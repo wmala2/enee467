@@ -1,0 +1,115 @@
+<mujoco model="rover_project">
+  <!-- Auto-generated from rover.urdf via mj_saveLastXML; base_link pos/freejoint hand-adjusted, see rover_env.py -->
+  <compiler angle="radian"/>
+
+  <!-- STL meshes exported from OnShape by onshape-to-robot, one per rover part -->
+  <asset>
+    <mesh name="left_motor" content_type="model/stl" file="meshes/left_motor.stl"/>
+    <mesh name="base_plate" content_type="model/stl" file="meshes/base_plate.stl"/>
+    <mesh name="front_wheel_upper_joint" content_type="model/stl" file="meshes/front_wheel_upper_joint.stl"/>
+    <mesh name="front_wheel_bracket" content_type="model/stl" file="meshes/front_wheel_bracket.stl"/>
+    <mesh name="left_motor_bracket" content_type="model/stl" file="meshes/left_motor_bracket.stl"/>
+    <mesh name="battery" content_type="model/stl" file="meshes/battery.stl"/>
+    <mesh name="esp32" content_type="model/stl" file="meshes/esp32.stl"/>
+    <mesh name="motor_controller" content_type="model/stl" file="meshes/motor_controller.stl"/>
+    <mesh name="right_motor" content_type="model/stl" file="meshes/right_motor.stl"/>
+    <mesh name="voltage_regulator" content_type="model/stl" file="meshes/voltage_regulator.stl"/>
+    <mesh name="right_motor_bracket" content_type="model/stl" file="meshes/right_motor_bracket.stl"/>
+    <mesh name="left_wheel" content_type="model/stl" file="meshes/left_wheel.stl"/>
+    <mesh name="right_wheel" content_type="model/stl" file="meshes/right_wheel.stl"/>
+    <mesh name="front_wheel_lower_joint" content_type="model/stl" file="meshes/front_wheel_lower_joint.stl"/>
+    <mesh name="front_wheel" content_type="model/stl" file="meshes/front_wheel.stl"/>
+  </asset>
+
+  <worldbody>
+    <!-- Rover chassis: free-floating base (6-DOF) so the whole rover can drive around the world -->
+    <body name="base_link" pos="0 0 0.1">
+      <inertial pos="-0.00237104 0.0277886 -0.0201836" quat="0.477074 0.524947 -0.508382 0.48824" mass="0.353116" diaginertia="0.00183094 0.00151404 0.000358957"/>
+      <joint name="base_floating_joint" type="free"/>
+      <!-- Adjustable-tilt camera, mounted on the chassis's rear overhang (past the driven
+           wheels, on the opposite end from the front_wheel caster) and tilted back toward
+           that same rear direction; centered/straight-down would just see the chassis
+           itself. It doesn't look ahead in the direction of travel, but that doesn't matter
+           for the reactive centroid-based steering in scripts/line_follower.py, which only
+           needs to see the line somewhere near the rover, not predict a path ahead of it.
+           Default tilt here is ~15.2 deg from straight-down (quat, not axisangle: this
+           file's compiler angle="radian" makes axisangle degrees a common footgun, and an
+           earlier version of this line was actually "-50 radians" by that mistake, not
+           "-50 deg" as its comment claimed). Scripts that want a different tilt call
+           envs/camera.py's set_camera_tilt() at runtime instead of editing this default;
+           see docs/pid-line-follower.md. -->
+      <camera name="top_cam" pos="0 0.12 0.07" quat="0.99120281 0.13235175 0 0" fovy="60"/>
+      <geom pos="0.0160863 -0.0852797 0.272765" quat="0.707105 0 0.707108 0" type="mesh" contype="0" conaffinity="0" rgba="0.647059 0.647059 0.647059 1" mesh="left_motor"/>
+      <geom pos="-0.0886915 -0.18808 -0.0273587" quat="0.707105 0 0 -0.707108" type="mesh" contype="0" conaffinity="0" rgba="0.917647 0.917647 0.917647 1" mesh="base_plate"/>
+      <geom pos="-0.473714 0.0946882 -0.0468587" quat="1.76043e-12 1.32679e-06 -1 -1.32679e-06" type="mesh" contype="0" conaffinity="0" rgba="0.498039 0.498039 0.498039 1" mesh="front_wheel_upper_joint"/>
+      <geom pos="-0.472714 -0.220152 -0.0468587" quat="1.32679e-06 0 0 -1" type="mesh" contype="0" conaffinity="0" rgba="0.101961 0.101961 0.101961 1" mesh="front_wheel_bracket"/>
+      <geom pos="-0.148629 0.205404 -0.0273587" quat="1.32679e-06 1 0 0" type="mesh" contype="0" conaffinity="0" rgba="0.352941 0.34902 0.34902 1" mesh="left_motor_bracket"/>
+      <geom pos="-0.124871 0.0875749 -0.0243587" quat="0.707105 0 0 -0.707108" type="mesh" contype="0" conaffinity="0" rgba="0.0117647 0.505882 0.905882 1" mesh="battery"/>
+      <geom pos="0.119292 0.0944044 -0.0213587" quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" rgba="0.262745 0.282353 0.301961 1" mesh="esp32"/>
+      <geom pos="0.20396 0.300238 -0.0213587" quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" rgba="1 0 0 1" mesh="motor_controller"/>
+      <geom pos="-0.0190726 0.115532 0.272765" quat="9.38184e-07 0.707105 9.38187e-07 -0.707108" type="mesh" contype="0" conaffinity="0" rgba="0.647059 0.647059 0.647059 1" mesh="right_motor"/>
+      <geom pos="0.26251 0.228404 -0.0213587" quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" rgba="0.0862745 0.317647 0.690196 1" mesh="voltage_regulator"/>
+      <geom pos="0.145642 0.00584812 -0.0273587" quat="1.76037e-12 1.32679e-06 -1 -1.32679e-06" type="mesh" contype="0" conaffinity="0" rgba="0.352941 0.34902 0.34902 1" mesh="right_motor_bracket"/>
+      <!-- Driven left wheel: hinge joint actuated by the left_wheel_motor in rover_scene.xml -->
+      <body name="left_wheel" pos="0.0797863 0.0611262 -0.0504087" quat="0.499998 0.5 -0.500002 -0.5">
+        <inertial pos="0 0 -0.01325" quat="0.5 0.5 -0.5 0.5" mass="0.034" diaginertia="2.00404e-05 1.20063e-05 1.20063e-05"/>
+        <joint name="left_axle"/>
+        <!-- Visual-only detailed mesh (collision handled by the cylinder primitive below) -->
+        <geom pos="0.464529 -0.127654 -0.0265" quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" rgba="0.176471 0.654902 0.937255 1" mesh="left_wheel"/>
+        <!-- Cylinder collision primitive matching the wheel mesh's radius/width. Its quat is
+             derived from the MESH's *compiled* geom_quat (MuJoCo re-centers/re-orients mesh
+             assets at compile time, so this is not the identity-ish value in the mesh geom's
+             own XML `quat` above) composed with a -90 deg rotation about Y, which maps the
+             cylinder's default symmetry axis onto the mesh's measured thin axis (mesh-local X).
+             An earlier version of this file used the *uncompiled* mesh quat by mistake, which
+             put the cylinder's rolling axis 90 deg off the wheel's true axle direction — it
+             still produced roughly-correct net motion (tumbling nets forward progress) but
+             visibly rough/tilted motion, which is what this fixes. -->
+        <geom type="cylinder" size="0.03435 0.01325" quat="0 0.707107 -0.707107 0"/>
+      </body>
+      <!-- Driven right wheel: hinge joint actuated by the right_wheel_motor in rover_scene.xml -->
+      <body name="right_wheel" pos="-0.0827726 0.0611262 -0.0504087" quat="0.707105 0 0.707108 0">
+        <inertial pos="0 0 -0.01325" quat="0.5 0.5 -0.5 0.5" mass="0.034" diaginertia="2.00404e-05 1.20063e-05 1.20063e-05"/>
+        <joint name="right_axle"/>
+        <!-- Visual-only detailed mesh (collision handled by the cylinder primitive below) -->
+        <geom pos="0.464529 -0.0286537 -0.0265" quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" rgba="0.176471 0.654902 0.937255 1" mesh="right_wheel"/>
+        <!-- Cylinder collision primitive matching the wheel mesh's radius/width. Its quat is
+             derived from the MESH's *compiled* geom_quat (MuJoCo re-centers/re-orients mesh
+             assets at compile time, so this is not the identity-ish value in the mesh geom's
+             own XML `quat` above) composed with a -90 deg rotation about Y, which maps the
+             cylinder's default symmetry axis onto the mesh's measured thin axis (mesh-local X).
+             An earlier version of this file used the *uncompiled* mesh quat by mistake, which
+             put the cylinder's rolling axis 90 deg off the wheel's true axle direction — it
+             still produced roughly-correct net motion (tumbling nets forward progress) but
+             visibly rough/tilted motion, which is what this fixes. -->
+        <geom type="cylinder" size="0.03435 0.01325" quat="0 0.707107 -0.707107 0"/>
+      </body>
+      <!-- Passive front caster swivel bracket (unactuated, free to rotate about the steering axis).
+           Mass/inertia below match the Webots diff_drive_rover.proto (the same rover, verified
+           driving correctly in Webots) instead of MuJoCo's mesh-volume auto-compute, which came
+           out 2.3x heavier for the wheel and was contributing to an unwanted pitch tilt. -->
+      <body name="front_wheel_lower_joint" pos="-0.00149314 -0.0978738 -0.0503587">
+        <inertial pos="0 0 0" mass="0.005" diaginertia="4.5e-07 4.5e-07 4.5e-07"/>
+        <joint name="front_swivel"/>
+        <geom pos="0.343294 -0.190212 0" quat="1.32679e-06 1 0 0" type="mesh" contype="0" conaffinity="0" rgba="0.647059 0.647059 0.647059 1" mesh="front_wheel_lower_joint"/>
+        <!-- Passive front caster wheel (unactuated, rolls freely to trail the rover).
+             z shifted down 5mm from the raw URDF value: with the chassis level, the caster's
+             collision cylinder fell ~7mm short of the floor (measured directly via forward
+             kinematics), forcing the whole rover to rest tilted so the caster could reach the
+             ground at all. Webots' own boundingObject for this wheel is actually two stacked
+             cylinders (a main one plus a slightly wider, near-flat "flange") — we'd only ported
+             the narrower one; using the flange's wider radius (0.0123) recovers part of the
+             clearance, and this position shift makes up the rest. -->
+        <body name="front_wheel" pos="0.00635 0.00965 -0.0221132" quat="9.38184e-07 -0.707105 -9.38187e-07 -0.707108">
+            <inertial pos="0 0 0" mass="0.005" diaginertia="2e-07 2e-07 2e-07"/>
+            <joint name="front_axle"/>
+          <!-- Visual-only detailed mesh (collision handled by the cylinder primitive below) -->
+          <geom pos="0.344734 -0.122278 0" quat="1.32679e-06 1 0 0" type="mesh" contype="0" conaffinity="0" rgba="0.247059 0.247059 0.247059 1" mesh="front_wheel"/>
+          <!-- Cylinder collision primitive: radius matches Webots' wider "flange" cylinder.
+               quat derived from the mesh's *compiled* geom_quat, same fix as the main wheels above. -->
+          <geom type="cylinder" size="0.0123 0.00611" quat="-0.707107 1.41421e-06 -1.41421e-06 -0.707107"/>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+</mujoco>

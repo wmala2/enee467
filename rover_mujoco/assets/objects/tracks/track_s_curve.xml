@@ -1,0 +1,52 @@
+<mujoco model="track_s_curve">
+  <worldbody>
+    <geom type="box" size="0.0257 0.015 0.001" pos="-0.7833 -0.0196 0.001" euler="0 0 -49.59" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0255 0.015 0.001" pos="-0.7500 -0.0584 0.001" euler="0 0 -49.11" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0250 0.015 0.001" pos="-0.7167 -0.0962 0.001" euler="0 0 -48.11" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0242 0.015 0.001" pos="-0.6833 -0.1324 0.001" euler="0 0 -46.56" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0233 0.015 0.001" pos="-0.6500 -0.1663 0.001" euler="0 0 -44.39" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0223 0.015 0.001" pos="-0.6167 -0.1974 0.001" euler="0 0 -41.51" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0211 0.015 0.001" pos="-0.5833 -0.2251 0.001" euler="0 0 -37.82" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0199 0.015 0.001" pos="-0.5500 -0.2489 0.001" euler="0 0 -33.19" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0188 0.015 0.001" pos="-0.5167 -0.2685 0.001" euler="0 0 -27.51" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0178 0.015 0.001" pos="-0.4833 -0.2835 0.001" euler="0 0 -20.73" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0171 0.015 0.001" pos="-0.4500 -0.2936 0.001" euler="0 0 -12.93" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0167 0.015 0.001" pos="-0.4167 -0.2987 0.001" euler="0 0 -4.40" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0167 0.015 0.001" pos="-0.3833 -0.2987 0.001" euler="0 0 4.40" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0171 0.015 0.001" pos="-0.3500 -0.2936 0.001" euler="0 0 12.93" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0178 0.015 0.001" pos="-0.3167 -0.2835 0.001" euler="0 0 20.73" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0188 0.015 0.001" pos="-0.2833 -0.2685 0.001" euler="0 0 27.51" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0199 0.015 0.001" pos="-0.2500 -0.2489 0.001" euler="0 0 33.19" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0211 0.015 0.001" pos="-0.2167 -0.2251 0.001" euler="0 0 37.82" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0223 0.015 0.001" pos="-0.1833 -0.1974 0.001" euler="0 0 41.51" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0233 0.015 0.001" pos="-0.1500 -0.1663 0.001" euler="0 0 44.39" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0242 0.015 0.001" pos="-0.1167 -0.1324 0.001" euler="0 0 46.56" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0250 0.015 0.001" pos="-0.0833 -0.0962 0.001" euler="0 0 48.11" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0255 0.015 0.001" pos="-0.0500 -0.0584 0.001" euler="0 0 49.11" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0257 0.015 0.001" pos="-0.0167 -0.0196 0.001" euler="0 0 49.59" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0257 0.015 0.001" pos="0.0167 0.0196 0.001" euler="0 0 49.59" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0255 0.015 0.001" pos="0.0500 0.0584 0.001" euler="0 0 49.11" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0250 0.015 0.001" pos="0.0833 0.0962 0.001" euler="0 0 48.11" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0242 0.015 0.001" pos="0.1167 0.1324 0.001" euler="0 0 46.56" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0233 0.015 0.001" pos="0.1500 0.1663 0.001" euler="0 0 44.39" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0223 0.015 0.001" pos="0.1833 0.1974 0.001" euler="0 0 41.51" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0211 0.015 0.001" pos="0.2167 0.2251 0.001" euler="0 0 37.82" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0199 0.015 0.001" pos="0.2500 0.2489 0.001" euler="0 0 33.19" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0188 0.015 0.001" pos="0.2833 0.2685 0.001" euler="0 0 27.51" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0178 0.015 0.001" pos="0.3167 0.2835 0.001" euler="0 0 20.73" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0171 0.015 0.001" pos="0.3500 0.2936 0.001" euler="0 0 12.93" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0167 0.015 0.001" pos="0.3833 0.2987 0.001" euler="0 0 4.40" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0167 0.015 0.001" pos="0.4167 0.2987 0.001" euler="0 0 -4.40" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0171 0.015 0.001" pos="0.4500 0.2936 0.001" euler="0 0 -12.93" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0178 0.015 0.001" pos="0.4833 0.2835 0.001" euler="0 0 -20.73" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0188 0.015 0.001" pos="0.5167 0.2685 0.001" euler="0 0 -27.51" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0199 0.015 0.001" pos="0.5500 0.2489 0.001" euler="0 0 -33.19" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0211 0.015 0.001" pos="0.5833 0.2251 0.001" euler="0 0 -37.82" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0223 0.015 0.001" pos="0.6167 0.1974 0.001" euler="0 0 -41.51" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0233 0.015 0.001" pos="0.6500 0.1663 0.001" euler="0 0 -44.39" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0242 0.015 0.001" pos="0.6833 0.1324 0.001" euler="0 0 -46.56" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0250 0.015 0.001" pos="0.7167 0.0962 0.001" euler="0 0 -48.11" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0255 0.015 0.001" pos="0.7500 0.0584 0.001" euler="0 0 -49.11" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+    <geom type="box" size="0.0257 0.015 0.001" pos="0.7833 0.0196 0.001" euler="0 0 -49.59" contype="0" conaffinity="0" group="3" rgba="0.05 0.05 0.05 1"/>
+  </worldbody>
+</mujoco>
