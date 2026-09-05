@@ -22,7 +22,9 @@ class CameraStream:
         self.http_addr = http_addr
         self.timeout = timeout
         self.stale_after_s = stale_after_s
-        self._min_period = 1.0 / target_hz  # don't poll the camera faster than this (bounds load/heat)
+        self._min_period = (
+            1.0 / target_hz
+        )  # don't poll the camera faster than this (bounds load/heat)
 
         # One reused TCP connection for every capture - no per-frame handshake
         self._session = requests.Session()
@@ -30,7 +32,7 @@ class CameraStream:
         # Shared state, guarded by the lock
         self._lock = threading.Lock()
         self._frame = None
-        self._stamp = 0.0    # perf_counter time the latest frame arrived
+        self._stamp = 0.0  # perf_counter time the latest frame arrived
         self._last_ok = 0.0  # last successful grab, for the staleness watchdog
 
         self._running = False

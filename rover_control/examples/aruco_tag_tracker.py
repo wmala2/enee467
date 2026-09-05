@@ -1,15 +1,16 @@
 # External Libraries
 import time
-import numpy as np
-import cv2
 
-# Local Files to Import
-from rover_control import conversions
-from rover_control.rover import Rover
-from rover_control.pid import PID
+import cv2
 
 # Local Libraries to Import
 from ArUco_detector.aruco_pose_estimator import ArucoPoseEstimator
+
+# Local Files to Import
+from rover_control import conversions
+from rover_control.pid import PID
+from rover_control.rover import Rover
+
 
 class ArucoTracker(Rover):
     MARKER_ID = 0  # the ArUco tag ID we keep tracking
@@ -62,10 +63,18 @@ class ArucoTracker(Rover):
         speed = [forward + turn, forward - turn]
 
         # Correctly convert for our pseudo-twist message
-        max_pos = conversions.convert_linear_vel_to_angular_vel(self.MAX_VELOCITY, self.wheel_diameter / 2.0)
-        min_pos = conversions.convert_linear_vel_to_angular_vel(self.MIN_VELOCITY, self.wheel_diameter / 2.0)
-        speed[0] = conversions.convert_linear_vel_to_angular_vel(speed[0], self.wheel_diameter / 2.0)
-        speed[1] = conversions.convert_linear_vel_to_angular_vel(speed[1], self.wheel_diameter / 2.0)
+        max_pos = conversions.convert_linear_vel_to_angular_vel(
+            self.MAX_VELOCITY, self.wheel_diameter / 2.0
+        )
+        min_pos = conversions.convert_linear_vel_to_angular_vel(
+            self.MIN_VELOCITY, self.wheel_diameter / 2.0
+        )
+        speed[0] = conversions.convert_linear_vel_to_angular_vel(
+            speed[0], self.wheel_diameter / 2.0
+        )
+        speed[1] = conversions.convert_linear_vel_to_angular_vel(
+            speed[1], self.wheel_diameter / 2.0
+        )
 
         # Clamp the speed so it doesn't go insane
         speed = self.clamp(speed, min_pos, max_pos)
@@ -73,11 +82,15 @@ class ArucoTracker(Rover):
 
     def search_speeds(self):
         # Spin slowly in place to bring a lost tag back into view (left wheel back, right wheel forward)
-        spin = conversions.convert_linear_vel_to_angular_vel(self.MIN_VELOCITY, self.wheel_diameter / 2.0)
+        spin = conversions.convert_linear_vel_to_angular_vel(
+            self.MIN_VELOCITY, self.wheel_diameter / 2.0
+        )
         return [-spin, spin]
 
     def update(self):
-        print(f"Tracking ArUco tag {self.MARKER_ID}, holding {self.STANDOFF_M} m - press Q in the window to quit")
+        print(
+            f"Tracking ArUco tag {self.MARKER_ID}, holding {self.STANDOFF_M} m - press Q in the window to quit"
+        )
 
         # Running Constantly
         while True:
@@ -110,6 +123,7 @@ class ArucoTracker(Rover):
         # Make sure the rover doesn't keep rolling after we quit
         self.stop()
         cv2.destroyAllWindows()
+
 
 # Create our rover class and start tracking the tag
 if __name__ == "__main__":

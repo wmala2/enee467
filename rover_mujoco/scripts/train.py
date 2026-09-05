@@ -1,9 +1,9 @@
 import os
+
+import envs  # noqa: F401  (imported for its side effect: registers LineFollower-v0)
 import gymnasium as gym
 from stable_baselines3 import PPO
 from stable_baselines3.common.monitor import Monitor
-
-import envs  # Registers LineFollower-v0
 
 # LineFollower-v0: camera-only line follower with domain randomization, the actual
 # sim-to-real-facing RL task this repo trains (see docs/rl-line-follower.md). PPO is used
@@ -13,6 +13,7 @@ import envs  # Registers LineFollower-v0
 ENV_ID = "LineFollower-v0"
 TOTAL_TIMESTEPS = 50_000
 MODEL_DIR = os.path.join(os.path.dirname(__file__), "../runs/ppo_line_follower")
+
 
 def main():
     os.makedirs(MODEL_DIR, exist_ok=True)
@@ -29,6 +30,7 @@ def main():
     model.save(os.path.join(MODEL_DIR, "model"))
     print(f"Saved trained model to {MODEL_DIR}/model.zip")
     print(f"View training curves with: uv run tensorboard --logdir {MODEL_DIR}")
+
 
 if __name__ == "__main__":
     main()

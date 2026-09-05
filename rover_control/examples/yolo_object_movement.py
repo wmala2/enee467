@@ -1,15 +1,17 @@
 # External Libraries
-import time
 from pathlib import Path
+import time
+
 import cv2
 
 # Local Files to Import
 from rover_control import conversions
-from rover_control.rover import Rover
 from rover_control.pid import PID
+from rover_control.rover import Rover
 
 # Local Libraries to Import
 from YOLO_agent.yolo_pose_estimator import YOLOPoseEstimator
+
 
 class YoloFollower(Rover):
     TARGET_OBJECT = "bottle"  # the COCO object name we drive toward
@@ -65,17 +67,27 @@ class YoloFollower(Rover):
         speed = [forward + turn, forward - turn]
 
         # Correctly convert for our pseudo-twist message
-        max_pos = conversions.convert_linear_vel_to_angular_vel(self.MAX_VELOCITY, self.wheel_diameter / 2.0)
-        min_pos = conversions.convert_linear_vel_to_angular_vel(self.MIN_VELOCITY, self.wheel_diameter / 2.0)
-        speed[0] = conversions.convert_linear_vel_to_angular_vel(speed[0], self.wheel_diameter / 2.0)
-        speed[1] = conversions.convert_linear_vel_to_angular_vel(speed[1], self.wheel_diameter / 2.0)
+        max_pos = conversions.convert_linear_vel_to_angular_vel(
+            self.MAX_VELOCITY, self.wheel_diameter / 2.0
+        )
+        min_pos = conversions.convert_linear_vel_to_angular_vel(
+            self.MIN_VELOCITY, self.wheel_diameter / 2.0
+        )
+        speed[0] = conversions.convert_linear_vel_to_angular_vel(
+            speed[0], self.wheel_diameter / 2.0
+        )
+        speed[1] = conversions.convert_linear_vel_to_angular_vel(
+            speed[1], self.wheel_diameter / 2.0
+        )
 
         # Clamp the speed so it doesn't go insane
         speed = self.clamp(speed, min_pos, max_pos)
         return speed
 
     def update(self):
-        print(f"Driving to YOLO object '{self.TARGET_OBJECT}', stopping {self.stop_tolerance_m} m away - press Q in the window to quit")
+        print(
+            f"Driving to YOLO object '{self.TARGET_OBJECT}', stopping {self.stop_tolerance_m} m away - press Q in the window to quit"
+        )
 
         # Running Constantly
         while True:
@@ -110,6 +122,7 @@ class YoloFollower(Rover):
         # Make sure the rover doesn't keep rolling after we quit
         self.stop()
         cv2.destroyAllWindows()
+
 
 # Create our rover class and start following the object
 if __name__ == "__main__":

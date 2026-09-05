@@ -1,7 +1,8 @@
+import time
+import urllib.request
+
 import cv2
 import numpy as np
-import urllib.request
-import time
 from ultralytics import YOLO
 
 
@@ -63,10 +64,10 @@ class YOLOExtractor:
         for box in results.boxes:
             x1, y1, x2, y2 = [float(v) for v in box.xyxy[0]]
             detections.append({
-                "name": results.names[int(box.cls)],          # what the object is
-                "confidence": float(box.conf),                # how sure the network is (0-1)
-                "box": [x1, y1, x2, y2],                      # corners of the bounding box (pixels)
-                "center": [(x1 + x2) / 2.0, (y1 + y2) / 2.0], # middle of the box (pixels)
+                "name": results.names[int(box.cls)],  # what the object is
+                "confidence": float(box.conf),  # how sure the network is (0-1)
+                "box": [x1, y1, x2, y2],  # corners of the bounding box (pixels)
+                "center": [(x1 + x2) / 2.0, (y1 + y2) / 2.0],  # middle of the box (pixels)
             })
 
         ### Optional visualization with boxes, labels, and the frame rate ###
@@ -80,7 +81,7 @@ class YOLOExtractor:
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.7,
                 (255, 255, 0),
-                2
+                2,
             )
 
         return annotated, detections

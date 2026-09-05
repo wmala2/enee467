@@ -19,13 +19,14 @@ reconciling rover_mujoco's env against this package's already-working hardware i
   encoder rate to 5Hz. The policy expects a fresh tick-delta every 10Hz control step
   (matching training), so this module polls encoders only, at the full rate.
 """
+
 import json
 import socket
 import threading
 import time
 
-import numpy as np
 from huggingface_hub import hf_hub_download
+import numpy as np
 from stable_baselines3 import PPO
 
 from ArUco_detector.camera_stream import CameraStream
@@ -33,8 +34,8 @@ from rover_control import network_interface
 from rover_control.rover import Rover
 
 HF_REPO_ID = "CursedRock17/rover-line-follower-ppo"
-CAM_RES = 64                # must match the trained policy's observation size
-CONTROL_HZ = 10.0           # matches Rover.COMMAND_RATE_HZ and the policy's training rate
+CAM_RES = 64  # must match the trained policy's observation size
+CONTROL_HZ = 10.0  # matches Rover.COMMAND_RATE_HZ and the policy's training rate
 
 
 class _EncoderOnlyPoller:
@@ -82,7 +83,7 @@ class _EncoderOnlyPoller:
                             [left - self._prev_left, right - self._prev_right], dtype=np.float32
                         )
                     self._prev_left, self._prev_right = left, right
-            except (socket.timeout, ValueError, KeyError):
+            except (TimeoutError, ValueError, KeyError):
                 pass  # missed packet: keep the last delta rather than stall the control loop
 
             elapsed = time.perf_counter() - t0
@@ -125,6 +126,7 @@ class RLLineFollowerRover(Rover):
             image = np.zeros((CAM_RES, CAM_RES, 1), dtype=np.uint8)
         else:
             import cv2
+
             resized = cv2.resize(frame, (CAM_RES, CAM_RES))
             image = resized.mean(axis=-1, keepdims=True).astype(np.uint8)
         return {"image": image, "encoders": self._encoders.latest_delta()}

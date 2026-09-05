@@ -7,7 +7,8 @@ pulled in via <include> from a scene (see assets/robots/rover/rover_line_*.xml).
 import math
 import os
 
-from envs.tracks import oval_waypoints, s_curve_waypoints
+from envs.tracks import oval_waypoints
+from envs.tracks import s_curve_waypoints
 
 # Visual/collision-free line appearance
 LINE_WIDTH = 0.03

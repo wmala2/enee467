@@ -1,6 +1,7 @@
 # External Libraries
-import cv2
 from pathlib import Path
+
+import cv2
 
 # Local Files to Import
 from YOLO_agent.yolo_pose_estimator import YOLOPoseEstimator
@@ -11,6 +12,7 @@ MODEL_PATH = Path(__file__).parent / "models" / "yolov8n.pt"
 
 # The depth model is the slow part, so a couple frames per second is realistic on CPU
 TARGET_FPS = 2.0
+
 
 def main():
     # Create the pose estimator once (imgsz=960 finds smaller/farther objects, see YOLO_extractor)
@@ -35,8 +37,10 @@ def main():
         # Print what the network found this frame and where it is in 3D
         for detection in detections:
             x, y, z = detection["position"]
-            print(f"{detection['name']} ({detection['confidence']:.2f}) "
-                  f"at X:{x:+.2f} Y:{y:+.2f} Z:{z:.2f} m")
+            print(
+                f"{detection['name']} ({detection['confidence']:.2f}) "
+                f"at X:{x:+.2f} Y:{y:+.2f} Z:{z:.2f} m"
+            )
 
         # Show the annotated image with boxes and the frame rate
         if annotated is not None:
@@ -49,6 +53,7 @@ def main():
 
     camera.release()
     cv2.destroyAllWindows()
+
 
 if __name__ == "__main__":
     main()

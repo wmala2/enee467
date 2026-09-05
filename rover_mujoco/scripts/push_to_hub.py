@@ -6,6 +6,7 @@ this run without having to reconstruct the setup from scratch.
 Usage: uv run python scripts/push_to_hub.py <repo_id> [--private/--public]
 Requires: `hf auth login` already done (checked via huggingface_hub.whoami()).
 """
+
 import argparse
 import json
 import os
@@ -13,9 +14,11 @@ import shutil
 import sys
 import tempfile
 
-from huggingface_hub import HfApi, whoami
-
-from train_real import ENV_ID, MODEL_DIR, N_ENVS, TOTAL_TIMESTEPS
+from huggingface_hub import HfApi
+from huggingface_hub import whoami
+from train_real import ENV_ID
+from train_real import MODEL_DIR
+from train_real import N_ENVS
 
 REPO_ROOT = os.path.join(os.path.dirname(__file__), "..")
 SOURCE_FILES = [
@@ -109,8 +112,12 @@ unconfirmed, motor model is datasheet-derived not bench-measured).
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("repo_id", help="e.g. CursedRock17/rover-line-follower-ppo")
-    parser.add_argument("--public", action="store_true", help="Make the repo public (default: private)")
-    parser.add_argument("--summary", default="(fill in final reward/laps/displacement stats before pushing)")
+    parser.add_argument(
+        "--public", action="store_true", help="Make the repo public (default: private)"
+    )
+    parser.add_argument(
+        "--summary", default="(fill in final reward/laps/displacement stats before pushing)"
+    )
     args = parser.parse_args()
 
     who = whoami()
@@ -136,21 +143,25 @@ def main():
             shutil.copy(os.path.join(REPO_ROOT, rel), dst)
 
         with open(os.path.join(tmp, "hyperparameters.json"), "w") as f:
-            json.dump({
-                "env_id": ENV_ID,
-                "total_timesteps": 10_000_000,
-                "n_envs": N_ENVS,
-                "algorithm": "PPO",
-                "policy": "MultiInputPolicy",
-                "ent_coef": 0.01,
-                "n_steps": 2048,
-                "batch_size": 64,
-                "n_epochs": 10,
-                "learning_rate": 3e-4,
-                "clip_range": 0.2,
-                "provenance": "3M steps at ent_coef=0.01 (scripts/sweep_hparams.py) "
-                              "+ 7M continued (scripts/continue_sweep_winner.py)",
-            }, f, indent=2)
+            json.dump(
+                {
+                    "env_id": ENV_ID,
+                    "total_timesteps": 10_000_000,
+                    "n_envs": N_ENVS,
+                    "algorithm": "PPO",
+                    "policy": "MultiInputPolicy",
+                    "ent_coef": 0.01,
+                    "n_steps": 2048,
+                    "batch_size": 64,
+                    "n_epochs": 10,
+                    "learning_rate": 3e-4,
+                    "clip_range": 0.2,
+                    "provenance": "3M steps at ent_coef=0.01 (scripts/sweep_hparams.py) "
+                    "+ 7M continued (scripts/continue_sweep_winner.py)",
+                },
+                f,
+                indent=2,
+            )
 
         api.upload_folder(folder_path=tmp, repo_id=args.repo_id)
 

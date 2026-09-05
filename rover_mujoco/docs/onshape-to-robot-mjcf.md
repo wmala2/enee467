@@ -97,14 +97,15 @@ URIs we had to `sed` earlier).
 
 ```python
 import mujoco
+
 m = mujoco.MjModel.from_xml_path("assets/robots/<name>/scene.xml")
 d = mujoco.MjData(m)
-print(m.nbody, m.njnt, m.nu)     # sanity-check body/joint/actuator counts
+print(m.nbody, m.njnt, m.nu)  # sanity-check body/joint/actuator counts
 for i in range(m.njnt):
     print(mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_JOINT, i), m.jnt_type[i])  # 0 = free
 
 d.ctrl[:] = ...  # a small nonzero command
 for _ in range(1000):
-    mujoco.mj_step(m, d)         # no "Nan, Inf or huge value" warnings should print
-print(d.qpos[:3])                # moved a sensible distance, didn't teleport or freeze
+    mujoco.mj_step(m, d)  # no "Nan, Inf or huge value" warnings should print
+print(d.qpos[:3])  # moved a sensible distance, didn't teleport or freeze
 ```

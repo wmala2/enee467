@@ -7,6 +7,7 @@ Never validated on real hardware before this. Watch it closely on the first run 
 to Ctrl-C -- every Rover motion method (including this one, via the inherited update() loop)
 stops the rover on Ctrl-C or any error.
 """
+
 from rover_control.rl_rover import RLLineFollowerRover
 
 

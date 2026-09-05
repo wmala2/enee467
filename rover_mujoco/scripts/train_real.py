@@ -1,9 +1,9 @@
 import os
+
+import envs  # noqa: F401  (imported for its side effect: registers LineFollowerReal-v0)
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import SubprocVecEnv
-
-import envs  # Registers LineFollowerReal-v0
 
 # LineFollowerReal-v0: the sim-to-real-constrained line follower — real observation space
 # (camera + noisy wheel encoders, no ground truth), real action space (left/right wheel
@@ -27,11 +27,14 @@ MODEL_DIR = os.path.join(os.path.dirname(__file__), "../runs/ppo_line_follower_r
 # updates.
 N_ENVS = 8
 
+
 def main():
     os.makedirs(MODEL_DIR, exist_ok=True)
 
     env = make_vec_env(
-        ENV_ID, n_envs=N_ENVS, vec_env_cls=SubprocVecEnv,
+        ENV_ID,
+        n_envs=N_ENVS,
+        vec_env_cls=SubprocVecEnv,
         vec_env_kwargs={"start_method": "fork"},
     )
     model = PPO("MultiInputPolicy", env, verbose=1, tensorboard_log=MODEL_DIR)
@@ -42,6 +45,7 @@ def main():
     model.save(os.path.join(MODEL_DIR, "model"))
     print(f"Saved trained model to {MODEL_DIR}/model.zip")
     print(f"View training curves with: uv run tensorboard --logdir {MODEL_DIR}")
+
 
 if __name__ == "__main__":
     main()

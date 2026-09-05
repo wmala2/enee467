@@ -5,15 +5,16 @@ our measured throughput) to compare learning curves cheaply before committing to
 
 Usage: uv run python scripts/sweep_hparams.py <variant_name>
 """
+
 import os
 import sys
 
+import envs  # noqa: F401  (imported for its side effect: registers LineFollowerReal-v0)
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import SubprocVecEnv
-
-import envs
-from train_real import ENV_ID, N_ENVS
+from train_real import ENV_ID
+from train_real import N_ENVS
 
 SWEEP_TIMESTEPS = 3_000_000
 SWEEP_DIR = os.path.join(os.path.dirname(__file__), "../runs/sweep")
@@ -41,7 +42,7 @@ VARIANTS = {
 
 def main():
     if len(sys.argv) != 2 or sys.argv[1] not in VARIANTS:
-        print(f"Usage: uv run python scripts/sweep_hparams.py <variant>")
+        print("Usage: uv run python scripts/sweep_hparams.py <variant>")
         print(f"Variants: {list(VARIANTS.keys())}")
         sys.exit(1)
 
@@ -51,7 +52,9 @@ def main():
     os.makedirs(out_dir, exist_ok=True)
 
     env = make_vec_env(
-        ENV_ID, n_envs=N_ENVS, vec_env_cls=SubprocVecEnv,
+        ENV_ID,
+        n_envs=N_ENVS,
+        vec_env_cls=SubprocVecEnv,
         vec_env_kwargs={"start_method": "fork"},
     )
     model = PPO("MultiInputPolicy", env, verbose=1, tensorboard_log=out_dir, **kwargs)

@@ -9,12 +9,12 @@ import os
 import random
 import time
 
-import numpy as np
+from envs.camera import set_camera_tilt
+from gen_track import oval_waypoints
+from gen_track import s_curve_waypoints
 import mujoco
 import mujoco.viewer
-
-from envs.camera import set_camera_tilt
-from gen_track import oval_waypoints, s_curve_waypoints
+import numpy as np
 
 # Each track maps to the waypoint function that generated it, so the start pose below
 # stays in sync with the actual line geometry without duplicating the path math.

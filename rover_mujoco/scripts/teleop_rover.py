@@ -1,9 +1,9 @@
 import time
-import numpy as np
+
+import envs  # noqa: F401  (imported for its side effect: registers Rover-v0)
 import gymnasium as gym
-import mujoco
 import mujoco.viewer
-import envs  # Registers Rover-v0
+import numpy as np
 
 # --- Physical limits (see docs/onshape-to-robot-mjcf.md's sibling tutorials for context) ---
 # Rated speed of the real rover's JGA25-371 gearmotors, assumed to be the wheel-shaft output
@@ -38,7 +38,7 @@ ANGULAR_RATIO = 3.0 / 5.0
 GLFW_KEY_RIGHT, GLFW_KEY_LEFT, GLFW_KEY_DOWN, GLFW_KEY_UP = 262, 263, 264, 265
 GLFW_KEY_SPACE = 32
 GLFW_KEY_EQUAL, GLFW_KEY_MINUS = 61, 45  # '+' is shift+'=' on most layouts; GLFW reports
-                                          # the unshifted physical key, so '=' is what arrives
+# the unshifted physical key, so '=' is what arrives
 
 # Target drive direction (-1/0/1 per axis), set by the arrow keys/space
 drive_state = {"linear_dir": 0, "angular_dir": 0}
@@ -46,6 +46,7 @@ drive_state = {"linear_dir": 0, "angular_dir": 0}
 speed_state = {"speed": 5.0}
 # Actual, ramped ctrl values the render loop drives toward the target above (see MAX_ACCEL)
 applied_state = {"linear": 0.0, "angular": 0.0}
+
 
 def on_key(keycode):
     if keycode == GLFW_KEY_UP:
@@ -66,10 +67,12 @@ def on_key(keycode):
         speed_state["speed"] = max(speed_state["speed"] - SPEED_STEP, MIN_SPEED)
         print(f"speed: {speed_state['speed']:.1f} rad/s")
 
+
 def ramp_toward(current, target, max_delta):
     if target > current:
         return min(current + max_delta, target)
     return max(current - max_delta, target)
+
 
 def main():
     env = gym.make("Rover-v0")
@@ -93,7 +96,9 @@ def main():
             target_linear = drive_state["linear_dir"] * speed
             target_angular = drive_state["angular_dir"] * speed * ANGULAR_RATIO
             applied_state["linear"] = ramp_toward(applied_state["linear"], target_linear, max_delta)
-            applied_state["angular"] = ramp_toward(applied_state["angular"], target_angular, max_delta)
+            applied_state["angular"] = ramp_toward(
+                applied_state["angular"], target_angular, max_delta
+            )
 
             # Mix linear/angular drive state into left/right wheel velocity targets
             linear, angular = applied_state["linear"], applied_state["angular"]
@@ -109,6 +114,7 @@ def main():
                 time.sleep(time_until_next_step)
 
     env.close()
+
 
 if __name__ == "__main__":
     main()

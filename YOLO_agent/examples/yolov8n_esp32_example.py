@@ -1,6 +1,7 @@
 # External Libraries
-import cv2
 from pathlib import Path
+
+import cv2
 
 # Local Files to Import
 from YOLO_agent.YOLO_extractor import YOLOExtractor
@@ -14,6 +15,7 @@ HTTP_ADDR = "http://192.168.50.123:80/capture"
 
 # 10-15 Hz is a good polling speed for the onboard ESP32 camera
 TARGET_FPS = 5.0
+
 
 def main():
     # Create the detector once, outside the main loop (imgsz=960 finds smaller objects, ~9 Hz on CPU)
@@ -45,6 +47,7 @@ def main():
         extractor.sleep_to_fps(TARGET_FPS)
 
     cv2.destroyAllWindows()
+
 
 if __name__ == "__main__":
     main()

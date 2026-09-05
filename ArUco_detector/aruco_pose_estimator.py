@@ -4,22 +4,17 @@ import numpy as np
 from ArUco_detector.camera_stream import CameraStream
 
 # Camera Calibration Defaults
-camera_matrix_default = np.array([
- [372.69444659,   0.0,         321.25586034],
- [  0.0,         370.94214518, 238.16525187],
- [  0.0,           0.0,           1.0        ]
-], dtype=np.float32)
+camera_matrix_default = np.array(
+    [[372.69444659, 0.0, 321.25586034], [0.0, 370.94214518, 238.16525187], [0.0, 0.0, 1.0]],
+    dtype=np.float32,
+)
 
 # Distortion Coeffcients
-dist_coeffs_default = np.array([
- -0.07753969,
-  0.11434413,
- -0.00108406,
-  0.00236484,
- -0.06344637
-], dtype=np.float32)
+dist_coeffs_default = np.array(
+    [-0.07753969, 0.11434413, -0.00108406, 0.00236484, -0.06344637], dtype=np.float32
+)
 
-marker_length_m_default = 0.10 # 10 cm
+marker_length_m_default = 0.10  # 10 cm
 
 
 class ArucoPoseEstimator:
@@ -70,12 +65,15 @@ class ArucoPoseEstimator:
 
         ### Marker corner positions in the marker's own frame (top-left, top-right, bottom-right, bottom-left) ###
         half = self.marker_length_m / 2.0
-        self._marker_points = np.array([
-            [-half,  half, 0.0],
-            [ half,  half, 0.0],
-            [ half, -half, 0.0],
-            [-half, -half, 0.0],
-        ], dtype=np.float32)
+        self._marker_points = np.array(
+            [
+                [-half, half, 0.0],
+                [half, half, 0.0],
+                [half, -half, 0.0],
+                [-half, -half, 0.0],
+            ],
+            dtype=np.float32,
+        )
 
         ### Pose smoothing storage (filled by process(), in output frame) ###
         self._filtered_pos = {}
@@ -117,7 +115,6 @@ class ArucoPoseEstimator:
 
         if ids is not None and len(ids) > 0:
             for i, marker_id in enumerate(ids.flatten()):
-
                 ### Pose estimation (cv2.aruco.estimatePoseSingleMarkers was removed in OpenCV 4.7+) ###
                 # SOLVEPNP_IPPE_SQUARE is the solver built for square fiducial markers
                 ok, rvec, tvec = cv2.solvePnP(
@@ -135,18 +132,26 @@ class ArucoPoseEstimator:
                 projected, _ = cv2.projectPoints(
                     self._marker_points, rvec, tvec, self.camera_matrix, self.dist_coeffs
                 )
-                reproj_error = float(np.mean(np.linalg.norm(
-                    projected.reshape(4, 2) - corners[i].reshape(4, 2), axis=1
-                )))
+                reproj_error = float(
+                    np.mean(
+                        np.linalg.norm(projected.reshape(4, 2) - corners[i].reshape(4, 2), axis=1)
+                    )
+                )
                 if reproj_error > self.max_reprojection_error_px:
                     if self.verbose:
                         # Draw rejected markers in red so the viewer makes the problem visible
-                        cv2.aruco.drawDetectedMarkers(frame, [corners[i]], np.array([[marker_id]]),
-                                                      borderColor=(0, 0, 255))
-                        cv2.putText(frame,
-                                    f"ID:{marker_id} REJECTED E:{reproj_error:.1f}px",
-                                    (10, 30 + 30 * i),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+                        cv2.aruco.drawDetectedMarkers(
+                            frame, [corners[i]], np.array([[marker_id]]), borderColor=(0, 0, 255)
+                        )
+                        cv2.putText(
+                            frame,
+                            f"ID:{marker_id} REJECTED E:{reproj_error:.1f}px",
+                            (10, 30 + 30 * i),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.6,
+                            (0, 0, 255),
+                            2,
+                        )
                     continue
 
                 ### Yaw from the rotation, position back in the rover-relative output frame ###
@@ -163,14 +168,21 @@ class ArucoPoseEstimator:
                 ### Optional visualization ###
                 if self.verbose:
                     cv2.drawFrameAxes(
-                        frame, self.camera_matrix, self.dist_coeffs,
-                        rvec, tvec, self.marker_length_m * 0.5
+                        frame,
+                        self.camera_matrix,
+                        self.dist_coeffs,
+                        rvec,
+                        tvec,
+                        self.marker_length_m * 0.5,
                     )
                     cv2.putText(
                         frame,
                         f"ID:{marker_id} R:{poses[int(marker_id)]['distance']:.2f}m Y:{poses[int(marker_id)]['yaw']:+.1f}deg E:{reproj_error:.1f}px",
                         (10, 30 + 30 * i),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.7,
+                        (0, 255, 0),
+                        2,
                     )
 
         # Draw only quality-gate-passing markers in green (rejected ones already drawn in red above)
@@ -190,8 +202,12 @@ class ArucoPoseEstimator:
                 self._filtered_pos[marker_id] = position
                 self._filtered_yaw[marker_id] = yaw
 
-            self._filtered_pos[marker_id] = self.alpha * position + (1.0 - self.alpha) * self._filtered_pos[marker_id]
-            self._filtered_yaw[marker_id] = self.alpha * yaw + (1.0 - self.alpha) * self._filtered_yaw[marker_id]
+            self._filtered_pos[marker_id] = (
+                self.alpha * position + (1.0 - self.alpha) * self._filtered_pos[marker_id]
+            )
+            self._filtered_yaw[marker_id] = (
+                self.alpha * yaw + (1.0 - self.alpha) * self._filtered_yaw[marker_id]
+            )
 
             smoothed = self._filtered_pos[marker_id]
             pose["position"] = smoothed.tolist()

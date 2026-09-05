@@ -1,9 +1,9 @@
 # External Libraries
-import os
 import json
+import os
 import time
+
 import cv2
-import numpy as np
 import ollama
 
 
@@ -50,13 +50,17 @@ class LLMDriver:
         # One short, schema-locked question keeps the answer fast and machine-readable
         response = ollama.chat(
             model=self.model,
-            messages=[{
-                "role": "user",
-                "content": (f"You are the front camera of a small rover. Look for a {self.target_object} "
-                            "in this image. Report if you see it and whether it is on the left, "
-                            "center, or right of the image."),
-                "images": [buffer.tobytes()],
-            }],
+            messages=[
+                {
+                    "role": "user",
+                    "content": (
+                        f"You are the front camera of a small rover. Look for a {self.target_object} "
+                        "in this image. Report if you see it and whether it is on the left, "
+                        "center, or right of the image."
+                    ),
+                    "images": [buffer.tobytes()],
+                }
+            ],
             format=self.RESPONSE_SCHEMA,
             options={"num_predict": 60, "num_thread": self.num_threads},
             keep_alive=self.keep_alive,
@@ -114,6 +118,7 @@ if __name__ == "__main__":
             # Send the exact same JSON message the other rover code sends
             if SEND_TO_ROVER:
                 from rover_control import network_interface
+
                 network_interface.send_message(json.dumps(msg).encode("utf-8"))
     except KeyboardInterrupt:
         pass

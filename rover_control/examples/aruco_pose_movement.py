@@ -1,15 +1,16 @@
 # External Libraries
 import time
-import numpy as np
-import cv2
 
-# Local Files to Import
-from rover_control import conversions
-from rover_control.rover import Rover
-from rover_control.pid import PID
+import cv2
 
 # Local Libraries to Import
 from ArUco_detector.aruco_pose_estimator import ArucoPoseEstimator
+
+# Local Files to Import
+from rover_control import conversions
+from rover_control.pid import PID
+from rover_control.rover import Rover
+
 
 class ArucoFollower(Rover):
     MARKER_ID = 1  # the ArUco tag ID we drive toward
@@ -19,14 +20,14 @@ class ArucoFollower(Rover):
 
         # How far away from the tag (in meters) the rover should stop
         self.stop_tolerance_m = stop_tolerance_m
-        
+
         # Camera Stream Address
-        img_addr="http://192.168.50.123:80/capture"
+        img_addr = "http://192.168.50.123:80/capture"
 
         # Create our ArUco Marker Pose Estimator
         self.estimator = ArucoPoseEstimator(
             http_addr=img_addr,
-            verbose=True # set False if you only want data
+            verbose=True,  # set False if you only want data
         )
 
         # PID on the forward distance to the tag (+Z is forward), output is forward speed in m/s
@@ -55,23 +56,33 @@ class ArucoFollower(Rover):
 
         # Forward speed comes from the distance PID, turning comes from the sideways offset PID
         forward = self.distance_pid.update(distance_error, dt)
-        turn =  self.heading_pid.update(pose[0], dt)
+        turn = self.heading_pid.update(pose[0], dt)
 
         # Mix forward and turn for a differential drive (tag to the right -> left wheel speeds up)
         speed = [forward + turn, forward - turn]
 
         # Correctly convert for our pseudo-twist message
-        max_pos = conversions.convert_linear_vel_to_angular_vel(self.MAX_VELOCITY, self.wheel_diameter / 2.0)
-        min_pos = conversions.convert_linear_vel_to_angular_vel(self.MIN_VELOCITY, self.wheel_diameter / 2.0)
-        speed[0] = conversions.convert_linear_vel_to_angular_vel(speed[0], self.wheel_diameter / 2.0)
-        speed[1] = conversions.convert_linear_vel_to_angular_vel(speed[1], self.wheel_diameter / 2.0)
+        max_pos = conversions.convert_linear_vel_to_angular_vel(
+            self.MAX_VELOCITY, self.wheel_diameter / 2.0
+        )
+        min_pos = conversions.convert_linear_vel_to_angular_vel(
+            self.MIN_VELOCITY, self.wheel_diameter / 2.0
+        )
+        speed[0] = conversions.convert_linear_vel_to_angular_vel(
+            speed[0], self.wheel_diameter / 2.0
+        )
+        speed[1] = conversions.convert_linear_vel_to_angular_vel(
+            speed[1], self.wheel_diameter / 2.0
+        )
 
         # Clamp the speed so it doesn't go insane
         speed = self.clamp(speed, min_pos, max_pos)
         return speed
 
     def update(self):
-        print(f"Driving to ArUco tag {self.MARKER_ID}, stopping {self.stop_tolerance_m} m away - press Q in the window to quit")
+        print(
+            f"Driving to ArUco tag {self.MARKER_ID}, stopping {self.stop_tolerance_m} m away - press Q in the window to quit"
+        )
 
         # Running Constantly
         while True:
@@ -79,8 +90,8 @@ class ArucoFollower(Rover):
             frame, poses = self.estimator.process()
 
             if self.MARKER_ID in poses:
-                print("Pose : ", poses[self.MARKER_ID]['position'])
-                wheel_speeds = self.compute_wheel_speeds(poses[self.MARKER_ID]['position'])
+                print("Pose : ", poses[self.MARKER_ID]["position"])
+                wheel_speeds = self.compute_wheel_speeds(poses[self.MARKER_ID]["position"])
             else:
                 # No tag in sight, so hold still
                 wheel_speeds = [0.0, 0.0]
@@ -98,6 +109,7 @@ class ArucoFollower(Rover):
         # Make sure the rover doesn't keep rolling after we quit
         self.stop()
         cv2.destroyAllWindows()
+
 
 # Create our rover class and start following the tag
 if __name__ == "__main__":

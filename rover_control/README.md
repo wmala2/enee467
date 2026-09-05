@@ -14,13 +14,13 @@ The easiest way to drive the rover: create one `Rover` and call high-level metho
 ```python
 from rover_control.rover import Rover
 
-rover = Rover(show_camera=True)        # show_camera=True pops up what the camera sees
+rover = Rover(show_camera=True)  # show_camera=True pops up what the camera sees
 try:
-    rover.run_maze([0, 1])             # drive to ArUco tag 0, then tag 1
-    rover.follow_object("bottle")      # find a COCO object and drive up to it
+    rover.run_maze([0, 1])  # drive to ArUco tag 0, then tag 1
+    rover.follow_object("bottle")  # find a COCO object and drive up to it
 finally:
     rover.stop()
-    rover.close()                      # shuts down the background camera reader
+    rover.close()  # shuts down the background camera reader
 ```
 
 | Method | What it does |

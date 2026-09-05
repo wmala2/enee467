@@ -10,14 +10,15 @@ import numpy as np
 
 def oval_waypoints(a=0.6, b=0.4, n=48):
     # Ellipse traced counter-clockwise, starting at its rightmost point
-    return [(a * math.cos(t), b * math.sin(t)) for t in
-            [2 * math.pi * i / n for i in range(n + 1)]]
+    return [(a * math.cos(t), b * math.sin(t)) for t in [2 * math.pi * i / n for i in range(n + 1)]]
 
 
 def s_curve_waypoints(length=1.6, amplitude=0.3, n=48):
     # Sine-wave path running along +x, starting at the origin
-    return [(x, amplitude * math.sin(2 * math.pi * x / length))
-            for x in [length * i / n - length / 2 for i in range(n + 1)]]
+    return [
+        (x, amplitude * math.sin(2 * math.pi * x / length))
+        for x in [length * i / n - length / 2 for i in range(n + 1)]
+    ]
 
 
 def path_length_table(waypoints):
@@ -55,7 +56,9 @@ def project_arc_length(waypoints, cumlen, point, near_segment=None, window=8, cl
     elif closed:
         segment_range = [(near_segment + off) % n_segments for off in range(-window, window + 1)]
     else:
-        segment_range = range(max(0, near_segment - window), min(n_segments, near_segment + window + 1))
+        segment_range = range(
+            max(0, near_segment - window), min(n_segments, near_segment + window + 1)
+        )
 
     best_s, best_d2, best_i = 0.0, np.inf, (near_segment if near_segment is not None else 0)
     for i in segment_range:

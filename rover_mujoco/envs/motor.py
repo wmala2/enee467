@@ -9,9 +9,9 @@ un-fit defaults — real identification needs recorded trajectories we don't hav
 Datasheet: https://www.openimpulse.com/blog/products-page/25d-gearmotors/jga25-371-dc-gearmotor-encoder-463-rpm-12-v-2/
 """
 
-import numpy as np
 from bam.actuator import DCMotorActuator
 from bam.model import Model
+import numpy as np
 
 # --- JGA25-371 datasheet, 12V nominal ---
 VIN = 12.0  # V, nominal supply

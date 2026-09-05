@@ -2,13 +2,14 @@ import math
 import os
 import random
 
-import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
 import mujoco
+import numpy as np
 
 from envs import tracks
-from envs.tracks import oval_waypoints, s_curve_waypoints
+from envs.tracks import oval_waypoints
+from envs.tracks import s_curve_waypoints
 
 # Onboard camera image observations, not ground-truth position: this is what makes the
 # task realistic for sim-to-real transfer, at the cost of much slower CPU rollouts than
@@ -42,11 +43,13 @@ FALL_HEIGHT = 0.03  # base_link z below this means the rover tipped over
 # the rover from cutting off the line while chasing progress. Reward-only privilege is fine
 # here: reward doesn't exist at deployment, only the policy's (camera+encoder) observation
 # does, and that stays unprivileged as before.
-PROGRESS_WEIGHT = 100.0   # per step: PROGRESS_WEIGHT * (forward arc-length delta / track length)
-                          # normalized so one full lap/traversal always sums to ~PROGRESS_WEIGHT,
-                          # regardless of the oval vs. s-curve's different physical lengths
-CENTER_WEIGHT = 0.3       # per step: CENTER_WEIGHT * (1 - abs(line-centering error))
-COMPLETION_BONUS = 50.0   # flat bonus each time a lap (closed track) or the end (open track) is reached
+PROGRESS_WEIGHT = 100.0  # per step: PROGRESS_WEIGHT * (forward arc-length delta / track length)
+# normalized so one full lap/traversal always sums to ~PROGRESS_WEIGHT,
+# regardless of the oval vs. s-curve's different physical lengths
+CENTER_WEIGHT = 0.3  # per step: CENTER_WEIGHT * (1 - abs(line-centering error))
+COMPLETION_BONUS = (
+    50.0  # flat bonus each time a lap (closed track) or the end (open track) is reached
+)
 
 TRACKS = {
     "rover_line_oval.xml": oval_waypoints,
@@ -165,8 +168,7 @@ class LineFollowerEnv(gym.Env):
         tipped_over = self.data.qpos[2] < FALL_HEIGHT
         terminated = tipped_over or finished
         truncated = (
-            self._lost_steps >= MAX_LINE_LOST_STEPS
-            or self._episode_steps >= MAX_EPISODE_STEPS
+            self._lost_steps >= MAX_LINE_LOST_STEPS or self._episode_steps >= MAX_EPISODE_STEPS
         )
         return obs, reward, terminated, truncated, {}
 
@@ -181,8 +183,11 @@ class LineFollowerEnv(gym.Env):
         (non-looping) track's far end is reached — the caller ends the episode there,
         successfully, rather than letting it idle past the end of the line."""
         s, self._prev_arc_segment = tracks.project_arc_length(
-            self._path_waypoints, self._path_cumlen, self.data.qpos[:2],
-            near_segment=self._prev_arc_segment, closed=self._path_closed,
+            self._path_waypoints,
+            self._path_cumlen,
+            self.data.qpos[:2],
+            near_segment=self._prev_arc_segment,
+            closed=self._path_closed,
         )
         delta = s - self._prev_arc_s
         if self._path_closed:

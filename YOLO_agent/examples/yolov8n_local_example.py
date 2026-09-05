@@ -1,6 +1,7 @@
 # External Libraries
-import cv2
 from pathlib import Path
+
+import cv2
 
 # Local Files to Import
 from YOLO_agent.YOLO_extractor import YOLOExtractor
@@ -11,6 +12,7 @@ MODEL_PATH = Path(__file__).parent / "models" / "yolov8n.pt"
 
 # 10-15 Hz is a good loop rate for our cameras
 TARGET_FPS = 15.0
+
 
 def main():
     # Create the detector once, outside the main loop (imgsz=960 finds smaller objects, ~9 Hz on CPU)
@@ -47,6 +49,7 @@ def main():
 
     camera.release()
     cv2.destroyAllWindows()
+
 
 if __name__ == "__main__":
     main()

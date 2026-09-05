@@ -1,13 +1,16 @@
 # External Libraries
-import time
 import json
+import time
+
 import numpy as np
+
+from rover_control import conversions
 
 # Local Files to Import
 from rover_control import network_interface
-from rover_control import conversions
 
-class Rover():
+
+class Rover:
     COMMAND_RATE_HZ = 10.0  # the rover firmware listens for commands at about this rate
     MAX_VELOCITY = 0.25  # m/s
     MIN_VELOCITY = 0.075  # m/s
@@ -17,18 +20,23 @@ class Rover():
 
     # --- Settings for the simple one-line behaviors (drive_to_tag, run_maze, ...) ---
     DEFAULT_CAMERA_ADDR = "http://192.168.50.123:80/capture"
-    CRUISE_VELOCITY = 0.20       # top speed of the trapezoidal drive (m/s)
-    ACCEL = 0.20                 # how fast forward() ramps up and down (m/s^2)
-    CENTER_TOLERANCE_DEG = 8.0   # "centered enough" on a tag to drive straight at it
-    SEARCH_STEP_DEG = 30.0       # how far we turn to sweep for a tag we can't see
-    SETTLE_S = 0.3               # pause after a turn so the chassis stops before we look
-    CONFIRM_FRAMES = 5           # fresh frames (captured after we stopped) sampled per look
-    CONFIRM_MIN = 3              # tag must appear in at least this many fresh frames to trust it
-    BEARING_AGREE_DEG = 4.0      # those fresh frames must agree within this bearing spread
-    MAX_LOOK_TRIES = 3           # sampling rounds before we treat the tag as unseen
+    CRUISE_VELOCITY = 0.20  # top speed of the trapezoidal drive (m/s)
+    ACCEL = 0.20  # how fast forward() ramps up and down (m/s^2)
+    CENTER_TOLERANCE_DEG = 8.0  # "centered enough" on a tag to drive straight at it
+    SEARCH_STEP_DEG = 30.0  # how far we turn to sweep for a tag we can't see
+    SETTLE_S = 0.3  # pause after a turn so the chassis stops before we look
+    CONFIRM_FRAMES = 5  # fresh frames (captured after we stopped) sampled per look
+    CONFIRM_MIN = 3  # tag must appear in at least this many fresh frames to trust it
+    BEARING_AGREE_DEG = 4.0  # those fresh frames must agree within this bearing spread
+    MAX_LOOK_TRIES = 3  # sampling rounds before we treat the tag as unseen
 
-    def __init__(self, wheel_diameter_m=(70.0 / 1000.0), wheel_separation_m=(187.832/1000.0),
-                 camera_addr=DEFAULT_CAMERA_ADDR, show_camera=False):
+    def __init__(
+        self,
+        wheel_diameter_m=(70.0 / 1000.0),
+        wheel_separation_m=(187.832 / 1000.0),
+        camera_addr=DEFAULT_CAMERA_ADDR,
+        show_camera=False,
+    ):
         # Physical geometry of the rover, used for all of the speed conversions
         self.wheel_diameter = wheel_diameter_m
         self.wheel_separation = wheel_separation_m
@@ -57,14 +65,22 @@ class Rover():
 
     def write_real_velocities(self, wheel_velocities):
         # Convert our values to the correct linear velocity
-        left_m  = conversions.convert_angular_vel_to_linear_vel(wheel_velocities[0], self.wheel_diameter / 2.0)
-        right_m = conversions.convert_angular_vel_to_linear_vel(wheel_velocities[1], self.wheel_diameter / 2.0)
+        left_m = conversions.convert_angular_vel_to_linear_vel(
+            wheel_velocities[0], self.wheel_diameter / 2.0
+        )
+        right_m = conversions.convert_angular_vel_to_linear_vel(
+            wheel_velocities[1], self.wheel_diameter / 2.0
+        )
 
         # Put message into JSON format for the rover firmware.
         # Keys MUST match the firmware exactly: command "m" with left_mps/right_mps (meters per second).
         self._cmd_index += 1
-        msg = json.dumps({"command": "m", "left_mps": left_m,
-                          "right_mps": right_m, "index": self._cmd_index}).encode("utf-8")
+        msg = json.dumps({
+            "command": "m",
+            "left_mps": left_m,
+            "right_mps": right_m,
+            "index": self._cmd_index,
+        }).encode("utf-8")
         print(f"V: {left_m:.3f} {right_m:.3f}")
         network_interface.send_message(msg)
 
@@ -101,19 +117,25 @@ class Rover():
         # Create the ArUco estimator + background camera the first time a vision method runs
         if self._aruco_estimator is None:
             from ArUco_detector.aruco_pose_estimator import ArucoPoseEstimator
-            self._aruco_estimator = ArucoPoseEstimator(http_addr=self.camera_addr, verbose=self.show_camera)
+
+            self._aruco_estimator = ArucoPoseEstimator(
+                http_addr=self.camera_addr, verbose=self.show_camera
+            )
         return self._aruco_estimator
 
     def _maybe_show(self, frame):
         # Pop up the camera view only if the student asked for it
         if self.show_camera and frame is not None:
             import cv2
+
             cv2.imshow("Rover", frame)
             cv2.waitKey(1)
 
     def turn(self, degrees):
         # Spin in place by `degrees` (positive = turn right / toward +X), then stop and settle
-        spin = conversions.convert_linear_vel_to_angular_vel(self.MIN_VELOCITY, self.wheel_diameter / 2.0)
+        spin = conversions.convert_linear_vel_to_angular_vel(
+            self.MIN_VELOCITY, self.wheel_diameter / 2.0
+        )
         left, right = (spin, -spin) if degrees >= 0 else (-spin, spin)
 
         # Spinning at the stall-floor speed, the rover turns at this rate, so this long covers `degrees`
@@ -140,7 +162,7 @@ class Rover():
 
         # Too short to reach cruise -> use a triangle (lower peak speed)
         if 2.0 * d_ramp >= distance:
-            v_top = min(v_cruise, np.sqrt(v_min ** 2 + a * distance))
+            v_top = min(v_cruise, np.sqrt(v_min**2 + a * distance))
             t_ramp = (v_top - v_min) / a
             t_cruise = 0.0
         else:
@@ -174,7 +196,9 @@ class Rover():
         # "distance":m} averaged over fresh, agreeing frames, or None if the tag isn't steadily seen.
         estimator = self._aruco()
         for _ in range(self.MAX_LOOK_TRIES):
-            since = time.perf_counter()  # only trust frames captured after right now (beats camera lag)
+            since = (
+                time.perf_counter()
+            )  # only trust frames captured after right now (beats camera lag)
             positions, bearings = [], []
             for _ in range(self.CONFIRM_FRAMES):
                 frame, since = estimator.next_frame(since)
@@ -188,7 +212,10 @@ class Rover():
                     bearings.append(np.degrees(np.arctan2(position[0], position[2])))
 
             # Trust it only if enough fresh frames saw the tag and they agree on the bearing
-            if len(bearings) >= self.CONFIRM_MIN and (max(bearings) - min(bearings)) <= self.BEARING_AGREE_DEG:
+            if (
+                len(bearings) >= self.CONFIRM_MIN
+                and (max(bearings) - min(bearings)) <= self.BEARING_AGREE_DEG
+            ):
                 average = np.mean(np.array(positions), axis=0).tolist()
                 return {
                     "position": average,
@@ -202,10 +229,10 @@ class Rover():
         while True:
             reading = self.see_tag(tag_id)
             if reading is None:
-                self.turn(self.SEARCH_STEP_DEG)            # can't see it: sweep one step and look again
+                self.turn(self.SEARCH_STEP_DEG)  # can't see it: sweep one step and look again
                 continue
             if abs(reading["bearing"]) > self.CENTER_TOLERANCE_DEG:
-                self.turn(reading["bearing"])              # turn by the measured bearing to face it
+                self.turn(reading["bearing"])  # turn by the measured bearing to face it
                 continue
             return reading["distance"]
 
@@ -227,10 +254,16 @@ class Rover():
         # Create the YOLO 3D-pose estimator the first time an object-following method runs
         if self._yolo_estimator is None:
             from pathlib import Path
+
             from YOLO_agent.yolo_pose_estimator import YOLOPoseEstimator
-            model_path = Path(__file__).resolve().parents[1] / "YOLO_agent" / "models" / "yolov8n.pt"
+
+            model_path = (
+                Path(__file__).resolve().parents[1] / "YOLO_agent" / "models" / "yolov8n.pt"
+            )
             # imgsz=960 sees smaller/farther objects; the depth pass makes this a slow (~1 Hz) look
-            self._yolo_estimator = YOLOPoseEstimator(model_path=model_path, imgsz=640, verbose=self.show_camera)
+            self._yolo_estimator = YOLOPoseEstimator(
+                model_path=model_path, imgsz=640, verbose=self.show_camera
+            )
         return self._yolo_estimator
 
     def _see_object(self, yolo, name):
@@ -251,7 +284,10 @@ class Rover():
                 bearings.append(np.degrees(np.arctan2(x, z)))
                 distances.append(z)
 
-        if len(bearings) >= self.CONFIRM_MIN and (max(bearings) - min(bearings)) <= self.BEARING_AGREE_DEG:
+        if (
+            len(bearings) >= self.CONFIRM_MIN
+            and (max(bearings) - min(bearings)) <= self.BEARING_AGREE_DEG
+        ):
             return {"bearing": float(np.mean(bearings)), "distance": float(np.mean(distances))}
         return None
 
@@ -262,10 +298,10 @@ class Rover():
         while True:
             reading = self._see_object(yolo, name)
             if reading is None:
-                self.turn(self.SEARCH_STEP_DEG)            # can't see it: sweep one step and look again
+                self.turn(self.SEARCH_STEP_DEG)  # can't see it: sweep one step and look again
                 continue
             if abs(reading["bearing"]) > self.CENTER_TOLERANCE_DEG:
-                self.turn(reading["bearing"])              # turn by the measured bearing to face it
+                self.turn(reading["bearing"])  # turn by the measured bearing to face it
                 continue
             self.forward(max(reading["distance"] - stop_distance_m, 0.0))
             print(f"Reached the {name}.")

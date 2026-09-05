@@ -1,32 +1,31 @@
 from collections import deque
 
-import numpy as np
-import mujoco
 from gymnasium import spaces
+import mujoco
+import numpy as np
 
 from envs import motor
-from envs.tracks import oval_waypoints, s_curve_waypoints
-from envs.tasks.line_follower_env import (
-    LineFollowerEnv,
-    CAM_RES,
-    CENTER_WEIGHT,
-    CONTROL_HZ,
-    FALL_HEIGHT,
-    MAX_LINE_LOST_STEPS,
-    MAX_EPISODE_STEPS,
-)
+from envs.tasks.line_follower_env import CAM_RES
+from envs.tasks.line_follower_env import CENTER_WEIGHT
+from envs.tasks.line_follower_env import CONTROL_HZ
+from envs.tasks.line_follower_env import FALL_HEIGHT
+from envs.tasks.line_follower_env import LineFollowerEnv
+from envs.tasks.line_follower_env import MAX_EPISODE_STEPS
+from envs.tasks.line_follower_env import MAX_LINE_LOST_STEPS
+from envs.tracks import oval_waypoints
+from envs.tracks import s_curve_waypoints
 
 # --- Domain randomization ranges ---
 # Starting points, not measured hardware values — see the DR table in
 # docs/rl-line-follower.md for the reasoning behind each one and what still needs real
 # characterization (motor curves fitted via BAM, per-surface friction, camera datasheet specs).
-ACTION_NOISE_STD_RANGE = (0.0, 0.3)    # rad/s: per-step Gaussian jitter on commanded speed
-ACTION_LATENCY_STEPS_RANGE = (0, 2)    # control-loop steps of command delay (@ CONTROL_HZ,
-                                       # so 0-200ms — real network/serial round-trip scale)
-WHEEL_FRICTION_RANGE = (0.4, 1.2)      # floor-contact sliding friction, stands in for surface
-ENCODER_NOISE_STD_RANGE = (0.0, 0.1)   # rad/s-equivalent: pre-quantization jitter on the
-                                       # angle reading (stray/missed quadrature edges), not
-                                       # noise on a velocity — see ENCODER_CPR_WHEEL below
+ACTION_NOISE_STD_RANGE = (0.0, 0.3)  # rad/s: per-step Gaussian jitter on commanded speed
+ACTION_LATENCY_STEPS_RANGE = (0, 2)  # control-loop steps of command delay (@ CONTROL_HZ,
+# so 0-200ms — real network/serial round-trip scale)
+WHEEL_FRICTION_RANGE = (0.4, 1.2)  # floor-contact sliding friction, stands in for surface
+ENCODER_NOISE_STD_RANGE = (0.0, 0.1)  # rad/s-equivalent: pre-quantization jitter on the
+# angle reading (stray/missed quadrature edges), not
+# noise on a velocity — see ENCODER_CPR_WHEEL below
 
 # The real rover has no velocity sensor: its "e" UDP command (see wmala2/rover-firmware,
 # src/control_server.cpp) returns raw cumulative quadrature counts, `long`, never reset on
@@ -50,11 +49,11 @@ CAMERA_RATE_HZ = CONTROL_HZ
 # would actually produce," as opposed to LineFollowerEnv's floor/line color + camera mount
 # pose. CAM_RES itself can't be randomized directly (the observation_space shape must stay
 # fixed for SB3), so "resolution" is approximated by pixelating a fixed-size render.
-FOVY_RANGE = (50.0, 70.0)              # deg: lens FOV manufacturing/mounting tolerance
-BRIGHTNESS_RANGE = (0.6, 1.4)          # exposure/ambient-light multiplier on pixel value
-WHITE_BALANCE_RANGE = (0.85, 1.15)     # per-RGB-channel gain before grayscale conversion
-PIXEL_NOISE_STD_RANGE = (0.0, 15.0)    # Gaussian sensor/JPEG-quality noise (0-255 scale)
-RESOLUTION_LEVELS = (16, 32, 64)       # effective sensor resolution; must all divide CAM_RES
+FOVY_RANGE = (50.0, 70.0)  # deg: lens FOV manufacturing/mounting tolerance
+BRIGHTNESS_RANGE = (0.6, 1.4)  # exposure/ambient-light multiplier on pixel value
+WHITE_BALANCE_RANGE = (0.85, 1.15)  # per-RGB-channel gain before grayscale conversion
+PIXEL_NOISE_STD_RANGE = (0.0, 15.0)  # Gaussian sensor/JPEG-quality noise (0-255 scale)
+RESOLUTION_LEVELS = (16, 32, 64)  # effective sensor resolution; must all divide CAM_RES
 
 
 def _pixelate(img, level, full_res):
@@ -66,6 +65,7 @@ def _pixelate(img, level, full_res):
     factor = full_res // level
     small = img.reshape(level, factor, level, factor, 1).mean(axis=(1, 3))
     return np.repeat(np.repeat(small, factor, axis=0), factor, axis=1).astype(np.uint8)
+
 
 # Torque-actuated scene variants (see assets/robots/rover/*_real.xml) — the wheel joints
 # take raw torque (Nm) here, computed each step by envs/motor.py's JGA25-371 model, rather
@@ -121,7 +121,8 @@ class LineFollowerRealEnv(LineFollowerEnv):
         # pair — varying the wheel side is the practical way to sweep effective friction in MuJoCo.
         # Distinct from the motor's own internal (gearbox/brush) friction below.
         self._wheel_geom_ids = [
-            gi for gi in range(self.model.ngeom)
+            gi
+            for gi in range(self.model.ngeom)
             if self.model.geom_type[gi] == mujoco.mjtGeom.mjGEOM_CYLINDER
         ]
 
@@ -135,14 +136,18 @@ class LineFollowerRealEnv(LineFollowerEnv):
         if self.domain_randomize:
             self._action_noise_std = rng.uniform(*ACTION_NOISE_STD_RANGE)
             self._encoder_noise_std = rng.uniform(*ENCODER_NOISE_STD_RANGE)
-            latency_steps = int(rng.integers(ACTION_LATENCY_STEPS_RANGE[0], ACTION_LATENCY_STEPS_RANGE[1] + 1))
+            latency_steps = int(
+                rng.integers(ACTION_LATENCY_STEPS_RANGE[0], ACTION_LATENCY_STEPS_RANGE[1] + 1)
+            )
         else:
             self._action_noise_std = 0.0
             self._encoder_noise_std = 0.0
             latency_steps = 0
         # Ticks accrue from here — matches the real rover's "r" (reset encoders) convention.
         self._prev_wheel_angle = self.data.qpos[self._wheel_qpos_adr].copy()
-        buffer_len = latency_steps + 1  # +1 so index [0] is exactly latency_steps old, not latency_steps-1
+        buffer_len = (
+            latency_steps + 1
+        )  # +1 so index [0] is exactly latency_steps old, not latency_steps-1
         self._action_buffer = deque([np.zeros(2, dtype=np.float32)] * buffer_len, maxlen=buffer_len)
 
         # This whole block used to run unconditionally, ignoring domain_randomize=False
@@ -190,7 +195,9 @@ class LineFollowerRealEnv(LineFollowerEnv):
             torque = motor.motor_torque(target_omega, measured_omega)
             self.data.ctrl[:] = torque
             for i, dof_adr in enumerate(self._wheel_dof_adr):
-                motor.apply_friction(self._friction_models[i], self.model, dof_adr, measured_omega[i])
+                motor.apply_friction(
+                    self._friction_models[i], self.model, dof_adr, measured_omega[i]
+                )
             mujoco.mj_step(self.model, self.data)
         self._episode_steps += 1
 
@@ -214,8 +221,7 @@ class LineFollowerRealEnv(LineFollowerEnv):
         tipped_over = self.data.qpos[2] < FALL_HEIGHT
         terminated = tipped_over or finished
         truncated = (
-            self._lost_steps >= MAX_LINE_LOST_STEPS
-            or self._episode_steps >= MAX_EPISODE_STEPS
+            self._lost_steps >= MAX_LINE_LOST_STEPS or self._episode_steps >= MAX_EPISODE_STEPS
         )
         return obs, reward, terminated, truncated, {}
 
@@ -243,6 +249,8 @@ class LineFollowerRealEnv(LineFollowerEnv):
         delta_angle = wheel_angle - self._prev_wheel_angle
         self._prev_wheel_angle = wheel_angle.copy()
 
-        noise_rad = self.np_random.normal(0.0, self._encoder_noise_std * self._physics_dt * self._decimation, size=2)
+        noise_rad = self.np_random.normal(
+            0.0, self._encoder_noise_std * self._physics_dt * self._decimation, size=2
+        )
         ticks = np.round((delta_angle + noise_rad) * ENCODER_CPR_WHEEL / (2 * np.pi))
         return {"image": self._cached_image, "encoders": ticks.astype(np.float32)}

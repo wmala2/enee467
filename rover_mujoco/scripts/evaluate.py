@@ -1,13 +1,13 @@
 import os
 import time
 
+import envs  # noqa: F401  (imported for its side effect: registers LineFollower-v0)
 import gymnasium as gym
-import mujoco
 import mujoco.viewer
 from stable_baselines3 import PPO
+from train import ENV_ID
+from train import MODEL_DIR
 
-import envs  # Registers LineFollower-v0
-from train import ENV_ID, MODEL_DIR
 
 def main():
     # LineFollowerEnv has no gym render_mode support of its own (see teleop_rover.py for
@@ -42,6 +42,7 @@ def main():
                 time.sleep(time_until_next_step)
 
     env.close()
+
 
 if __name__ == "__main__":
     main()
