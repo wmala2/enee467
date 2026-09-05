@@ -19,10 +19,20 @@ own choices against the working baseline below:
 - **Observation space.** Grayscale vs. color, the current `64×64` resolution vs. smaller/larger,
   a stack of the last few frames instead of one. `LineFollowerRealEnv` also adds wheel
   encoders to the mix — try training without them to see how much they actually help.
-- **Reward function.** The current reward (`1 - abs(error)` when the line is visible, `-1`
-  when it isn't) is one reasonable choice, not the only one. Try penalizing angular velocity
-  (smoother driving), rewarding distance traveled along the track, or shaping it differently
-  near the edges of the frame.
+- **Reward function.** Finishing the track (repeatedly, if it's the closed oval) is the
+  actual goal, so the reward's dominant term is forward progress along the track's
+  waypoints (ground-truth (x, y), reward-only — the observation stays camera+encoders
+  only, since reward doesn't exist at deployment), normalized so one full lap/traversal
+  always sums to `PROGRESS_WEIGHT` regardless of the oval vs. s-curve's different lengths,
+  plus a flat `COMPLETION_BONUS` each time that happens. Line-centering (`1 - abs(error)`,
+  the only signal a real deployed policy actually has) is now a smaller `CENTER_WEIGHT`
+  shaping term rather than the whole reward — see `PROGRESS_WEIGHT`/`CENTER_WEIGHT`/
+  `COMPLETION_BONUS` in `envs/tasks/line_follower_env.py`. (An earlier, centering-only
+  version of this reward is what produced the "vibrate in place" failure mode described
+  below CONTROL_HZ in that same file — worth knowing if you're tuning these weights and
+  see a policy that keeps reward high without actually moving.) Still worth experimenting
+  with: penalizing angular velocity for smoother driving, or shaping differently near the
+  edges of the frame.
 - **Hyperparameters.** `n_steps`, `batch_size`, learning rate, and the PPO clip range all
   matter more once you're past a smoke test — see `uv run tensorboard --logdir runs/...` for
   training curves to compare runs against.
@@ -41,16 +51,25 @@ hardware. Run it with `uv run python scripts/train.py` / `scripts/evaluate.py`.
 `envs/tasks/line_follower_real_env.py` subclasses `LineFollowerEnv` and cuts the environment
 down to what's real:
 
-- **Observation**: the onboard camera image, refreshed only at **10 Hz** (matching the real
-  rover's `\capture` endpoint rate) rather than every physics step, plus noisy left/right wheel
-  encoder readings. No ground-truth position, ever — same as the sim-only env, but now the
-  camera itself is rate-limited too, which changes what the policy can react to.
-- **Action**: left/right wheel velocity, same shape as `LineFollower-v0`. This is an
-  **assumption**, not a confirmed fact — it's not yet been reconciled against the actual
-  command format in the rover-firmware repo (units, scaling, whether it's velocity or a raw
-  PWM duty cycle). Everything else in this environment (motor lag, latency, noise) layers on
-  top of whatever that interface turns out to be, so it's an isolated thing to fix later
-  rather than something the rest of the DR depends on.
+- **Observation**: the onboard camera image, refreshed only at **10 Hz** (`CONTROL_HZ` —
+  confirmed against `wmala2/rover-firmware`'s own `DEFAULT_CMD_RATE_HZ` default, not just an
+  assumption anymore) rather than every physics step, plus left/right wheel **encoder ticks
+  accrued since the last control step** — not velocity. The real rover has no velocity
+  sensor: its `"e"` command returns raw cumulative quadrature counts (`ENCODER_CPR_WHEEL =
+  680`, the firmware's own default), never auto-reset, so any "velocity" is something a
+  client derives by polling twice and differencing — this env now does exactly that instead
+  of handing the policy an idealized continuous rad/s it could never actually get. No
+  ground-truth position, ever, in either case.
+- **Action**: left/right wheel velocity, same shape as `LineFollower-v0`. Still not fully
+  reconciled against the firmware: its actual `"m"` UDP command takes `left_mps`/`right_mps`
+  (**m/s**, not rad/s — needs a wheel-radius conversion we haven't wired in yet), and
+  separately, **this sim's own "both wheels the same sign" convention drives in a circle,
+  not straight** — backwards from the firmware's (confirmed: same sign on both wheels =
+  forward). Both are compensations the eventual real-hardware bridge has to make, not
+  something to fix in `rover.xml` (shared by already-working teleop/PID scripts). Everything
+  else in this environment (motor lag, latency, noise) layers on top of whatever that
+  interface turns out to be, so it's an isolated thing to fix later rather than something the
+  rest of the DR depends on.
 
 ### Motor model: BAM + the JGA25-371 datasheet
 
@@ -98,7 +117,7 @@ camera's datasheet) should replace them over time.
 | Action noise (rad/s, Gaussian) | 0.0 | 0.3 | Per-step jitter on the commanded wheel velocity, approximating real actuator command noise. |
 | Action latency (control steps) | 0 | 2 | The rover's 10 Hz control loop introduces communication/processing delay between a decision and the wheels actually responding. Drawn once per episode, which is also standing in for per-agent lag (manufacturing variance between individual rovers) rather than modeling that as a separate parameter — reconsider this if the two turn out to need different distributions. |
 | Wheel-floor friction coefficient | 0.4 | 1.2 | Stands in for different floor materials (grass, concrete, carpet) — MuJoCo resolves contact friction from the wheel/floor geom pair, so randomizing the wheel side sweeps the effective range. Distinct from the motor's own internal (gearbox/brush) friction above, which comes from the BAM model instead. |
-| Encoder noise (rad/s, Gaussian) | 0.0 | 0.1 | Real encoder measurement/quantization noise on the velocity reading. |
+| Encoder noise (rad/s-equivalent, Gaussian) | 0.0 | 0.1 | Pre-quantization jitter on the wheel-angle reading (stray/missed quadrature edges), applied before rounding to integer ticks — not noise on a velocity, since the real sensor doesn't report one. |
 | Camera capture rate (Hz) | 10 (fixed) | 10 (fixed) | Not randomized — this is a known real constraint (the `\capture` endpoint), modeled directly rather than swept. |
 | Camera FOV (deg) | 50 | 70 | Lens FOV manufacturing tolerance and mounting variance around `rover.xml`'s `top_cam` default. |
 | Brightness (pixel-value multiplier) | 0.6 | 1.4 | Exposure/ambient-light variation, applied after rendering rather than by moving light sources — cheaper and gets the same effect. |

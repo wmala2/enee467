@@ -9,12 +9,14 @@ description = "High-level AI agent code (ArUco tracking, YOLO detection, LLM hyb
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "huggingface_hub",
     "numpy",
     "ollama",
     "opencv-contrib-python",
     "pillow",
     "pynput",
     "requests",
+    "stable-baselines3",
     "transformers",
     "ultralytics",
 ]

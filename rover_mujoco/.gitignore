@@ -218,3 +218,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Training runs (model checkpoints, tensorboard logs) — trained models are pushed to
+# Hugging Face (scripts/push_to_hub.py) instead of committed here.
+runs/

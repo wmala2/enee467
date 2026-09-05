@@ -7,6 +7,7 @@ import gymnasium as gym
 from gymnasium import spaces
 import mujoco
 
+from envs import tracks
 from envs.tracks import oval_waypoints, s_curve_waypoints
 
 # Onboard camera image observations, not ground-truth position: this is what makes the
@@ -15,8 +16,37 @@ from envs.tracks import oval_waypoints, s_curve_waypoints
 CAM_RES = 64
 LINEAR_SPEED = 3.0
 MAX_LINE_LOST_STEPS = 20
-MAX_EPISODE_STEPS = 500
+
+# Control-loop rate: a fresh action decision every CONTROL_HZ, decimated down from the
+# physics integrator's much finer 500 Hz (0.002s) timestep — no real actuator can be
+# commanded that fast, and (found via an actual training run) letting PPO issue a brand
+# new target wheel velocity every single physics tick let it discover a degenerate
+# "vibrate in place" policy: whipsawing the command every 2ms kept the line centered
+# (near-zero net displacement, so near-zero image error) far more easily than actually
+# learning to drive, and since the reward for that was already ~97% of max from the very
+# first rollout, training never had pressure to move past it. 10 Hz matches the real
+# rover's camera/command-rate constraint (see LineFollowerRealEnv).
+CONTROL_HZ = 10.0
+
+# One episode = enough control decisions to actually traverse a track (previously 500
+# *physics* steps at 0.002s was only 1 simulated second total — nowhere near enough time
+# to drive either track, which is the other half of why standing still used to look
+# reward-optimal). 300 control steps @ CONTROL_HZ = 30 simulated seconds.
+MAX_EPISODE_STEPS = 300
 FALL_HEIGHT = 0.03  # base_link z below this means the rover tipped over
+
+# Reward weights. Finishing the track (as many times as possible) is the actual goal —
+# speed/smoothness are secondary — so PROGRESS_WEIGHT (forward progress along the track's
+# waypoints, ground-truth position) is the dominant term and CENTER_WEIGHT (line-centering,
+# the only signal a real deployed policy would have) is a smaller shaping term that keeps
+# the rover from cutting off the line while chasing progress. Reward-only privilege is fine
+# here: reward doesn't exist at deployment, only the policy's (camera+encoder) observation
+# does, and that stays unprivileged as before.
+PROGRESS_WEIGHT = 100.0   # per step: PROGRESS_WEIGHT * (forward arc-length delta / track length)
+                          # normalized so one full lap/traversal always sums to ~PROGRESS_WEIGHT,
+                          # regardless of the oval vs. s-curve's different physical lengths
+CENTER_WEIGHT = 0.3       # per step: CENTER_WEIGHT * (1 - abs(line-centering error))
+COMPLETION_BONUS = 50.0   # flat bonus each time a lap (closed track) or the end (open track) is reached
 
 TRACKS = {
     "rover_line_oval.xml": oval_waypoints,
@@ -25,9 +55,11 @@ TRACKS = {
 
 
 class LineFollowerEnv(gym.Env):
-    """Camera-only line follower. Reward and termination are both computed from the
-    rendered onboard image, the same signal a real deployed rover would have to use —
-    no privileged (x, y) ground truth leaks into the policy or its reward."""
+    """Camera-only line follower. The policy's observation is never privileged (no
+    ground-truth position, only what a real deployed rover could sense). Reward *does*
+    use ground-truth (x, y) position to score forward progress along the track — fine
+    since reward is a training-only construct that doesn't exist at deployment, unlike
+    the observation, which has to work with only what the real rover can sense."""
 
     metadata = {"render_modes": ["human"], "render_fps": 50}
     TRACKS = TRACKS  # class attribute so subclasses (e.g. LineFollowerRealEnv) can point
@@ -39,6 +71,12 @@ class LineFollowerEnv(gym.Env):
         self.render_mode = render_mode
 
         scene_file, self._waypoints_fn = random.choice(list(self.TRACKS.items()))
+        # Track geometry (and thus its arc-length table) is fixed for this env instance's
+        # whole lifetime, same as scene_file/waypoints_fn above — only the per-episode
+        # progress *state* (self._prev_arc_s etc., set in reset()) changes between resets.
+        self._path_waypoints = self._waypoints_fn()
+        self._path_cumlen, self._path_closed = tracks.path_length_table(self._path_waypoints)
+        self._path_total_len = self._path_cumlen[-1]
         model_path = os.path.join(
             os.path.dirname(__file__), "../../assets/robots/rover", scene_file
         )
@@ -63,6 +101,21 @@ class LineFollowerEnv(gym.Env):
         self._lost_steps = 0
         self._episode_steps = 0
 
+        # Physics steps per control decision — see CONTROL_HZ above.
+        self._physics_dt = self.model.opt.timestep
+        self._decimation = max(1, round(1.0 / (CONTROL_HZ * self._physics_dt)))
+
+    def close(self):
+        """Release the offscreen renderer's GL context. Not just cleanup hygiene: MuJoCo's
+        Renderer leaves that context in a broken state for whatever Renderer is constructed
+        next *in the same process* if this is skipped — found by hand (every env after the
+        first one in a process rendered solid black) tracing what looked like a spawn/DR bug
+        but was actually this. Harmless for a single long-lived training worker (it only ever
+        makes one renderer), but required for any script that constructs more than one
+        LineFollowerEnv in one process (e.g. an eval loop over several episodes/tracks)."""
+        self.renderer.close()
+        super().close()
+
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
         mujoco.mj_resetData(self.model, self.data)
@@ -77,30 +130,81 @@ class LineFollowerEnv(gym.Env):
 
         self._lost_steps = 0
         self._episode_steps = 0
+
+        # Track-progress reward state (see _track_progress_reward) — (x0, y0) is on the
+        # path by construction (_start_pose spawns at its first waypoint), so this is ~0.
+        # Only this initial fix searches the whole path (near_segment=None); every step
+        # after stays windowed around wherever it last matched.
+        self._prev_arc_s, self._prev_arc_segment = tracks.project_arc_length(
+            self._path_waypoints, self._path_cumlen, (x0, y0)
+        )
+        self._unwrapped_progress = 0.0
+        self._laps_completed = 0
+        self._finished = False
+
         return self._get_obs(), {}
 
     def step(self, action):
         self.data.ctrl[:] = action
-        mujoco.mj_step(self.model, self.data)
+        for _ in range(self._decimation):
+            mujoco.mj_step(self.model, self.data)
         self._episode_steps += 1
 
         obs = self._get_obs()
         error = self._line_error(obs)
+        progress_reward, finished = self._track_progress_reward()
 
         if error is None:
             self._lost_steps += 1
             reward = -1.0
         else:
             self._lost_steps = 0
-            reward = 1.0 - abs(error)
+            reward = CENTER_WEIGHT * (1.0 - abs(error))
+        reward += progress_reward
 
         tipped_over = self.data.qpos[2] < FALL_HEIGHT
-        terminated = tipped_over
+        terminated = tipped_over or finished
         truncated = (
             self._lost_steps >= MAX_LINE_LOST_STEPS
             or self._episode_steps >= MAX_EPISODE_STEPS
         )
         return obs, reward, terminated, truncated, {}
+
+    def _track_progress_reward(self):
+        """Forward progress along the track's waypoints since the last step (ground-truth
+        (x, y), projected onto the polyline — see envs/tracks.py), normalized by the
+        track's own length so a full lap (closed track) or traversal (open track) always
+        sums to ~PROGRESS_WEIGHT regardless of the oval vs. s-curve's different physical
+        lengths, plus a flat COMPLETION_BONUS each time that actually happens.
+
+        Returns (reward, finished): `finished` is True exactly once, the step an open
+        (non-looping) track's far end is reached — the caller ends the episode there,
+        successfully, rather than letting it idle past the end of the line."""
+        s, self._prev_arc_segment = tracks.project_arc_length(
+            self._path_waypoints, self._path_cumlen, self.data.qpos[:2],
+            near_segment=self._prev_arc_segment, closed=self._path_closed,
+        )
+        delta = s - self._prev_arc_s
+        if self._path_closed:
+            # Shortest signed distance around the loop, so wrapping from ~total_len back
+            # to ~0 registers as further forward progress, not a huge backward jump.
+            total = self._path_total_len
+            delta = (delta + total / 2) % total - total / 2
+        self._prev_arc_s = s
+        self._unwrapped_progress += delta
+
+        reward = PROGRESS_WEIGHT * delta / self._path_total_len
+        finished = False
+        if self._path_closed:
+            laps = int(self._unwrapped_progress // self._path_total_len)
+            if laps > self._laps_completed:
+                self._laps_completed = laps
+                reward += COMPLETION_BONUS
+        elif not self._finished and self._unwrapped_progress >= self._path_total_len:
+            self._finished = True
+            finished = True
+            reward += COMPLETION_BONUS
+        return reward, finished
 
     def _start_pose(self):
         """Spawn at the track's first waypoint, yawed to face the second one (matches
