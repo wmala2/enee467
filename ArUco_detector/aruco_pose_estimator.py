@@ -47,7 +47,8 @@ class ArucoPoseEstimator:
         self.marker_length_m = marker_length_m
         self.http_addr = http_addr
         self.alpha = alpha
-        # Reject a detected pose if its corners reproject more than this many pixels off (blurred/occluded)
+        # Reject a detected pose if its corners reproject more than this many pixels off
+        # (blurred/occluded)
         # 6.0 px is a realistic threshold for JPEG-compressed frames from the ESP32 camera
         self.max_reprojection_error_px = max_reprojection_error_px
         self.verbose = verbose
@@ -63,7 +64,8 @@ class ArucoPoseEstimator:
         # and compensating for JPEG compression softening the marker edges
         self._clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
 
-        ### Marker corner positions in the marker's own frame (top-left, top-right, bottom-right, bottom-left) ###
+        ### Marker corner positions in the marker's own frame (top-left, top-right, bottom-right,
+        ### bottom-left) ###
         half = self.marker_length_m / 2.0
         self._marker_points = np.array(
             [
@@ -115,7 +117,8 @@ class ArucoPoseEstimator:
 
         if ids is not None and len(ids) > 0:
             for i, marker_id in enumerate(ids.flatten()):
-                ### Pose estimation (cv2.aruco.estimatePoseSingleMarkers was removed in OpenCV 4.7+) ###
+                ### Pose estimation (cv2.aruco.estimatePoseSingleMarkers was removed in OpenCV 4.7+)
+                ### ###
                 # SOLVEPNP_IPPE_SQUARE is the solver built for square fiducial markers
                 ok, rvec, tvec = cv2.solvePnP(
                     self._marker_points,
@@ -127,8 +130,10 @@ class ArucoPoseEstimator:
                 if not ok:
                     continue
 
-                ### Quality gate: reproject the corners and reject the pose if it lands too far off ###
-                # A clean detection reprojects to within ~1 px; a blurred or occluded one is much worse
+                ### Quality gate: reproject the corners and reject the pose if it lands too far off
+                ### ###
+                # A clean detection reprojects to within ~1 px; a blurred or occluded one is much
+                # worse
                 projected, _ = cv2.projectPoints(
                     self._marker_points, rvec, tvec, self.camera_matrix, self.dist_coeffs
                 )
@@ -177,7 +182,8 @@ class ArucoPoseEstimator:
                     )
                     cv2.putText(
                         frame,
-                        f"ID:{marker_id} R:{poses[int(marker_id)]['distance']:.2f}m Y:{poses[int(marker_id)]['yaw']:+.1f}deg E:{reproj_error:.1f}px",
+                        f"ID:{marker_id} R:{poses[int(marker_id)]['distance']:.2f}m "
+                        f"Y:{poses[int(marker_id)]['yaw']:+.1f}deg E:{reproj_error:.1f}px",
                         (10, 30 + 30 * i),
                         cv2.FONT_HERSHEY_SIMPLEX,
                         0.7,
@@ -233,7 +239,8 @@ class ArucoPoseEstimator:
         frame, stamp = self.camera.next_after(since, timeout=timeout)
         if frame is None and self.camera.is_stale():
             raise RuntimeError(
-                f"Camera stream stalled - no fresh frames from {self.http_addr}. Check the ESP32 camera."
+                f"Camera stream stalled - no fresh frames from {self.http_addr}. Check the ESP32 "
+                f"camera."
             )
         return frame, stamp
 

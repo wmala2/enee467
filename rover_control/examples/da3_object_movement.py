@@ -164,7 +164,7 @@ class ObjectFollower(Rover):
                     time.sleep(0.05)
                     continue
 
-                h, w, c = frame.shape
+                _, w, _ = frame.shape
                 annotated, detections = self.extractor.process(frame)
 
                 # Filter out the specific target type
@@ -205,7 +205,8 @@ class ObjectFollower(Rover):
                         # Compile steering rates
                         wheel_speeds = self.compute_wheel_speeds(pseudo_pose)
                         print(
-                            f"                  -> Computed Commands: Left={wheel_speeds[0]:.2f}, Right={wheel_speeds[1]:.2f}"
+                            f"                  -> Computed Commands: Left={wheel_speeds[0]:.2f}, "
+                            f"Right={wheel_speeds[1]:.2f}"
                         )
 
                         # Visual feedback layer additions
@@ -225,7 +226,8 @@ class ObjectFollower(Rover):
                     self.distance_pid.reset()
                     self.heading_pid.reset()
 
-                # Ensure 'annotated' is a valid, non-empty 3D image matrix. Fallback to raw frame if it's broken.
+                # Ensure 'annotated' is a valid, non-empty 3D image matrix. Fallback to raw frame if
+                # it's broken.
                 if (
                     annotated is not None
                     and isinstance(annotated, np.ndarray)

@@ -1,6 +1,7 @@
 import socket
 
-# Define the Network Information to Communicate with the rover - take a look at firmware UML diagram for more information
+# Define the Network Information to Communicate with the rover - take a look at firmware UML diagram
+# for more information
 UDP_IP = "192.168.50.223"
 UDP_PORT = 9000
 UDP_REPLY_PORT = (

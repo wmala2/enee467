@@ -15,7 +15,8 @@ TARGET_FPS = 15.0
 
 
 def main():
-    # Create the detector once, outside the main loop (imgsz=960 finds smaller objects, ~9 Hz on CPU)
+    # Create the detector once, outside the main loop (imgsz=960 finds smaller objects, ~9 Hz on
+    # CPU)
     extractor = YOLOExtractor(model_path=MODEL_PATH, imgsz=960, verbose=True)
 
     # Open the laptop's own camera (video port 0)

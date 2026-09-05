@@ -119,7 +119,7 @@ def save_silent_histogram(box_depths, filtered_pixels, final_dist, obj_name):
         plt.savefig(output_filename, dpi=150)
         plt.close()  # Clean up graph canvas memory
         print(f"\n[SUCCESS] Lab diagnostic chart saved to: '{output_filename}'")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 -- a failed diagnostic plot must not lose the run it was plotting
         print(f"\n[ERROR] Failed to save snapshot chart: {e}")
 
 
@@ -220,7 +220,8 @@ if __name__ == "__main__":
 
                     if trigger_snapshot_save and len(valid_detections) == 0:
                         print(
-                            "\n[WARNING] Snapshot hotkey ignored: No visible objects detected to profile."
+                            "\n[WARNING] Snapshot hotkey ignored: No visible objects detected to "
+                            "profile."
                         )
 
                 # Reset the one-shot trigger flag immediately

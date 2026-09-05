@@ -62,7 +62,7 @@ class CameraStream:
                         self._frame = frame
                         self._stamp = now
                         self._last_ok = now
-            except Exception:
+            except Exception:  # noqa: BLE001 -- see below; the watchdog handles a sustained outage
                 # Network hiccup: keep the old frame, the watchdog tracks how long we've been down
                 time.sleep(0.05)
 

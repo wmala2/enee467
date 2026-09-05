@@ -81,7 +81,8 @@ class ArucoFollower(Rover):
 
     def update(self):
         print(
-            f"Driving to ArUco tag {self.MARKER_ID}, stopping {self.stop_tolerance_m} m away - press Q in the window to quit"
+            f"Driving to ArUco tag {self.MARKER_ID}, stopping {self.stop_tolerance_m} m away - "
+            f"press Q in the window to quit"
         )
 
         # Running Constantly

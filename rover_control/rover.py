@@ -43,7 +43,8 @@ class Rover:
         self.velocity_bias = (self.MAX_VELOCITY + self.MIN_VELOCITY) / 2.0
         self._last_loop_time = time.perf_counter()
 
-        # Camera for the simple vision behaviors (estimators are created the first time they're needed)
+        # Camera for the simple vision behaviors (estimators are created the first time they're
+        # needed)
         self.camera_addr = camera_addr
         self.show_camera = show_camera
         self._aruco_estimator = None
@@ -73,7 +74,8 @@ class Rover:
         )
 
         # Put message into JSON format for the rover firmware.
-        # Keys MUST match the firmware exactly: command "m" with left_mps/right_mps (meters per second).
+        # Keys MUST match the firmware exactly: command "m" with left_mps/right_mps (meters per
+        # second).
         self._cmd_index += 1
         msg = json.dumps({
             "command": "m",
@@ -138,7 +140,8 @@ class Rover:
         )
         left, right = (spin, -spin) if degrees >= 0 else (-spin, spin)
 
-        # Spinning at the stall-floor speed, the rover turns at this rate, so this long covers `degrees`
+        # Spinning at the stall-floor speed, the rover turns at this rate, so this long covers
+        # `degrees`
         omega = 2.0 * self.MIN_VELOCITY / self.wheel_separation
         end_time = time.perf_counter() + np.radians(abs(degrees) * self.TURN_SCALE) / omega
         try:
@@ -193,7 +196,8 @@ class Rover:
 
     def see_tag(self, tag_id):
         # One stop-and-stare reading of an ArUco tag. Returns {"position":[x,y,z], "bearing":deg,
-        # "distance":m} averaged over fresh, agreeing frames, or None if the tag isn't steadily seen.
+        # "distance":m} averaged over fresh, agreeing frames, or None if the tag isn't steadily
+        # seen.
         estimator = self._aruco()
         for _ in range(self.MAX_LOOK_TRIES):
             since = (
@@ -267,13 +271,14 @@ class Rover:
         return self._yolo_estimator
 
     def _see_object(self, yolo, name):
-        # Stop-and-stare reading of a named COCO object: returns {"bearing":deg, "distance":m} or None.
+        # Stop-and-stare reading of a named COCO object: returns {"bearing":deg, "distance":m} or
+        # None.
         # Aims at the nearest matching object and only trusts it if several frames agree.
         bearings, distances = [], []
         for _ in range(self.CONFIRM_FRAMES):
             try:
                 frame = yolo.get_frame_from_http(self.camera_addr)
-            except Exception:
+            except Exception:  # noqa: BLE001, S112 -- a dropped frame just costs us one of CONFIRM_FRAMES
                 continue
             annotated, detections = yolo.process(frame)
             self._maybe_show(annotated)
@@ -292,7 +297,8 @@ class Rover:
         return None
 
     def follow_object(self, name, stop_distance_m=0.25):
-        # Search for a named COCO object (e.g. "bottle"), center on it, and drive up to stop_distance_m away
+        # Search for a named COCO object (e.g. "bottle"), center on it, and drive up to
+        # stop_distance_m away
         print(f"Looking for a {name}...")
         yolo = self._yolo()
         while True:
@@ -315,6 +321,7 @@ class Rover:
         self.stop()
 
     def close(self):
-        # Shut down the background camera reader (safe to skip - it also stops when the program ends)
+        # Shut down the background camera reader (safe to skip - it also stops when the program
+        # ends)
         if self._aruco_estimator is not None:
             self._aruco_estimator.close()

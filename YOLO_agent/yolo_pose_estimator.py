@@ -2,7 +2,8 @@ import os
 
 # If the depth model is already in the local Hugging Face cache, force offline mode so it loads
 # straight from disk with no network calls. This lets the YOLO 3D-pose examples run on a network
-# with no internet (like the rover's BaleNet). The first run still needs internet to download it once.
+# with no internet (like the rover's BaleNet). The first run still needs internet to download it
+# once.
 _DEPTH_MODEL = "depth-anything/Depth-Anything-V2-Metric-Indoor-Small-hf"
 _hf_home = os.environ.get("HF_HOME", os.path.expanduser("~/.cache/huggingface"))
 _hf_hub = os.environ.get("HF_HUB_CACHE", os.path.join(_hf_home, "hub"))

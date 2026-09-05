@@ -74,7 +74,6 @@ _model = None
 
 def process_frame():
     """Pulls the next ordered frame from the FIFO queue and processes it on GPU."""
-    global _model
     _ready.set()
 
     while True:
@@ -104,7 +103,8 @@ def process_frame():
             with torch.autocast(device_type="cuda", dtype=torch.float16):
                 prediction = _model.inference(
                     [frame],
-                    # 378 is the model's native training resolution — resize to this before inference
+                    # 378 is the model's native training resolution — resize to this before
+                    # inference
                     process_res=378,
                     process_res_method="upper_bound_resize",
                 )
@@ -115,7 +115,7 @@ def process_frame():
 
             result["depth"] = metric_depth_meters.astype(np.float32)
             result["shape"] = metric_depth_meters.shape
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 -- surfaced to the caller as an error field; the worker thread must survive
             result["error"] = str(exc)
         finally:
             done.set()
@@ -123,7 +123,7 @@ def process_frame():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _model, _ready
+    global _model
 
     if not torch.cuda.is_available():
         raise RuntimeError("No CUDA GPU detected.")
@@ -144,8 +144,11 @@ async def lifespan(app: FastAPI):
     _ready.wait()
     print("Depth server ready — Fair Bounded FIFO Engine Active")
 
-    yield
-    _work_queue.push(None)
+    try:
+        yield
+    finally:
+        # Sentinel must reach the worker even if the app raises, or the thread never exits.
+        _work_queue.push(None)
 
 
 app = FastAPI(lifespan=lifespan)
@@ -168,7 +171,8 @@ async def depth_endpoint(request: Request):
     # Push to our fair FIFO queue structure
     _work_queue.push((jpeg_bytes, result, done))
 
-    # run_in_executor offloads the blocking done.wait() to a thread so FastAPI's event loop stays responsive
+    # run_in_executor offloads the blocking done.wait() to a thread so FastAPI's event loop stays
+    # responsive
     await asyncio.get_event_loop().run_in_executor(None, done.wait, 5.0)
 
     if not done.is_set():

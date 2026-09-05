@@ -68,7 +68,8 @@ unresolved gaps before real deployment**:
   negate one channel.
 
 ## Reward
-`PROGRESS_WEIGHT * (forward arc-length delta / track length) + CENTER_WEIGHT * (1 - |line-centering error|) + COMPLETION_BONUS` on
+`PROGRESS_WEIGHT * (forward arc-length delta / track length)
++ CENTER_WEIGHT * (1 - |line-centering error|) + COMPLETION_BONUS` on
 lap/traversal completion. Progress is ground-truth position projected onto the track's
 waypoints (reward-only privilege — never in the observation), windowed around the
 previous match to avoid teleporting to a spatially-close-but-path-distant part of the
@@ -133,7 +134,7 @@ def main():
 
     with tempfile.TemporaryDirectory() as tmp:
         shutil.copy(model_path, os.path.join(tmp, "model.zip"))
-        with open(os.path.join(tmp, "README.md"), "w") as f:
+        with open(os.path.join(tmp, "README.md"), "w", encoding="utf-8") as f:
             f.write(build_model_card(args.summary))
 
         src_dir = os.path.join(tmp, "source")
@@ -142,7 +143,7 @@ def main():
             os.makedirs(os.path.dirname(dst), exist_ok=True)
             shutil.copy(os.path.join(REPO_ROOT, rel), dst)
 
-        with open(os.path.join(tmp, "hyperparameters.json"), "w") as f:
+        with open(os.path.join(tmp, "hyperparameters.json"), "w", encoding="utf-8") as f:
             json.dump(
                 {
                     "env_id": ENV_ID,

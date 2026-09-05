@@ -31,7 +31,8 @@ def main():
         tensorboard_log=OUT_DIR,
     )
     print(
-        f"Resumed at {model.num_timesteps} timesteps, ent_coef={model.ent_coef}, device={model.device}"
+        f"Resumed at {model.num_timesteps} timesteps, ent_coef={model.ent_coef}, "
+        f"device={model.device}"
     )
     model.learn(total_timesteps=ADDITIONAL_TIMESTEPS, reset_num_timesteps=False)
     model.save(os.path.join(OUT_DIR, "model"))

@@ -22,21 +22,21 @@ SWEEP_DIR = os.path.join(os.path.dirname(__file__), "../runs/sweep")
 VARIANTS = {
     # Baseline PPO defaults reproduced here for reference (not meant to be re-run — the
     # 10M-step run already covers this point).
-    "baseline": dict(),
+    "baseline": {},
     # SB3 default ent_coef=0.0 — no entropy bonus at all. This is the most likely fix for
     # "found one safe behavior and stopped exploring": reward the policy for keeping its
     # action distribution's entropy up, directly countering premature convergence.
-    "entropy_0.01": dict(ent_coef=0.01),
-    "entropy_0.02": dict(ent_coef=0.02),
+    "entropy_0.01": {"ent_coef": 0.01},
+    "entropy_0.02": {"ent_coef": 0.02},
     # Constant 3e-4 for the entire run may be too high once the policy's already found a
     # decent local behavior (causing it to keep perturbing away from good updates — matches
     # the elevated approx_kl/clip_fraction seen in the plateaued region). Linear decay to 0.
-    "lr_linear_decay": dict(learning_rate=lambda progress_remaining: 3e-4 * progress_remaining),
+    "lr_linear_decay": {"learning_rate": lambda progress_remaining: 3e-4 * progress_remaining},
     # Combine both.
-    "entropy_0.01_lr_decay": dict(
-        ent_coef=0.01,
-        learning_rate=lambda progress_remaining: 3e-4 * progress_remaining,
-    ),
+    "entropy_0.01_lr_decay": {
+        "ent_coef": 0.01,
+        "learning_rate": lambda progress_remaining: 3e-4 * progress_remaining,
+    },
 }
 
 

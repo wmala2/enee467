@@ -18,7 +18,8 @@ TARGET_FPS = 5.0
 
 
 def main():
-    # Create the detector once, outside the main loop (imgsz=960 finds smaller objects, ~9 Hz on CPU)
+    # Create the detector once, outside the main loop (imgsz=960 finds smaller objects, ~9 Hz on
+    # CPU)
     extractor = YOLOExtractor(model_path=MODEL_PATH, imgsz=640, verbose=True)
 
     print("YOLOv8n ESP32 camera demo - press Q in the window to quit")
@@ -26,7 +27,7 @@ def main():
         # Grab one JPEG still from the ESP32 camera, just like the ArUco tracker does
         try:
             frame = extractor.get_frame_from_http(HTTP_ADDR)
-        except Exception as error:
+        except Exception as error:  # noqa: BLE001 -- one bad frame should not end the demo loop
             print(f"Camera error: {error}")
             continue
 

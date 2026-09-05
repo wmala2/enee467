@@ -1,6 +1,7 @@
 import math
 import os
 import random
+from typing import ClassVar
 
 import gymnasium as gym
 from gymnasium import spaces
@@ -64,7 +65,7 @@ class LineFollowerEnv(gym.Env):
     since reward is a training-only construct that doesn't exist at deployment, unlike
     the observation, which has to work with only what the real rover can sense."""
 
-    metadata = {"render_modes": ["human"], "render_fps": 50}
+    metadata: ClassVar[dict] = {"render_modes": ["human"], "render_fps": 50}
     TRACKS = TRACKS  # class attribute so subclasses (e.g. LineFollowerRealEnv) can point
     # at different scene files (different actuators) without re-implementing __init__
 

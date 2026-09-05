@@ -61,7 +61,7 @@ def main():
         return
 
     # Calibration
-    ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(
+    ret, mtx, dist, _, _ = cv2.calibrateCamera(
         object_points, image_points, gray.shape[::-1], None, None
     )
 

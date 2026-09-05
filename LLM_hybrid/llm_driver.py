@@ -2,6 +2,7 @@
 import json
 import os
 import time
+from typing import ClassVar
 
 import cv2
 import ollama
@@ -14,7 +15,7 @@ class LLMDriver:
 
     # The exact JSON shape we force the model to reply with: see the target or not,
     # and where it sits in the image, so the answer can steer the rover
-    RESPONSE_SCHEMA = {
+    RESPONSE_SCHEMA: ClassVar[dict] = {
         "type": "object",
         "properties": {
             "target_seen": {"type": "boolean"},
@@ -54,7 +55,8 @@ class LLMDriver:
                 {
                     "role": "user",
                     "content": (
-                        f"You are the front camera of a small rover. Look for a {self.target_object} "
+                        f"You are the front camera of a small rover. Look for a "
+                        f"{self.target_object} "
                         "in this image. Report if you see it and whether it is on the left, "
                         "center, or right of the image."
                     ),

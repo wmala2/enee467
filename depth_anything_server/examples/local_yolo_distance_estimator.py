@@ -118,7 +118,8 @@ with torch.inference_mode():
 
                 # Print metrics cleanly to the terminal
                 print(
-                    f"Target Spotted: {detection['name']} ({detection['confidence']:.2f}) -> {distance_m:.2f} meters away"
+                    f"Target Spotted: {detection['name']} ({detection['confidence']:.2f}) -> "
+                    f"{distance_m:.2f} meters away"
                 )
 
                 # 2. Draw a striking custom bounding box border directly onto the frame

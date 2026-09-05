@@ -24,7 +24,7 @@ class RoverNavigationClient:
             img_arr = np.frombuffer(response.content, dtype=np.uint8)
             frame = cv2.imdecode(img_arr, cv2.IMREAD_COLOR)
             return frame
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 -- caller treats None as "no frame this tick"
             if self.verbose:
                 print(f"Error communicating with rover {rover_ip}: {e}")
             return None
@@ -63,7 +63,7 @@ class RoverNavigationClient:
                 self._show_debug_window(frame, depth_meters)
 
             return depth_meters
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 -- caller treats None as "no depth this tick"
             if self.verbose:
                 print(f"Server inference failed: {e}")
             return None

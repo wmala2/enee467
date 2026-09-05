@@ -30,7 +30,8 @@ class ArucoTracker(Rover):
             verbose=True,  # set False if you only want data
         )
 
-        # PID that holds the standoff distance (+Z forward): drives forward when far, backs up when close
+        # PID that holds the standoff distance (+Z forward): drives forward when far, backs up when
+        # close
         self.distance_pid = PID(kp=0.8, ki=0.05, kd=0.10, output_limit=self.MAX_VELOCITY)
 
         # PID that keeps the tag centered (+X is right), output is a turning speed in m/s
@@ -81,7 +82,8 @@ class ArucoTracker(Rover):
         return speed
 
     def search_speeds(self):
-        # Spin slowly in place to bring a lost tag back into view (left wheel back, right wheel forward)
+        # Spin slowly in place to bring a lost tag back into view (left wheel back, right wheel
+        # forward)
         spin = conversions.convert_linear_vel_to_angular_vel(
             self.MIN_VELOCITY, self.wheel_diameter / 2.0
         )
@@ -89,7 +91,8 @@ class ArucoTracker(Rover):
 
     def update(self):
         print(
-            f"Tracking ArUco tag {self.MARKER_ID}, holding {self.STANDOFF_M} m - press Q in the window to quit"
+            f"Tracking ArUco tag {self.MARKER_ID}, holding {self.STANDOFF_M} m - press Q in the "
+            f"window to quit"
         )
 
         # Running Constantly

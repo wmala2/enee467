@@ -83,7 +83,7 @@ while True:
     try:
         frame = get_frame(HTTP_ADDR)
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 -- any camera/network failure should skip the frame, not stop the stream
         print(f"Camera error: {e}")
         continue
 
@@ -103,7 +103,8 @@ while True:
         # Draw marker outlines
         cv2.aruco.drawDetectedMarkers(frame, corners, ids)
 
-        # Where the marker's four corners sit in its own frame (top-left, top-right, bottom-right, bottom-left)
+        # Where the marker's four corners sit in its own frame (top-left, top-right, bottom-right,
+        # bottom-left)
         half = marker_length_m / 2.0
         marker_points = np.array(
             [
@@ -117,7 +118,8 @@ while True:
 
         # Iterate through each detected marker
         for i, marker_id in enumerate(ids.flatten()):
-            # Estimate this marker's pose (cv2.aruco.estimatePoseSingleMarkers was removed in OpenCV 4.7+)
+            # Estimate this marker's pose (cv2.aruco.estimatePoseSingleMarkers was removed in OpenCV
+            # 4.7+)
             ok, rvec, tvec = cv2.solvePnP(
                 marker_points,
                 corners[i].reshape((-1, 1, 2)),

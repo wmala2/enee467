@@ -44,7 +44,8 @@ class EncoderPoller:
         self._thread = None
 
     def start(self):
-        # Launch the background polling thread; returns self so you can chain: EncoderPoller().start()
+        # Launch the background polling thread; returns self so you can chain:
+        # EncoderPoller().start()
         self._running = True
         self._thread = threading.Thread(target=self._run, daemon=True, name="encoder_poller")
         self._thread.start()

@@ -2,6 +2,7 @@
 import json
 import os
 import time
+from typing import ClassVar
 
 import cv2
 import numpy as np
@@ -10,7 +11,7 @@ import ollama
 
 class ObjectIdentifier:
     # The exact JSON shape we force the model to reply with
-    RESPONSE_SCHEMA = {
+    RESPONSE_SCHEMA: ClassVar[dict] = {
         "type": "object",
         "properties": {"object": {"type": "string"}},
         "required": ["object"],

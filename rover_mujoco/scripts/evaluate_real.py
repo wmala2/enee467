@@ -18,7 +18,7 @@ def main():
     mj_model = env.unwrapped.model
     mj_data = env.unwrapped.data
 
-    obs, info = env.reset()
+    obs, _ = env.reset()
     episode_reward = 0.0
 
     with mujoco.viewer.launch_passive(mj_model, mj_data) as viewer:
@@ -26,14 +26,14 @@ def main():
             step_start = time.time()
 
             action, _ = model.predict(obs, deterministic=True)
-            obs, reward, terminated, truncated, info = env.step(action)
+            obs, reward, terminated, truncated, _ = env.step(action)
             episode_reward += reward
             viewer.sync()
 
             if terminated or truncated:
                 print(f"Episode reward: {episode_reward}")
                 episode_reward = 0.0
-                obs, info = env.reset()
+                obs, _ = env.reset()
 
             time_until_next_step = mj_model.opt.timestep - (time.time() - step_start)
             if time_until_next_step > 0:

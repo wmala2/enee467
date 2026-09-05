@@ -4,6 +4,7 @@ tweaking its shape below; the output is a worldbody-only <mujoco> file meant to 
 pulled in via <include> from a scene (see assets/robots/rover/rover_line_*.xml).
 """
 
+import itertools
 import math
 import os
 
@@ -18,7 +19,7 @@ LINE_RGBA = "0.05 0.05 0.05 1"
 
 def build_track_xml(name, waypoints):
     lines = [f'<mujoco model="{name}">', "  <worldbody>"]
-    for (x0, y0), (x1, y1) in zip(waypoints, waypoints[1:]):
+    for (x0, y0), (x1, y1) in itertools.pairwise(waypoints):
         mx, my = (x0 + x1) / 2, (y0 + y1) / 2
         seg_len = math.hypot(x1 - x0, y1 - y0)
         heading_deg = math.degrees(math.atan2(y1 - y0, x1 - x0))
@@ -41,6 +42,6 @@ if __name__ == "__main__":
     }
     for name, waypoints in tracks.items():
         path = os.path.join(out_dir, f"{name}.xml")
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             f.write(build_track_xml(name, waypoints))
         print(f"wrote {path} ({len(waypoints)} waypoints)")

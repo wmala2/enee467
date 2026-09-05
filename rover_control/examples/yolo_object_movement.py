@@ -63,7 +63,8 @@ class YoloFollower(Rover):
         forward = self.distance_pid.update(distance_error, dt)
         turn = self.heading_pid.update(position[0], dt)
 
-        # Mix forward and turn for a differential drive (object to the right -> left wheel speeds up)
+        # Mix forward and turn for a differential drive (object to the right -> left wheel speeds
+        # up)
         speed = [forward + turn, forward - turn]
 
         # Correctly convert for our pseudo-twist message
@@ -86,7 +87,8 @@ class YoloFollower(Rover):
 
     def update(self):
         print(
-            f"Driving to YOLO object '{self.TARGET_OBJECT}', stopping {self.stop_tolerance_m} m away - press Q in the window to quit"
+            f"Driving to YOLO object '{self.TARGET_OBJECT}', stopping {self.stop_tolerance_m} m "
+            f"away - press Q in the window to quit"
         )
 
         # Running Constantly
@@ -94,7 +96,7 @@ class YoloFollower(Rover):
             # Grab one JPEG still from the ESP32 camera, then find the object and its 3D pose
             try:
                 frame = self.estimator.get_frame_from_http(self.img_addr)
-            except Exception as error:
+            except Exception as error:  # noqa: BLE001 -- one bad frame should not stop the rover mid-drive
                 print(f"Camera error: {error}")
                 continue
             annotated, detections = self.estimator.process(frame)

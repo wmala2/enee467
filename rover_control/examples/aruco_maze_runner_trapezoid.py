@@ -1,5 +1,6 @@
 # External Libraries
 import time
+from typing import ClassVar
 
 import cv2
 import numpy as np
@@ -27,7 +28,7 @@ class ArucoTrapezoidRunner(Rover):
     (ramp up, cruise, ramp down) straight to it - taking no pictures while moving.
     """
 
-    MARKER_ID_LIST = [0, 1]  # the order of ArUco tag IDs we drive toward
+    MARKER_ID_LIST: ClassVar[list[int]] = [0, 1]  # the order of ArUco tag IDs we drive toward
     CRUISE_VELOCITY = 0.20  # top speed of the trapezoid (m/s), under the rover's MAX_VELOCITY
     ACCEL = 0.20  # how fast the speed ramps up and down (m/s^2)
     CENTER_TOLERANCE_DEG = (
@@ -66,7 +67,8 @@ class ArucoTrapezoidRunner(Rover):
         # Background encoder + lidar poller - gives us actual wheel counts and proximity readings
         self.poller = EncoderPoller().start()
 
-        # Populated by look() so approach_tag() can log detection reliability alongside its decisions
+        # Populated by look() so approach_tag() can log detection reliability alongside its
+        # decisions
         self._look_stats = {}
 
     def _enc(self):
@@ -93,7 +95,8 @@ class ArucoTrapezoidRunner(Rover):
             raise KeyboardInterrupt
 
     def turn_in_place(self, direction, degrees, target_id=None):
-        # Spin the rover on the spot by a number of degrees (open-loop, timed at the stall-floor speed)
+        # Spin the rover on the spot by a number of degrees (open-loop, timed at the stall-floor
+        # speed)
         # direction: +1 turns toward the tag's right (+X), -1 turns left
         omega = 2.0 * self.MIN_VELOCITY / self.wheel_separation
         spin_time = np.radians(degrees) / omega
@@ -130,7 +133,8 @@ class ArucoTrapezoidRunner(Rover):
             )
 
     def look(self, target_id):
-        # Stop-and-stare measurement, hardened: trust a reading only when several fresh frames AGREE.
+        # Stop-and-stare measurement, hardened: trust a reading only when several fresh frames
+        # AGREE.
         # next_frame() only returns frames captured AFTER `since`, so the stale, laggy frames from
         # while we were moving are skipped deterministically - no frame-count guessing.
         total_sampled = total_with_tag = 0
@@ -224,7 +228,8 @@ class ArucoTrapezoidRunner(Rover):
             return distance_m
 
     def drive_straight(self, distance_m, target_id=None):
-        # Play back a trapezoidal speed curve over time to cover distance_m, both wheels equal (straight)
+        # Play back a trapezoidal speed curve over time to cover distance_m, both wheels equal
+        # (straight)
         v_min = self.MIN_VELOCITY  # motors stall below this, so the ramps start/end here, not at 0
         v_cruise = self.CRUISE_VELOCITY
         a = self.ACCEL
@@ -245,7 +250,8 @@ class ArucoTrapezoidRunner(Rover):
         # Total time the curve takes: ramp up + cruise + ramp down
         t_total = 2.0 * t_ramp + t_cruise
 
-        # Log the planned (open-loop) move so we can compare commanded distance vs where the tag lands
+        # Log the planned (open-loop) move so we can compare commanded distance vs where the tag
+        # lands
         self.logger.log(
             phase="drive",
             event=f"trapezoid {distance_m:.2f}m / {t_total:.1f}s",
@@ -279,8 +285,10 @@ class ArucoTrapezoidRunner(Rover):
         self.stop()
 
     def reach_tag(self, target_id):
-        # Center, drive, then VERIFY we arrived. We drive open-loop (no encoders), so one trapezoid can
-        # under/overshoot - take fresh captures afterward and re-drive the re-measured gap if we fell short.
+        # Center, drive, then VERIFY we arrived. We drive open-loop (no encoders), so one trapezoid
+        # can
+        # under/overshoot - take fresh captures afterward and re-drive the re-measured gap if we
+        # fell short.
         distance = self.approach_tag(target_id)  # initial search + center + confirmed distance
         for attempt in range(self.MAX_APPROACH_TRIES):
             remaining = distance - self.stop_tolerance_m
@@ -349,7 +357,8 @@ class ArucoTrapezoidRunner(Rover):
 
     def update(self):
         print(
-            f"Trapezoidal maze run over tags {self.MARKER_ID_LIST} - press Q in the window or Ctrl-C to quit"
+            f"Trapezoidal maze run over tags {self.MARKER_ID_LIST} - press Q in the window or "
+            f"Ctrl-C to quit"
         )
 
         try:
@@ -360,7 +369,8 @@ class ArucoTrapezoidRunner(Rover):
                     print(f"Reached tag {target_id} (verified)!")
                 else:
                     print(
-                        f"Could not confirm tag {target_id} after {self.MAX_APPROACH_TRIES} tries - moving on."
+                        f"Could not confirm tag {target_id} after {self.MAX_APPROACH_TRIES} tries "
+                        f"- moving on."
                     )
 
             print("Maze complete - every tag in the list visited!")

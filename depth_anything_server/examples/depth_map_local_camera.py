@@ -33,7 +33,8 @@ with torch.inference_mode():
 
         # Apply PyTorch optimization: Run with Automatic Mixed Precision (FP16)
         with torch.autocast(device_type="cuda", dtype=torch.float16):
-            # 3. Model inference using the official DA3 API (handles resize internally via process_res)
+            # 3. Model inference using the official DA3 API (handles resize internally via
+            # process_res)
             # We pass the BGR frame directly; the API manages the array-to-tensor pipeline
             prediction = model.inference(
                 [frame], process_res=378, process_res_method="upper_bound_resize"

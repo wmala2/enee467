@@ -1,5 +1,6 @@
 # External Libraries
 import time
+from typing import ClassVar
 
 import cv2
 import numpy as np
@@ -28,7 +29,7 @@ class ArucoRunner(Rover):
          a guard stops and re-centers if the tag drifts off-center or drops out of view.
     """
 
-    MARKER_ID_LIST = [0, 1]  # the order of ArUco tag IDs we drive toward
+    MARKER_ID_LIST: ClassVar[list[int]] = [0, 1]  # the order of ArUco tag IDs we drive toward
     CENTER_TOLERANCE_DEG = (
         7.0  # "semi-centered" enough to drive; also keeps each turn above a tiny-burst size
     )
@@ -47,7 +48,8 @@ class ArucoRunner(Rover):
 
     # Cap forward speed well below the base class limit: at full throttle the chassis vibrates
     # enough to lose the ArUco tag every 2-5 frames. The logs show reliable lock only when
-    # saturated=False (distance_error < ~0.3 m). 0.12 m/s keeps us in that regime the whole approach.
+    # saturated=False (distance_error < ~0.3 m). 0.12 m/s keeps us in that regime the whole
+    # approach.
     MAX_VELOCITY = 0.12  # m/s (overrides Rover.MAX_VELOCITY = 0.25)
 
     def __init__(self, stop_tolerance_m=0.25):
@@ -74,7 +76,8 @@ class ArucoRunner(Rover):
         # Remember when we last ran the controller so the PIDs get a real time step
         self._last_pid_time = time.perf_counter()
 
-        # Diagnostic logging (one CSV row per tick/decision) + per-tick scratch from compute_wheel_speeds
+        # Diagnostic logging (one CSV row per tick/decision) + per-tick scratch from
+        # compute_wheel_speeds
         self.logger = RunLogger("maze_pid", enabled=self.LOG)
         self._last_frame_stamp = 0.0
         self._dbg = {}
@@ -109,7 +112,8 @@ class ArucoRunner(Rover):
             raise KeyboardInterrupt
 
     def turn_in_place(self, direction, degrees, target_id=None):
-        # Spin the rover on the spot by a number of degrees (open-loop, timed at the stall-floor speed)
+        # Spin the rover on the spot by a number of degrees (open-loop, timed at the stall-floor
+        # speed)
         # direction: +1 turns toward the tag's right (+X), -1 turns left
         omega = 2.0 * self.MIN_VELOCITY / self.wheel_separation
         spin_time = np.radians(degrees * self.TURN_SCALE) / omega
@@ -146,7 +150,8 @@ class ArucoRunner(Rover):
             )
 
     def look(self, target_id):
-        # Stop-and-stare measurement, hardened: trust a reading only when several fresh frames AGREE.
+        # Stop-and-stare measurement, hardened: trust a reading only when several fresh frames
+        # AGREE.
         # next_frame() only returns frames captured AFTER `since`, so the stale, laggy frames from
         # while we were moving are skipped deterministically - no frame-count guessing.
         total_sampled = total_with_tag = 0
@@ -292,7 +297,8 @@ class ArucoRunner(Rover):
 
     def drive_to_tag(self, target_id):
         # Continuous PID approach toward an already-centered tag. Returns "arrived" once we're
-        # within the stop tolerance, or "recenter" if the tag drifts off-center or drops out of view.
+        # within the stop tolerance, or "recenter" if the tag drifts off-center or drops out of
+        # view.
 
         # Start the controllers clean so the first dt isn't a stale stop-and-stare gap
         self.distance_pid.reset()
@@ -301,7 +307,8 @@ class ArucoRunner(Rover):
         _last_known_distance = None  # used to detect "tag went below FOV when very close"
 
         while True:
-            # Pull the freshest frame + its capture time, detect (raw), then smooth (what we steer on)
+            # Pull the freshest frame + its capture time, detect (raw), then smooth (what we steer
+            # on)
             frame, stamp = self.estimator.camera.latest()
             annotated, poses = self.estimator.detect(frame)
             self._show(annotated if annotated is not None else frame)
@@ -317,7 +324,8 @@ class ArucoRunner(Rover):
             position = poses[target_id]["position"] if seen else None
             bearing_smoothed = np.degrees(np.arctan2(position[0], position[2])) if seen else None
 
-            # How old is this frame, and is it actually new since last tick? (camera-lag diagnostics)
+            # How old is this frame, and is it actually new since last tick? (camera-lag
+            # diagnostics)
             frame_age = (time.perf_counter() - stamp) if stamp else None
             frame_is_new = stamp != self._last_frame_stamp
             self._last_frame_stamp = stamp
@@ -424,7 +432,8 @@ class ArucoRunner(Rover):
 
     def update(self):
         print(
-            f"Driving ArUco tags {self.MARKER_ID_LIST}, stopping {self.stop_tolerance_m} m away - press Q in the window or Ctrl-C to quit"
+            f"Driving ArUco tags {self.MARKER_ID_LIST}, stopping {self.stop_tolerance_m} m away - "
+            f"press Q in the window or Ctrl-C to quit"
         )
 
         try:
