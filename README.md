@@ -38,7 +38,18 @@ importable from the real-rover code without leaving the venv.
     uv run rover_mujoco/scripts/teleop_rover.py
     ```
 
-3) (Only for the `LLM_hybrid` examples) Install and start the local Ollama server — see [LLM_hybrid/README.md](LLM_hybrid/README.md) for the two-command setup.
+3) Before committing, lint, format, and type-check everything in one pass:
+    ```bash
+    uv run scripts/check.py         # report problems, change nothing
+    uv run scripts/check.py --fix   # apply the formatter and ruff's safe autofixes
+    ```
+
+   The rules live in the root `pyproject.toml` under `[tool.ruff]` and follow the
+   [Google Python Style Guide](https://google.github.io/styleguide/pyguide.html), at 100 columns
+   rather than 80. `ruff` and `ty` come from the workspace's dev group, so a plain `uv sync`
+   already installed them, and the same command covers `rover_mujoco/` too.
+
+4) (Only for the `LLM_hybrid` examples) Install and start the local Ollama server — see [LLM_hybrid/README.md](LLM_hybrid/README.md) for the two-command setup.
 
 ---
 
