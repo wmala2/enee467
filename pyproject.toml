@@ -7,7 +7,8 @@ name = "matrix_lab_rover_above"
 version = "0.1.0"
 description = "High-level AI agent code (ArUco tracking, YOLO detection, LLM hybrid, rover control) for the STEM Rovers"
 readme = "README.md"
-requires-python = ">=3.10"
+# Pinned to 3.12 by rover_mujoco (MuJoCo/onshape-to-robot); the whole workspace shares one interpreter.
+requires-python = ">=3.12,<3.13"
 dependencies = [
     "huggingface_hub",
     "numpy",
@@ -16,10 +17,54 @@ dependencies = [
     "pillow",
     "pynput",
     "requests",
+    "rover_mujoco",
     "stable-baselines3",
     "transformers",
     "ultralytics",
 ]
 
+# torch is not a plain dependency: pick exactly one of these extras at sync time.
+#   uv sync --extra cpu     (no NVIDIA GPU -- saves ~6 GB)
+#   uv sync --extra cu121   (NVIDIA GPU)
+[project.optional-dependencies]
+cpu = ["torch", "torchvision"]
+cu121 = ["torch", "torchvision"]
+
 [tool.setuptools]
 packages = ["ArUco_detector", "depth_anything_server", "LLM_hybrid", "YOLO_agent", "rover_control"]
+
+# Lint/test tooling for the whole workspace. uv installs this group by default, so a plain
+# `uv sync` gets it; use `uv sync --no-dev` to skip it.
+[dependency-groups]
+dev = [
+    "ruff>=0.3.0",
+    "pytest>=8.0.0",
+    "ty>=0.0.78",
+]
+
+[tool.uv.workspace]
+members = ["rover_mujoco"]
+
+[tool.uv]
+conflicts = [[{ extra = "cpu" }, { extra = "cu121" }]]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu121"
+url = "https://download.pytorch.org/whl/cu121"
+explicit = true
+
+[tool.uv.sources]
+rover_mujoco = { workspace = true }
+torch = [
+    { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-cu121", extra = "cu121" },
+]
+torchvision = [
+    { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-cu121", extra = "cu121" },
+]

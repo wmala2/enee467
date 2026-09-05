@@ -23,19 +23,29 @@ the dependency set with whatever else you end up needing.
 
 ## 2. Clone and install
 
+This directory is a member of the parent repo's
+[uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/): it keeps its own
+`pyproject.toml`, but the lockfile and virtual environment live at the repository root and are
+shared with the high-level rover code. So clone and sync from the root:
+
 ```shell
-git clone https://github.com/CursedRock17/rover_mujoco.git -b main
-cd rover_mujoco
-uv sync
+git clone https://github.com/CursedRock17/matrix_lab_rover_above.git
+cd matrix_lab_rover_above
+uv sync --extra cpu     # or --extra cu121 on a machine with an NVIDIA GPU
 ```
 
-`uv sync` reads `pyproject.toml`/`uv.lock` and builds a `.venv` in the repo with every
-dependency pinned to the same versions everyone else is using. You don't need `uv init`:
+`uv sync` reads the root `pyproject.toml`/`uv.lock` and builds one `.venv` with every dependency
+— this project's *and* the high-level packages' — pinned to the same versions everyone else is
+using. The `--extra` picks which PyTorch build to pull; nothing in `rover_mujoco/` needs torch
+directly, but the same environment serves both halves of the repo. You don't need `uv init`:
 that's for starting a *new* project, and this one already has a `pyproject.toml` from the clone.
 
-If you're using VSCode, point its Python interpreter at `.venv` (Command Palette →
-"Python: Select Interpreter" → the one inside `rover_mujoco/.venv`) so linting/autocomplete
-see the same packages you're running.
+The commands in these docs are written relative to this folder, so `cd rover_mujoco` first and
+run them as-is — `uv run` walks up to the workspace root to find the environment on its own.
+
+If you're using VSCode, point its Python interpreter at the root `.venv` (Command Palette →
+"Python: Select Interpreter" → the one inside `matrix_lab_rover_above/.venv`) so
+linting/autocomplete see the same packages you're running.
 
 ## 3. Sanity check: does MuJoCo actually open a window?
 
@@ -54,16 +64,18 @@ or a display; on all platforms, updating GPU drivers is the most common fix.
 ## 4. Adding your own packages
 
 `pyproject.toml` already has the baseline this project needs: `mujoco`, `gymnasium`,
-`stable-baselines3`, `onshape-to-robot`, plus `ruff`/`ty`/`pytest` as dev tools. To add
-something on top of that:
+`stable-baselines3`, `onshape-to-robot`. The dev tools (`ruff`/`ty`/`pytest`) live in the root
+`pyproject.toml` instead, as a workspace-wide `[dependency-groups] dev`, so one `uv sync` installs
+them for both halves of the repo. To add something on top of that:
 
 ```shell
-uv add some-package          # adds it to [project.dependencies] and installs it
-uv add --dev some-dev-tool   # same, but under [dependency-groups] dev (linting/testing only)
+cd rover_mujoco && uv add some-package   # simulation dependency -> rover_mujoco/pyproject.toml
+uv add --dev some-dev-tool               # linting/testing tool -> run from the repo root
 ```
 
-Both commands update `pyproject.toml` and `uv.lock` for you. Commit both so everyone else
-picks up the same addition on their next `uv sync`. If you ever need a distributable wheel
+Run the first from inside `rover_mujoco/` so it lands in *this* project's `pyproject.toml` rather
+than the root one; either way the lockfile they update is the shared root `uv.lock`. Commit both
+so everyone else picks up the same addition on their next `uv sync`. If you ever need a distributable wheel
 (rather than just a local `.venv`), `uv build` packages the project using exactly what's in
 `pyproject.toml`, extras included.
 
