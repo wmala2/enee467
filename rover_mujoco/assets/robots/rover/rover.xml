@@ -26,40 +26,49 @@
     <body name="base_link" pos="0 0 0.1">
       <inertial pos="-0.00237104 0.0277886 -0.0201836" quat="0.477074 0.524947 -0.508382 0.48824" mass="0.353116" diaginertia="0.00183094 0.00151404 0.000358957"/>
       <joint name="base_floating_joint" type="free"/>
-      <!-- Adjustable-tilt camera, mounted on the chassis's rear overhang (past the driven
-           wheels, on the opposite end from the front_wheel caster) and tilted back toward
-           that same rear direction; centered/straight-down would just see the chassis
-           itself. It doesn't look ahead in the direction of travel, but that doesn't matter
-           for the reactive centroid-based steering in scripts/line_follower.py, which only
-           needs to see the line somewhere near the rover, not predict a path ahead of it.
-           Default tilt here is ~15.2 deg from straight-down (quat, not axisangle: this
+      <!-- Adjustable-tilt camera, mounted directly above the front_wheel caster and tilted
+           forward along the direction of travel; centered/straight-down would just see the
+           chassis itself.
+
+           This used to sit at y=+0.12, the opposite end of the chassis from the caster, and
+           the drive convention in scripts/line_follower.py was inverted to match, so the rover
+           drove caster-trailing. Two errors that cancelled: the sim was self-consistent (the
+           camera led the direction of travel either way) which is why the line follower
+           trained and evaluated fine, but the geometry did not match the real rover, whose
+           camera sits over the caster. teleop_rover.py always had it right.
+           Default tilt is 60 deg from straight-down, not the 15.2 it was at the old mount.
+           Sitting above the caster, a shallow tilt looks straight at the rover's own chassis
+           -- 13.2% of the frame is its own body -- and the track is simply not in view.
+           Measured with line_follower.py's own line_error() over 12 poses on each track:
+           45 deg finds the line 0/12 times, 55 deg 9/12 and 7/12, 60 deg 12/12 on both.
+           (quat, not axisangle: this
            file's compiler angle="radian" makes axisangle degrees a common footgun, and an
            earlier version of this line was actually "-50 radians" by that mistake, not
            "-50 deg" as its comment claimed). Scripts that want a different tilt call
            envs/camera.py's set_camera_tilt() at runtime instead of editing this default;
            see docs/pid-line-follower.md. -->
-      <camera name="top_cam" pos="0 0.12 0.07" quat="0.99120281 0.13235175 0 0" fovy="60"/>
+      <camera name="top_cam" pos="0 -0.098 0.07" quat="0.86602540 -0.50000000 0 0" fovy="60"/>
       <!-- BEGIN generated lidar sites (scripts/gen_rover_lidar.py) -->
       <!-- The rover's three forward ToF beams. Each is a fan of rays spanning
            LIDAR_FOV_DEG (25 deg); GoalNavEnv takes the minimum over each fan,
            which is what a real cone-FOV part reports. A rangefinder casts along its
            site's local +Z, so zaxis aims each ray. Massless, collision-free sites:
            scenes without matching <rangefinder> sensors pay nothing for them. -->
-      <site name="lidar_left_0" pos="0 0.13 -0.06" size="0.005" zaxis="-0.216440 0.976296 0"/>
-      <site name="lidar_left_1" pos="0 0.13 -0.06" size="0.005" zaxis="-0.321439 0.946930 0"/>
-      <site name="lidar_left_2" pos="0 0.13 -0.06" size="0.005" zaxis="-0.422618 0.906308 0"/>
-      <site name="lidar_left_3" pos="0 0.13 -0.06" size="0.005" zaxis="-0.518773 0.854912 0"/>
-      <site name="lidar_left_4" pos="0 0.13 -0.06" size="0.005" zaxis="-0.608761 0.793353 0"/>
-      <site name="lidar_center_0" pos="0 0.13 -0.06" size="0.005" zaxis="0.216440 0.976296 0"/>
-      <site name="lidar_center_1" pos="0 0.13 -0.06" size="0.005" zaxis="0.108867 0.994056 0"/>
-      <site name="lidar_center_2" pos="0 0.13 -0.06" size="0.005" zaxis="-0.000000 1.000000 0"/>
-      <site name="lidar_center_3" pos="0 0.13 -0.06" size="0.005" zaxis="-0.108867 0.994056 0"/>
-      <site name="lidar_center_4" pos="0 0.13 -0.06" size="0.005" zaxis="-0.216440 0.976296 0"/>
-      <site name="lidar_right_0" pos="0 0.13 -0.06" size="0.005" zaxis="0.608761 0.793353 0"/>
-      <site name="lidar_right_1" pos="0 0.13 -0.06" size="0.005" zaxis="0.518773 0.854912 0"/>
-      <site name="lidar_right_2" pos="0 0.13 -0.06" size="0.005" zaxis="0.422618 0.906308 0"/>
-      <site name="lidar_right_3" pos="0 0.13 -0.06" size="0.005" zaxis="0.321439 0.946930 0"/>
-      <site name="lidar_right_4" pos="0 0.13 -0.06" size="0.005" zaxis="0.216440 0.976296 0"/>
+      <site name="lidar_left_0" pos="0 -0.13 -0.06" size="0.005" zaxis="0.216440 -0.976296 0"/>
+      <site name="lidar_left_1" pos="0 -0.13 -0.06" size="0.005" zaxis="0.321439 -0.946930 0"/>
+      <site name="lidar_left_2" pos="0 -0.13 -0.06" size="0.005" zaxis="0.422618 -0.906308 0"/>
+      <site name="lidar_left_3" pos="0 -0.13 -0.06" size="0.005" zaxis="0.518773 -0.854912 0"/>
+      <site name="lidar_left_4" pos="0 -0.13 -0.06" size="0.005" zaxis="0.608761 -0.793353 0"/>
+      <site name="lidar_center_0" pos="0 -0.13 -0.06" size="0.005" zaxis="-0.216440 -0.976296 0"/>
+      <site name="lidar_center_1" pos="0 -0.13 -0.06" size="0.005" zaxis="-0.108867 -0.994056 0"/>
+      <site name="lidar_center_2" pos="0 -0.13 -0.06" size="0.005" zaxis="0.000000 -1.000000 0"/>
+      <site name="lidar_center_3" pos="0 -0.13 -0.06" size="0.005" zaxis="0.108867 -0.994056 0"/>
+      <site name="lidar_center_4" pos="0 -0.13 -0.06" size="0.005" zaxis="0.216440 -0.976296 0"/>
+      <site name="lidar_right_0" pos="0 -0.13 -0.06" size="0.005" zaxis="-0.608761 -0.793353 0"/>
+      <site name="lidar_right_1" pos="0 -0.13 -0.06" size="0.005" zaxis="-0.518773 -0.854912 0"/>
+      <site name="lidar_right_2" pos="0 -0.13 -0.06" size="0.005" zaxis="-0.422618 -0.906308 0"/>
+      <site name="lidar_right_3" pos="0 -0.13 -0.06" size="0.005" zaxis="-0.321439 -0.946930 0"/>
+      <site name="lidar_right_4" pos="0 -0.13 -0.06" size="0.005" zaxis="-0.216440 -0.976296 0"/>
       <!-- END generated lidar sites -->
       <geom pos="0.0160863 -0.0852797 0.272765" quat="0.707105 0 0.707108 0" type="mesh" contype="0" conaffinity="0" rgba="0.647059 0.647059 0.647059 1" mesh="left_motor"/>
       <geom pos="-0.0886915 -0.18808 -0.0273587" quat="0.707105 0 0 -0.707108" type="mesh" contype="0" conaffinity="0" rgba="0.917647 0.917647 0.917647 1" mesh="base_plate"/>

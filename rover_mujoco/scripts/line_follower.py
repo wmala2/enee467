@@ -31,11 +31,10 @@ BANG_TURN_SPEED = 3.0  # angular speed (rad/s) the bang-bang controller applies 
 BANG_DEADBAND = 0.05  # normalized error within which bang-bang just drives straight
 
 # Camera tilt in degrees, 0 (straight down) to 90 (forward-facing, perpendicular to the
-# rover) — see docs/pid-line-follower.md for what each end of that range actually looks
-# like from this mount. 15.2 deg is this mount's original tuned/verified angle; higher
-# angles show progressively more of the rover's own chassis and less ground, and nothing
-# near 90 can see the floor at all, so it's not usable for line-following.
-CAMERA_ANGLE_DEG = 15.2
+# rover) — see docs/pid-line-follower.md. The camera sits above the caster, so a shallow tilt
+# points it at the rover's own chassis rather than the track: measured over 12 poses on each
+# track, line_error() finds the line 0/12 times at 45 deg, 9/12 at 55, and 12/12 at 60.
+CAMERA_ANGLE_DEG = 60.0
 
 CAM_RES = 64  # onboard camera resolution (small + square keeps centroid math cheap)
 DARK_THRESHOLD = 60  # pixel value below which we call a pixel "line"
@@ -48,9 +47,9 @@ def start_pose(waypoints_fn):
     tx, ty = x1 - x0, y1 - y0
     norm = math.hypot(tx, ty)
     tx, ty = tx / norm, ty / norm
-    # Robot "forward" is its local +Y axis (see teleop_rover.py); solve for the yaw that
-    # rotates local +Y onto the world tangent direction (tx, ty).
-    yaw = math.atan2(-tx, ty)
+    # Robot "forward" is its local -Y axis -- the caster end (see teleop_rover.py's mixing);
+    # solve for the yaw that rotates local -Y onto the world tangent direction (tx, ty).
+    yaw = math.atan2(tx, -ty)
     quat = [math.cos(yaw / 2), 0.0, 0.0, math.sin(yaw / 2)]
     return (x0, y0), quat
 
@@ -122,7 +121,10 @@ def main():
                 angular, integral = pid_control(error, integral, prev_error)
             prev_error = error
 
-            data.ctrl[:] = [LINEAR_SPEED + angular, -LINEAR_SPEED + angular]
+            # Forward is [-v, +v], the same mixing teleop_rover.py uses. This was inverted
+            # here, which drove the rover caster-trailing -- backwards, by the model's own
+            # naming -- and every script derived from this one inherited it.
+            data.ctrl[:] = [-LINEAR_SPEED + angular, LINEAR_SPEED + angular]
 
             mujoco.mj_step(model, data)
             viewer.sync()

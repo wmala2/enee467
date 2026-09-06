@@ -33,19 +33,13 @@ runtime instead of hand-editing `rover.xml`.
 
 Worth knowing before you start changing it:
 
-- The default, `~15.2°`, is this mount's original tuned angle — the one all the tracking
-  numbers below were measured at.
-- This particular camera is mounted on the chassis's *rear* overhang (see the comment in
-  `rover.xml`), not out over the front. It doesn't look ahead in the direction of travel, and
-  that's fine: centroid-based steering only needs to see the line somewhere near the rover, not
-  predict a path ahead of it. If you build a *forward*-looking mount instead (a real design
-  choice worth trying), expect to re-tune the mount position, not just the angle.
-- Higher angles put progressively more of the rover's own chassis in frame and less ground,
-  since the mount sits close to the chassis rather than out on a boom. Straight down (0°) and
-  the default (~15°) both keep a usable strip of floor in view; angles approaching 90° see
-  none of the ground at all (there's nothing to find a centroid of), so they're not usable for
-  this task even though the code will happily let you set them. Render a frame and look at it
-  before assuming a given angle will track anything.
+- The default is **60°**. The camera sits directly above the caster, so a shallow tilt points
+  it at the rover's own chassis rather than the track — 13.2% of the frame is its own body.
+  Measured with `line_error()` over 12 poses on each track: 45° finds the line 0/12 times,
+  55° finds it 9/12 and 7/12, and 60° finds it 12/12 on both, well centred.
+- This replaced a `~15.2°` default that belonged to an older mount, where the camera sat on
+  the opposite end of the chassis from the caster and the drive convention was inverted to
+  match. See the note in `rover.xml`.
 
 ## Tracks
 

@@ -71,13 +71,15 @@ reading on odd steps (`LIDAR_DECIMATION`) rather than pretending both sensors ar
 
 ### The camera is the weak sensor here, and that's measured
 
-The line follower's camera sits at ~15.2° from straight down, which is right for looking at a
-line under the rover and useless for looking at an obstacle in front of it. Rendering a box at
-various mount angles:
+These numbers were taken at the old camera mount, where it sat on the opposite end of the
+chassis from the caster. That mount was wrong (see `rover.xml`) and the camera now sits above
+the caster at a 60° default, so re-measure before relying on the exact figures — the shape of
+the result, that this camera is short-range only, still holds. Rendering a box at various mount
+angles:
 
 | Tilt | Obstacle 0.4 m ahead | Obstacle 0.8 m ahead |
 |------|---------------------|---------------------|
-| 15.2° (line-follower default) | 0.0% of pixels | 0.0% |
+| 15.2° (old line-follower default) | 0.0% of pixels | 0.0% |
 | 45° | 6.0% | 0.0% |
 | 60° (`CAMERA_ANGLE_DEG` here) | 8.4% | 1.1% |
 | 75° | 9.4% | 1.0% |

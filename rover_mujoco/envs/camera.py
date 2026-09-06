@@ -11,7 +11,13 @@ import mujoco
 
 def set_camera_tilt(model, cam_name, angle_deg):
     """Point `cam_name` `angle_deg` up from straight-down (0) toward forward-facing (90),
-    rotating about the camera mount's own local X (its lateral/hinge axis)."""
+    rotating about the camera mount's own local X (its lateral/hinge axis).
+
+    The negative sine is what makes "forward" mean forward. A MuJoCo camera looks along its
+    own -Z, and rotating about +X by theta swings that view toward +Y -- which is the *rear*
+    on this rover, whose forward is local -Y (see teleop_rover.py's mixing). Rotating the
+    other way tilts the view along the direction of travel, which is what every caller means
+    by this argument."""
     cam_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, cam_name)
     theta = math.radians(angle_deg)
-    model.cam_quat[cam_id] = [math.cos(theta / 2), math.sin(theta / 2), 0.0, 0.0]
+    model.cam_quat[cam_id] = [math.cos(theta / 2), -math.sin(theta / 2), 0.0, 0.0]

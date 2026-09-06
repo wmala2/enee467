@@ -150,7 +150,7 @@ def control(obs, avoid=True, state=None):
                 state._commit_steps -= 1  # clear: run out the trailing steps
             if state._commit_steps > 0:
                 turn = state._commit_turn
-                return escape_dead_zone([AVOID_CRUISE + turn, -AVOID_CRUISE + turn])
+                return escape_dead_zone([-AVOID_CRUISE + turn, AVOID_CRUISE + turn])
         if blocked:
             if state is not None:
                 state._commit_steps = AVOID_CLEAR_STEPS
@@ -187,7 +187,7 @@ def control(obs, avoid=True, state=None):
     # stopping to turn. cos() keeps forward speed high when nearly aligned and low when not.
     speed = CRUISE * max(math.cos(bearing), 0.25)
     turn = TURN_GAIN * bearing
-    return escape_dead_zone([speed + turn, -speed + turn])
+    return escape_dead_zone([-speed + turn, speed + turn])
 
 
 def main():

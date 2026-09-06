@@ -313,9 +313,9 @@ class GoalNavEnv(gym.Env):
         self._layout = self._place_obstacles(rng, start_xy, self._goal_xy, n_obstacles)
 
         self.data.qpos[0], self.data.qpos[1], self.data.qpos[2] = start_xy[0], start_xy[1], 0.1
-        # Robot forward is local +Y (see teleop_rover.py), so a world heading of start_yaw is a
-        # rotation of start_yaw - 90 deg about z.
-        half = (start_yaw - math.pi / 2) / 2
+        # Robot forward is local -Y -- the caster end (see teleop_rover.py), so a world heading
+        # of start_yaw is a rotation of start_yaw + 90 deg about z.
+        half = (start_yaw + math.pi / 2) / 2
         self.data.qpos[3:7] = [math.cos(half), 0.0, 0.0, math.sin(half)]
 
         self._randomize(rng)
@@ -449,10 +449,10 @@ class GoalNavEnv(gym.Env):
         return np.where(np.abs(omega) < self._min_omega, 0.0, omega)
 
     def _true_yaw(self):
-        """World heading of the rover's forward (+Y local) axis."""
+        """World heading of the rover's forward (-Y local) axis."""
         mat = np.zeros(9)
         mujoco.mju_quat2Mat(mat, self.data.qpos[3:7])
-        forward = mat.reshape(3, 3) @ np.array([0.0, 1.0, 0.0])
+        forward = mat.reshape(3, 3) @ np.array([0.0, -1.0, 0.0])
         return math.atan2(forward[1], forward[0])
 
     def _heading_error(self):

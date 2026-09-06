@@ -243,16 +243,16 @@ def integrate_odometry(pose, left_ticks, right_ticks, counts_per_rev):
     x, y, yaw = pose
     left_rad = 2.0 * math.pi * left_ticks / counts_per_rev
     right_rad = 2.0 * math.pi * right_ticks / counts_per_rev
-    # Two sign conventions from rover.xml have to be undone here, and getting either wrong
-    # flips the turn direction (measured: a driving arc came out mirrored about the rover's
-    # axis until both were fixed):
-    #   1. The right wheel's body frame is mirrored, so equal-sign wheel commands spin in
-    #      place; negating it recovers the usual differential-drive mixing.
-    #   2. The joint *names* are swapped relative to the physical sides -- "left_axle" is the
-    #      wheel at x=+0.0798, which is on the rover's right when forward is +Y. So the ticks
-    #      that arrive as `left_ticks` belong to the physically-right wheel.
-    right_wheel_dist = left_rad * WHEEL_RADIUS
-    left_wheel_dist = -right_rad * WHEEL_RADIUS
+    # One sign convention from rover.xml to undo: forward is the [-v, +v] mixing (see
+    # teleop_rover.py), so a wheel rolling the rover forward reads negative on the left axle
+    # and positive on the right. Negating the left recovers the usual differential-drive form.
+    #
+    # The joint names are not swapped, contrary to what an earlier version of this comment
+    # claimed. Forward is local -Y, which puts left at +X, and left_axle sits at x=+0.0798 --
+    # so it really is the left wheel. That earlier confusion was a downstream symptom of the
+    # drive convention being inverted, not a separate quirk of the model.
+    left_wheel_dist = -left_rad * WHEEL_RADIUS
+    right_wheel_dist = right_rad * WHEEL_RADIUS
     ds = (left_wheel_dist + right_wheel_dist) / 2.0
     dyaw = (right_wheel_dist - left_wheel_dist) / WHEEL_BASE
     # Midpoint integration -- advance half the turn, translate along that heading, then the

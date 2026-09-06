@@ -23,8 +23,8 @@ SENSOR_BEGIN = "    <!-- BEGIN generated lidar sensors (scripts/gen_rover_lidar.
 SENSOR_END = "    <!-- END generated lidar sensors -->"
 
 # Where the sensor sits on the chassis: forward of centre and low, roughly where the real part
-# is mounted. Robot forward is local +Y (see teleop_rover.py).
-MOUNT_POS = "0 0.13 -0.06"
+# is mounted. Robot forward is local -Y -- the caster end (see teleop_rover.py's mixing).
+MOUNT_POS = "0 -0.13 -0.06"
 
 
 def site_lines():
@@ -43,10 +43,10 @@ def site_lines():
     for name, angles in zip(arena.LIDAR_BEAM_NAMES, arena.lidar_ray_angles(), strict=True):
         for i, deg in enumerate(angles):
             rad = math.radians(deg)
-            # Positive angle = toward the rover's left, which is -X when forward is +Y.
+            # Positive angle = toward the rover's left, which is +X when forward is -Y.
             lines.append(
                 f'      <site name="lidar_{name}_{i}" pos="{MOUNT_POS}" size="0.005"'
-                f' zaxis="{-math.sin(rad):.6f} {math.cos(rad):.6f} 0"/>'
+                f' zaxis="{math.sin(rad):.6f} {-math.cos(rad):.6f} 0"/>'
             )
     lines.append(SITE_END)
     return lines

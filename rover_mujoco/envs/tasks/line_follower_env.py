@@ -219,7 +219,7 @@ class LineFollowerEnv(gym.Env):
         tx, ty = x1 - x0, y1 - y0
         norm = math.hypot(tx, ty)
         tx, ty = tx / norm, ty / norm
-        yaw = math.atan2(-tx, ty)
+        yaw = math.atan2(tx, -ty)
         quat = [math.cos(yaw / 2), 0.0, 0.0, math.sin(yaw / 2)]
         return (x0, y0), quat
 
