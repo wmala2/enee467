@@ -97,6 +97,7 @@ def camera_overlay(img, error, scale=6):
     Draws with numpy rather than cv2 so this stays a MuJoCo-only dependency; the window itself
     is cv2, which the workspace already ships for the ArUco and YOLO packages."""
     view = np.repeat(np.repeat(img, scale, axis=0), scale, axis=1).astype(np.uint8).copy()
+    view = np.vstack([np.zeros((26, view.shape[1], 3), dtype=np.uint8), view])
     band_top = int(CAM_RES * (1.0 - GROUND_BAND)) * scale
     view[band_top, :, :] = [0, 160, 255]  # boundary of the band the centroid uses
 
@@ -107,12 +108,52 @@ def camera_overlay(img, error, scale=6):
     view[dark_big] = (0.45 * view[dark_big] + 0.55 * tint[dark_big]).astype(np.uint8)
 
     mid = view.shape[1] // 2
-    view[:, mid - 1 : mid + 1, :] = [90, 90, 90]  # image centre
+    view[26:, mid - 1 : mid + 1, :] = [90, 90, 90]  # image centre
     if error is not None:
         col = int((error * (CAM_RES / 2) + CAM_RES / 2) * scale)
         col = max(1, min(view.shape[1] - 2, col))
-        view[:, col - 1 : col + 1, :] = [0, 255, 0]  # measured line centroid
+        view[26:, col - 1 : col + 1, :] = [0, 255, 0]  # measured line centroid
     return view
+
+
+def read_telemetry(model, data):
+    """(forward speed m/s, left wheel rad/s, right wheel rad/s) from the model's own sensors.
+
+    Read through sensordata rather than qvel so this reports exactly what the viewer's sensor
+    plot is drawing, and exactly what a real rover would publish."""
+    adr = {}
+    for name in ("base_velocity", "left_wheel_speed", "right_wheel_speed"):
+        sid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SENSOR, name)
+        adr[name] = model.sensor_adr[sid]
+    vel = data.sensordata[adr["base_velocity"] : adr["base_velocity"] + 3]
+    # The velocimeter is in the site's frame, and the rover's forward is its local -Y.
+    return (
+        -float(vel[1]),
+        float(data.sensordata[adr["left_wheel_speed"]]),
+        float(data.sensordata[adr["right_wheel_speed"]]),
+    )
+
+
+def show_telemetry(viewer, data, speed, error):
+    """Float a text readout above the rover in the MuJoCo viewer.
+
+    user_scn is the viewer's scratch scene for caller-supplied geoms. A fully transparent
+    sphere carries the label without drawing anything, which is the least intrusive way to get
+    text into the 3D view -- the passive viewer has no text overlay API of its own."""
+    scene = viewer.user_scn
+    scene.ngeom = 0
+    marker = scene.geoms[0]
+    mujoco.mjv_initGeom(
+        marker,
+        mujoco.mjtGeom.mjGEOM_SPHERE,
+        np.array([0.005, 0.0, 0.0]),
+        data.qpos[:3] + np.array([0.0, 0.0, 0.22]),
+        np.eye(3).flatten(),
+        np.array([1.0, 1.0, 1.0, 0.0]),
+    )
+    err = "  line lost" if error is None else f"  err {error:+.2f}"
+    marker.label = f"{speed:+.2f} m/s{err}"
+    scene.ngeom = 1
 
 
 def pid_control(error, integral, prev_error):
@@ -170,11 +211,19 @@ def main():
             step_start = time.time()
 
             error = line_error(cam_renderer, data)
+            speed, left_rad_s, right_rad_s = read_telemetry(model, data)
+            show_telemetry(viewer, data, speed, error)
             if show_camera:
                 cam_renderer.update_scene(
                     data, camera="top_cam", scene_option=onboard_scene_option()
                 )
                 frame = camera_overlay(cam_renderer.render(), error)
+                readout = f"{speed:+.2f} m/s   L {left_rad_s:+5.2f}  R {right_rad_s:+5.2f}   " + (
+                    "line lost" if error is None else f"err {error:+.3f}"
+                )
+                cv2.putText(
+                    frame, readout, (6, 18), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (255, 255, 255), 1
+                )
                 cv2.imshow("rover camera (red = line, green = centroid)", frame[:, :, ::-1])
                 if cv2.waitKey(1) & 0xFF == 27:
                     break

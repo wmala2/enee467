@@ -29,6 +29,15 @@
     <geom name="floor" type="plane" size="2 2 0.1" rgba=".8 .8 .8 1"/>
   </worldbody>
 
+  <sensor>
+    <!-- Declared so MuJoCo's viewer can plot them live (its sensor figure is empty unless the
+         model has sensors). Wheel speeds are what you command; the base velocimeter is what
+         the chassis actually does, which is the pair worth watching while tuning. -->
+    <jointvel name="left_wheel_speed" joint="left_axle"/>
+    <jointvel name="right_wheel_speed" joint="right_axle"/>
+    <velocimeter name="base_velocity" site="base_imu"/>
+  </sensor>
+
   <actuator>
     <!-- Raw torque actuator, unlike rover_line_s_curve.xml's <velocity> servo: ctrl here is
          Nm, computed each step by envs/motor.py's JGA25-371 DC-motor model rather than by

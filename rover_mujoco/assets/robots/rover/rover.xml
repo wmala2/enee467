@@ -48,6 +48,8 @@
            envs/camera.py's set_camera_tilt() at runtime instead of editing this default;
            see docs/pid-line-follower.md. -->
       <camera name="top_cam" pos="0 -0.098 0.07" quat="0 0 0.50000000 0.86602540" fovy="60"/>
+      <!-- Massless reference frame for the base velocimeter sensor. -->
+      <site name="base_imu" pos="0 0 0" size="0.005"/>
       <!-- BEGIN generated lidar sites (scripts/gen_rover_lidar.py) -->
       <!-- The rover's three forward ToF beams. Each is a fan of rays spanning
            LIDAR_FOV_DEG (25 deg); GoalNavEnv takes the minimum over each fan,
