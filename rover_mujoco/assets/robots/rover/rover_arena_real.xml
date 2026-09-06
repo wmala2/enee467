@@ -5,6 +5,12 @@
   <include file="../../objects/arena/arena_5x5.xml"/>
 
   <!-- Implicit integrator: see docs/onshape-to-robot-mjcf.md for why this matters here -->
+  <!-- Offscreen framebuffer, only used for top-down renders and debugging; the
+       policy's own 64x64 camera needs nothing this large. -->
+  <visual>
+    <global offwidth="960" offheight="640"/>
+  </visual>
+
   <option integrator="implicitfast"/>
 
   <worldbody>

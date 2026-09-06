@@ -22,10 +22,19 @@ def build_track_xml(name, waypoints):
     for (x0, y0), (x1, y1) in itertools.pairwise(waypoints):
         mx, my = (x0 + x1) / 2, (y0 + y1) / 2
         seg_len = math.hypot(x1 - x0, y1 - y0)
-        heading_deg = math.degrees(math.atan2(y1 - y0, x1 - x0))
+        heading = math.atan2(y1 - y0, x1 - x0)
+        # Quaternion rather than euler, deliberately. This used to emit `euler="0 0 <degrees>"`
+        # while rover.xml sets a global <compiler angle="radian">, so MuJoCo read each heading
+        # as radians -- a 45-degree segment was rotated 45 radians. Every box landed at an
+        # essentially arbitrary angle and the "line" came out as scattered dashes. A quaternion
+        # carries no unit, so the footgun cannot recur.
+        qw, qz = math.cos(heading / 2), math.sin(heading / 2)
+        # Half-length is padded by half the line width so consecutive boxes overlap instead of
+        # merely touching; without it every bend leaves a visible wedge on its outside.
+        half_len = seg_len / 2 + LINE_WIDTH / 2
         lines.append(
-            f'    <geom type="box" size="{seg_len / 2:.4f} {LINE_WIDTH / 2} {LINE_THICKNESS}" '
-            f'pos="{mx:.4f} {my:.4f} {LINE_THICKNESS}" euler="0 0 {heading_deg:.2f}" '
+            f'    <geom type="box" size="{half_len:.4f} {LINE_WIDTH / 2} {LINE_THICKNESS}" '
+            f'pos="{mx:.4f} {my:.4f} {LINE_THICKNESS}" quat="{qw:.6f} 0 0 {qz:.6f}" '
             f'contype="0" conaffinity="0" group="3" rgba="{LINE_RGBA}"/>'
         )
     lines += ["  </worldbody>", "</mujoco>", ""]
