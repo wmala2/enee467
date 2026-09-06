@@ -97,7 +97,11 @@ class Controller:
         self._commit_turn = 0.0
 
     def __call__(self, obs):
-        return control(obs, avoid=self.avoid, state=self)
+        """Returns a normalized action. The controller reasons in rad/s because that is what
+        the motor limits are expressed in; the env's action space is [-1, 1], so divide at the
+        boundary rather than scattering the scale through the control law."""
+        wheels = control(obs, avoid=self.avoid, state=self)
+        return np.clip(wheels / arena.MAX_WHEEL_SPEED, -1.0, 1.0).astype(np.float32)
 
 
 def control(obs, avoid=True, state=None):

@@ -194,12 +194,14 @@ class GoalNavEnv(gym.Env):
             mujoco.Renderer(self.model, height=CAM_RES, width=CAM_RES) if include_image else None
         )
 
-        # Bounded by what the motors can actually do, not an arbitrary +/-10 rad/s: the policy
-        # used to be able to command 1.34x the real top speed, with rl_rover.py clamping at
-        # inference instead -- which its own docstring flags as causing jerky behaviour at the
-        # clamp boundary. Training inside the real envelope removes that mismatch.
-        limit = np.float32(arena.MAX_WHEEL_SPEED)
-        self.action_space = spaces.Box(low=-limit, high=limit, shape=(2,), dtype=np.float32)
+        # Normalized to [-1, 1] and scaled to rad/s inside step(). This is not cosmetic: SB3's
+        # Gaussian policy starts at std ~= 1 around zero, so an action space in physical units
+        # (+/-MAX_WHEEL_SPEED = 7.46 rad/s) puts 97.5% of sampled commands inside the motors'
+        # 2.24 rad/s dead zone. The rover then cannot move at all, every episode ends on the
+        # stuck detector at exactly STUCK_WINDOW steps, and nothing is ever learned -- which is
+        # precisely what the first run of this did. Normalized, only 23.5% land in the dead
+        # zone. The real envelope still applies, just after scaling.
+        self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(2,), dtype=np.float32)
 
         obs_spaces = {
             "encoders": spaces.Box(low=-1.0, high=1.0, shape=(OBS_HISTORY, 2), dtype=np.float32),
@@ -352,7 +354,9 @@ class GoalNavEnv(gym.Env):
     # --- stepping --------------------------------------------------------------------------
 
     def step(self, action):
-        action = np.clip(action, self.action_space.low, self.action_space.high)
+        # [-1, 1] in, rad/s out. Noise is added after scaling because ACTION_NOISE_STD_RANGE is
+        # in rad/s -- a physical quantity, not a fraction of the action range.
+        action = np.clip(action, -1.0, 1.0) * arena.MAX_WHEEL_SPEED
         noisy = action + self.np_random.normal(0.0, self._action_noise_std, size=2)
         self._action_buffer.append(noisy.astype(np.float32))
         target_omega = self._apply_actuator_envelope(self._action_buffer[0])
