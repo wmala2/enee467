@@ -1,0 +1,18 @@
+<mujoco model="rover_HardTrack">
+  <!-- Rover body/mesh/joint/camera tree compiled from rover.urdf -->
+  <include file="rover.xml"/>
+  <!-- Track converted from the Webots PROTO by scripts/import_webots_track.py -->
+  <include file="../../objects/tracks/HardTrack.xml"/>
+
+  <option integrator="implicitfast"/>
+
+  <worldbody>
+    <light diffuse=".8 .8 .8" pos="0 0 3" dir="0 0 -1"/>
+    <geom name="floor" type="plane" size="6 6 0.1" rgba=".8 .8 .8 1"/>
+  </worldbody>
+
+  <actuator>
+    <velocity name="left_wheel_motor" joint="left_axle" kv="0.2" ctrlrange="-10 10"/>
+    <velocity name="right_wheel_motor" joint="right_axle" kv="0.2" ctrlrange="-10 10"/>
+  </actuator>
+</mujoco>
