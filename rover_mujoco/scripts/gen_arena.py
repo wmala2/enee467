@@ -24,25 +24,13 @@ COLLIDE_BITS = 'contype="3" conaffinity="3"'
 
 
 def build_arena_xml():
-    half = arena.ARENA_HALF
-    thickness = arena.WALL_THICKNESS
-    height = arena.WALL_HEIGHT
-    # Walls sit just outside the nominal square so the usable floor is exactly ARENA_SIZE.
-    offset = half + thickness
-
     lines = ['<mujoco model="arena_5x5">', "  <worldbody>"]
-    lines.append(f"    <!-- {arena.ARENA_SIZE:g}x{arena.ARENA_SIZE:g} m walled arena -->")
-    walls = [
-        ("wall_north", f"0 {offset} {height / 2}", f"{offset} {thickness} {height / 2}"),
-        ("wall_south", f"0 -{offset} {height / 2}", f"{offset} {thickness} {height / 2}"),
-        ("wall_east", f"{offset} 0 {height / 2}", f"{thickness} {offset} {height / 2}"),
-        ("wall_west", f"-{offset} 0 {height / 2}", f"{thickness} {offset} {height / 2}"),
-    ]
-    for name, pos, size in walls:
-        lines.append(
-            f'    <geom name="{name}" type="box" pos="{pos}" size="{size}"'
-            f' {COLLIDE_BITS} rgba="0.6 0.6 0.65 1"/>'
-        )
+    lines.append(  # noqa: FURB113 -- one long comment block, not a run of appends
+        f"    <!-- {arena.ARENA_SIZE:g}x{arena.ARENA_SIZE:g} m arena. Deliberately unwalled: the\n"
+        "         boundary is a soft one that the rover can cross, which ends the episode as a\n"
+        "         failure (OUT_OF_BOUNDS_TOLERANCE). Walls would make straying impossible and\n"
+        "         would also hand the camera a free, always-present visual reference. -->"
+    )
 
     lines.append(
         "    <!-- Obstacle pool: parked outside the walls, moved into place each reset\n"

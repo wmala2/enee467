@@ -108,6 +108,50 @@ def lidar_ray_angles():
 WHEEL_BASE = 0.1626
 WHEEL_RADIUS = 0.0335
 
+# --- Actuator envelope, straight from rover_control/rover.py -------------------------------
+# The real motors have both a ceiling and a dead zone: below MIN_VELOCITY the wheels cannot
+# overcome friction at all. The sim used to allow +/-10 rad/s with no dead zone, i.e. 1.34x the
+# real top speed plus a band of commands the hardware simply cannot execute, and rl_rover.py
+# papered over it by clamping at inference -- its own docstring warns of "jerky behavior right
+# at the clamp boundaries". Training inside the real envelope removes that mismatch.
+MAX_WHEEL_SPEED = 0.25 / WHEEL_RADIUS  # ~7.46 rad/s
+MIN_WHEEL_SPEED = 0.075 / WHEEL_RADIUS  # ~2.24 rad/s, below which the wheel stalls
+MAX_SPEED_SCALE_RANGE = (0.85, 1.15)  # DR: unit-to-unit motor variation
+MIN_SPEED_SCALE_RANGE = (0.70, 1.30)  # DR: dead zone varies with surface and battery state
+
+# --- Systematic odometry error ------------------------------------------------------------
+# The DR that actually decides whether dead reckoning survives contact with reality. Gaussian
+# encoder noise averages out; a wheel that is 2% larger than nominal, or a track width off by a
+# few mm, produces a steady curve whose error grows without bound. Slip is the other half: on
+# carpet or grass the wheels turn further than the rover travels, so odometry over-reports.
+# Calibrated against the arrival tolerance rather than guessed. Measured total odometry drift
+# over a 250-step arc: with these off entirely the floor is already 0.10 m mean / 0.21 m max
+# (Gaussian tick noise, quantization, and real wheel slip in the physics), against a 0.25 m
+# tolerance. The originals -- +/-3% radius and up to 8% slip -- pushed that to 0.31 m mean /
+# 0.84 m max, i.e. the rover could no longer tell it had arrived and nothing could solve the
+# task. These keep the systematic failure mode in the training distribution without making the
+# goal unknowable.
+WHEEL_RADIUS_SCALE_RANGE = (0.99, 1.01)
+TRACK_WIDTH_SCALE_RANGE = (0.99, 1.01)
+WHEEL_SLIP_RANGE = (0.0, 0.03)  # fraction of commanded wheel travel lost to slip
+
+# --- Goal pose ----------------------------------------------------------------------------
+# The goal is a pose, not a point: "go to (1, 2) heading North" also fixes the final heading,
+# expressed in the rover's own start frame (it has no compass, only encoders).
+HEADING_TOLERANCE_DEG = 20.0
+
+# --- Boundary -----------------------------------------------------------------------------
+# The arena is a soft boundary now, not a walled box: the rover can drive out of it and that
+# ends the episode as a failure. Walls would have made straying impossible and would also have
+# been free obstacles for the camera to key off.
+OUT_OF_BOUNDS_TOLERANCE = 0.5
+
+# --- Path-aware progress ------------------------------------------------------------------
+# Straight-line distance to the goal is a dishonest progress signal once something is in the
+# way: it rewards driving into an obstacle. This grid supports a geodesic (around-obstacles)
+# distance instead, which is the same quantity A*/Dijkstra optimise.
+GRID_CELL = 0.05
+
 
 def sample_start(rng):
     """A spawn (x, y) and yaw anywhere in the arena, kept WALL_MARGIN clear of the walls.
@@ -232,3 +276,71 @@ def goal_in_body_frame(pose, goal_xy):
     forward = dx * math.cos(yaw) + dy * math.sin(yaw)
     left = -dx * math.sin(yaw) + dy * math.cos(yaw)
     return np.array([forward, left], dtype=np.float32)
+
+
+def sample_pose_goal(rng, start_xy, min_distance, max_distance):
+    """A goal pose: position sampled as before, plus a final heading drawn uniformly. Returned
+    in world terms; GoalNavEnv converts both into the rover's start frame, which is the frame
+    the command is actually given in."""
+    xy = sample_goal(rng, start_xy, min_distance, max_distance)
+    return xy, rng.uniform(-math.pi, math.pi)
+
+
+def _occupancy(obstacles, inflate):
+    """Boolean grid over the arena plus its out-of-bounds margin: True where the rover's centre
+    cannot be. Obstacles are inflated by `inflate` so the grid is in centre-of-rover terms."""
+    extent = ARENA_HALF + OUT_OF_BOUNDS_TOLERANCE
+    n = round(2 * extent / GRID_CELL)
+    axis = (np.arange(n) + 0.5) * GRID_CELL - extent
+    gx, gy = np.meshgrid(axis, axis, indexing="ij")
+    blocked = np.zeros((n, n), dtype=bool)
+    for xy, radius, is_box in obstacles:
+        if is_box:
+            blocked |= (np.abs(gx - xy[0]) <= radius + inflate) & (
+                np.abs(gy - xy[1]) <= radius + inflate
+            )
+        else:
+            blocked |= ((gx - xy[0]) ** 2 + (gy - xy[1]) ** 2) <= (radius + inflate) ** 2
+    return blocked, axis
+
+
+def distance_field(obstacles, goal_xy, inflate=ROVER_RADIUS):
+    """Geodesic distance in metres from every reachable cell to the goal, routed *around*
+    obstacles -- Dijkstra on an 8-connected grid, which is what A*/D*/Dijkstra would compute.
+
+    Built once per reset and then read per step, so the per-step cost is a lookup. Cells the
+    rover cannot reach come back as inf; callers fall back to straight-line distance there
+    rather than handing the policy an infinity."""
+    import heapq
+
+    blocked, axis = _occupancy(obstacles, inflate)
+    n = len(axis)
+    dist = np.full((n, n), np.inf)
+
+    def to_cell(p):
+        i = int(np.clip((p[0] - axis[0]) / GRID_CELL + 0.5, 0, n - 1))
+        j = int(np.clip((p[1] - axis[1]) / GRID_CELL + 0.5, 0, n - 1))
+        return i, j
+
+    gi, gj = to_cell(goal_xy)
+    # A goal inside an inflated obstacle would seed nothing; free its own cell so the field
+    # still grows outward from it.
+    blocked[gi, gj] = False
+    dist[gi, gj] = 0.0
+    queue = [(0.0, gi, gj)]
+    steps = [
+        (di, dj, GRID_CELL * math.hypot(di, dj))
+        for di in (-1, 0, 1)
+        for dj in (-1, 0, 1)
+        if (di, dj) != (0, 0)
+    ]
+    while queue:
+        d, i, j = heapq.heappop(queue)
+        if d > dist[i, j]:
+            continue
+        for di, dj, cost in steps:
+            ni, nj = i + di, j + dj
+            if 0 <= ni < n and 0 <= nj < n and not blocked[ni, nj] and d + cost < dist[ni, nj]:
+                dist[ni, nj] = d + cost
+                heapq.heappush(queue, (d + cost, ni, nj))
+    return dist, axis, to_cell

@@ -10,8 +10,10 @@
   <worldbody>
     <!-- Overhead light so the rover, obstacles and walls are visible in the viewer -->
     <light diffuse=".8 .8 .8" pos="0 0 3" dir="0 0 -1"/>
-    <!-- Ground plane sized to the arena, not the default 10x10 rover_scene.xml floor -->
-    <geom name="floor" type="plane" size="2.5 2.5 0.1" rgba=".8 .8 .8 1"/>
+    <!-- Ground plane extends past the 5x5 arena by OUT_OF_BOUNDS_TOLERANCE plus margin, so a
+         rover that strays outside the soft boundary is still driving on something when the
+         episode ends rather than falling off the world. -->
+    <geom name="floor" type="plane" size="3.5 3.5 0.1" rgba=".8 .8 .8 1"/>
   </worldbody>
 
   <sensor>

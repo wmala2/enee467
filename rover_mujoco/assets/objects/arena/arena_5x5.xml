@@ -1,10 +1,9 @@
 <mujoco model="arena_5x5">
   <worldbody>
-    <!-- 5x5 m walled arena -->
-    <geom name="wall_north" type="box" pos="0 2.55 0.075" size="2.55 0.05 0.075" contype="3" conaffinity="3" rgba="0.6 0.6 0.65 1"/>
-    <geom name="wall_south" type="box" pos="0 -2.55 0.075" size="2.55 0.05 0.075" contype="3" conaffinity="3" rgba="0.6 0.6 0.65 1"/>
-    <geom name="wall_east" type="box" pos="2.55 0 0.075" size="0.05 2.55 0.075" contype="3" conaffinity="3" rgba="0.6 0.6 0.65 1"/>
-    <geom name="wall_west" type="box" pos="-2.55 0 0.075" size="0.05 2.55 0.075" contype="3" conaffinity="3" rgba="0.6 0.6 0.65 1"/>
+    <!-- 5x5 m arena. Deliberately unwalled: the
+         boundary is a soft one that the rover can cross, which ends the episode as a
+         failure (OUT_OF_BOUNDS_TOLERANCE). Walls would make straying impossible and
+         would also hand the camera a free, always-present visual reference. -->
     <!-- Obstacle pool: parked outside the walls, moved into place each reset
          (see envs/tasks/goal_nav_env.py). Each is a MOCAP body rather than a bare
          worldbody geom, and that is load-bearing: MuJoCo precomputes broadphase

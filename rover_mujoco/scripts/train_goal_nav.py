@@ -7,11 +7,11 @@ goal handed to the policy as a dead-reckoned vector that drifts rather than as g
 
 Two choices here are worth knowing about before changing them:
 
-* `include_image=False`. Rendering the onboard camera costs ~4.8 ms of a 5.4 ms step, and the
-  camera was measured to see 0% of an obstacle 0.4 m ahead at the line follower's mount angle
-  and ~8% at this env's (see docs/rl-goal-nav.md). The lidar carries the obstacle signal, so
-  the image buys almost nothing here and costs ~4.5x the wall-clock. Turn it back on if you
-  want to study vision for this task -- just budget an order of magnitude more time.
+* `include_image=True, include_lidar=False`. Obstacle avoidance is camera-only by design, so
+  the policy gets the same monocular view a deployed rover would and no range at all. The
+  classical baseline (scripts/goal_nav_baseline.py) reaches 14.5% arrivals without avoidance
+  and only 4.5% with it, because avoidance manoeuvres lengthen episodes and odometry drift
+  grows with them -- beating that while keeping collisions down is the actual objective.
 * `curriculum=True`. Success is much sparser than line following, so each env starts on short
   goals in an empty arena and promotes itself once it arrives reliably. The final level is the
   full task: 3-8 obstacles, goals up to 3.5 m. See CURRICULUM in envs/tasks/goal_nav_env.py.
@@ -30,12 +30,12 @@ from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import SubprocVecEnv
 
 ENV_ID = "GoalNav-v0"
-TOTAL_TIMESTEPS = 8_000_000
+TOTAL_TIMESTEPS = 2_000_000
 MODEL_DIR = os.path.join(os.path.dirname(__file__), "../runs/ppo_goal_nav")
 
 # Without the camera render the rollout is physics-bound and cheap, so this scales further
 # than train_real.py's 8 (which was rendering-bound). Measured on this machine before picking.
-N_ENVS = 24
+N_ENVS = 16
 
 # ent_coef: the line-follower sweep found the SB3 default of 0.0 plateaued from
 # under-exploration while 0.01 was still climbing at 3M steps (see sweep_hparams.py). This
@@ -54,7 +54,10 @@ BATCH_SIZE = 512
 # decisions. 0.995 roughly doubles that horizon.
 GAMMA = 0.995
 
-ENV_KWARGS = {"include_image": False, "curriculum": True}
+# Camera on, lidar off: obstacle avoidance here is specified as camera-only, so the policy
+# sees what the rover sees and gets no range information. That costs roughly an order of
+# magnitude in throughput versus the vector-only configuration -- rendering dominates the step.
+ENV_KWARGS = {"include_image": True, "include_lidar": False, "curriculum": True}
 
 
 class ProgressCallback(BaseCallback):
