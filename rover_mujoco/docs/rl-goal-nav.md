@@ -222,9 +222,38 @@ Shaped like the line follower's, for the same reasons:
 - **`STEP_PENALTY`** every step, so dawdling costs something and standing still is never
   optimal — the failure mode that made the first line-follower reward function degenerate.
 
+- **`PROXIMITY_WEIGHT`** every step the nearest lidar beam reads closer than
+  `PROXIMITY_THRESHOLD_M`, scaled by how far inside that threshold it is.
+
 Reward uses ground-truth position. That is the same reward-only privilege `LineFollowerEnv`
 documents: reward is a training-time construct that doesn't exist at deployment, unlike the
-observation, which stays honest.
+observation, which stays honest. The proximity term is the exception that proves it — it is
+computed from the *lidar*, not from true obstacle positions, precisely so it rewards something
+the deployed policy can also perceive.
+
+### Why the proximity term exists
+
+`COLLISION_PENALTY` on its own is a terminal signal delivered at the instant of contact, with
+nothing warning the policy on the way in. That is the classic sparse-penalty failure and it
+showed up exactly as the textbook predicts: training stalled at ~40% arrival and ~60%
+collisions for 160k steps at curriculum level 2, oscillating with no trend. The policy had no
+gradient telling it that closing on an obstacle was bad until it was too late to act.
+
+Scale matters here — too large and the policy learns to freeze rather than risk approaching
+anything. Measured against a random policy, the proximity term costs **9.2 points per episode
+on average** (worst case 66.2, which is a policy grinding against an obstacle for a whole
+episode and deserves it), against `COLLISION_PENALTY` 25 and roughly 150 for a clean run. So a
+whole episode of skimming past obstacles still costs less than one crash.
+
+### Sensor history
+
+The policy is a memoryless MLP and the lidar refreshes only every other control step
+(`LIDAR_DECIMATION`), so from a single frame it cannot tell a fresh reading from a held one,
+let alone whether an obstacle is closing. `encoders` and `lidar` therefore carry the last
+`OBS_HISTORY` (4) readings, most recent first, stacked *inside the env* rather than by a
+`VecFrameStack` wrapper — so evaluation and the real-rover bridge stay honest by just keeping
+the same deque. Before four readings exist the oldest is repeated, so the shape is fixed and
+the padding is a plausible past rather than zeros.
 
 ## Training configuration
 

@@ -72,6 +72,13 @@ CURRICULUM = (
     {"obstacles": (2, 5), "goal_distance": (1.0, 2.5)},
     {"obstacles": (3, arena.MAX_OBSTACLES), "goal_distance": (1.0, 3.5)},
 )
+# Sensor history. The policy is a memoryless MLP, and the lidar refreshes only every other
+# control step (LIDAR_DECIMATION), so from a single frame it cannot tell a fresh reading from a
+# held one, let alone whether an obstacle is approaching. Stacking the last few readings inside
+# the env -- rather than with a VecFrameStack wrapper -- keeps evaluation and the real-rover
+# bridge honest: both just keep the same deque.
+OBS_HISTORY = 4
+
 CURRICULUM_WINDOW = 50  # episodes of history each env keeps
 CURRICULUM_PROMOTE_RATE = 0.7  # arrive this often over that window and the level goes up
 
@@ -81,6 +88,15 @@ CURRICULUM_PROMOTE_RATE = 0.7  # arrive this often over that window and the leve
 PROGRESS_WEIGHT = 100.0
 SUCCESS_BONUS = 50.0
 COLLISION_PENALTY = 25.0  # one-off, and the episode ends there
+
+# Dense obstacle feedback. COLLISION_PENALTY alone is a terminal signal that arrives only at
+# the instant of contact, with nothing warning the policy on the way in -- the classic sparse-
+# penalty failure, and measured: training stalled at ~40% arrival / ~60% collisions for 160k
+# steps with no trend. This penalises closing on an obstacle *before* hitting it, using the
+# nearest lidar beam, i.e. a quantity the policy can actually see and act on. Kept small: a
+# whole episode spent skimming obstacles should still cost less than one crash.
+PROXIMITY_THRESHOLD_M = 0.5  # start paying inside this range
+PROXIMITY_WEIGHT = 1.0  # per step, scaled by how far inside the threshold it is
 STEP_PENALTY = 0.05  # per step, so dawdling costs something and stalling is never optimal
 
 # Lidar realism. The real sensor answers in integer millimetres and the firmware reports a
@@ -133,6 +149,7 @@ class GoalNavEnv(gym.Env):
         self.curriculum = curriculum
         self._level = 0
         self._recent_arrivals = deque(maxlen=CURRICULUM_WINDOW)
+        self._sensor_history = deque(maxlen=OBS_HISTORY)
 
         model_path = os.path.join(
             os.path.dirname(__file__), "../../assets/robots/rover", SCENE_FILE
@@ -147,9 +164,11 @@ class GoalNavEnv(gym.Env):
         # All three vector fields are normalized (see the *_SCALE constants), so every bound
         # here is +/-1 rather than the raw sensor range. The goal can exceed 1 only if odometry
         # drift pushes the estimate past the arena diagonal, hence the headroom in GOAL_SCALE.
+        # encoders/lidar carry the last OBS_HISTORY readings, most recent first; the goal is
+        # a single current value since it is already an integral of everything before it.
         obs_spaces = {
-            "encoders": spaces.Box(low=-1.0, high=1.0, shape=(2,), dtype=np.float32),
-            "lidar": spaces.Box(low=0.0, high=1.0, shape=(3,), dtype=np.float32),
+            "encoders": spaces.Box(low=-1.0, high=1.0, shape=(OBS_HISTORY, 2), dtype=np.float32),
+            "lidar": spaces.Box(low=0.0, high=1.0, shape=(OBS_HISTORY, 3), dtype=np.float32),
             "goal": spaces.Box(low=-1.0, high=1.0, shape=(2,), dtype=np.float32),
         }
         if include_image:
@@ -258,6 +277,7 @@ class GoalNavEnv(gym.Env):
         self._prev_distance = self._initial_distance
         self._lidar_reading = self._read_lidar(force=True)
         self._cached_image = self._capture_processed_image()
+        self._sensor_history.clear()
 
         return self._get_obs(), {
             "goal_command": self._goal_local_truth,
@@ -288,6 +308,9 @@ class GoalNavEnv(gym.Env):
         distance = float(np.linalg.norm(self._goal_xy - self.data.qpos[:2]))
         reward = PROGRESS_WEIGHT * (self._prev_distance - distance) / self._initial_distance
         reward -= STEP_PENALTY
+        nearest = float(np.min(self._lidar_reading))
+        if nearest < PROXIMITY_THRESHOLD_M:
+            reward -= PROXIMITY_WEIGHT * (1.0 - nearest / PROXIMITY_THRESHOLD_M)
         self._prev_distance = distance
 
         arrived = distance <= GOAL_TOLERANCE_M
@@ -477,9 +500,18 @@ class GoalNavEnv(gym.Env):
         self._odom = arena.integrate_odometry(self._odom, ticks[0], ticks[1], ENCODER_CPR_WHEEL)
         goal_local = arena.goal_in_body_frame(self._odom, self._goal_local_truth)
 
+        self._sensor_history.appendleft((
+            (ticks / ENCODER_SCALE).astype(np.float32),
+            (self._lidar_reading / LIDAR_SCALE).astype(np.float32),
+        ))
+        # Before OBS_HISTORY readings exist (the first steps of an episode) the oldest one is
+        # repeated, so the shape is fixed and the padding is a plausible past rather than zeros.
+        frames = list(self._sensor_history)
+        frames += [frames[-1]] * (OBS_HISTORY - len(frames))
+
         obs = {
-            "encoders": (ticks / ENCODER_SCALE).astype(np.float32),
-            "lidar": (self._lidar_reading / LIDAR_SCALE).astype(np.float32),
+            "encoders": np.stack([f[0] for f in frames]),
+            "lidar": np.stack([f[1] for f in frames]),
             "goal": (goal_local / GOAL_SCALE).astype(np.float32),
         }
         if self.include_image:
