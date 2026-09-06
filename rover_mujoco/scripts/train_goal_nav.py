@@ -33,9 +33,14 @@ ENV_ID = "GoalNav-v0"
 TOTAL_TIMESTEPS = 2_000_000
 MODEL_DIR = os.path.join(os.path.dirname(__file__), "../runs/ppo_goal_nav")
 
-# Without the camera render the rollout is physics-bound and cheap, so this scales further
-# than train_real.py's 8 (which was rendering-bound). Measured on this machine before picking.
-N_ENVS = 16
+# Measured on this machine, camera-on, before picking: 1 env 157 steps/s, 4 -> 329, 8 -> 358,
+# 12 -> 366. It saturates at 8 because rendering is the bottleneck and this machine has no
+# discrete GPU -- MuJoCo is rendering on Intel integrated graphics, which every worker shares.
+# Going past the knee is actively harmful rather than merely useless: a 16-worker run held 200
+# steps/s briefly and then collapsed to 4 with the workers blocked at 0.1% CPU and the machine
+# 60% idle, i.e. contending for GPU contexts rather than computing. 8 is the knee at half the
+# memory.
+N_ENVS = 8
 
 # ent_coef: the line-follower sweep found the SB3 default of 0.0 plateaued from
 # under-exploration while 0.01 was still climbing at 3M steps (see sweep_hparams.py). This
