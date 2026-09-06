@@ -27,6 +27,13 @@ policy a goal vector that drifts rather than a correct one.
 | `lidar` | (3,) | Left/centre/right beam distances in metres, clipped to 2 m |
 | `goal` | (2,) | (forward, left) metres to the goal **in the rover's estimated body frame** |
 
+Every vector field is divided by a fixed constant (`ENCODER_SCALE`, `LIDAR_SCALE`,
+`GOAL_SCALE`) so it lands in roughly [-1, 1]. Raw, these three span ticks in the hundreds,
+metres in single digits, and metres again — and SB3's `MultiInputPolicy` concatenates them
+straight into one MLP with no normalization of its own. Fixed constants are used rather than a
+running `VecNormalize` so deployment stays simple: the bridge applies the same three numbers,
+with no statistics file to ship next to the weights.
+
 The lidar is not an invention for the sim. The physical rover already has it: the firmware's
 `"l"` UDP command answers with `left_distance`, `center_distance`, `right_distance` and a
 `center_ok` validity flag, which `rover_control/encoder_poller.py` polls today. Modelling it
@@ -54,6 +61,19 @@ various mount angles:
 So the camera is a short-range confirmation at best; the lidar is the obstacle sensor. Worth
 knowing before you spend a training run wondering why vision isn't carrying the task.
 
+It is also almost the entire compute bill. Profiling one step:
+
+| Component | Time | Share |
+|-----------|------|-------|
+| Camera render | 2.94 ms | 55% |
+| Image post-processing (white balance, noise, pixelate) | ~1.9 ms | 34% |
+| Physics (`mj_step` x decimation) | 0.57 ms | 11% |
+
+So `GoalNavEnv(include_image=False)` — how `train_goal_nav.py` runs — is about 4.5x faster
+single-env (177 -> 798 steps/s) and ~2400 env-steps/s across 24 subprocesses, turning a
+day-long run into under an hour. The image is still there when you want it: flip the flag and
+budget an order of magnitude more time.
+
 ## The goal vector drifts, on purpose
 
 `envs/arena.py`'s `integrate_odometry()` dead-reckons the pose from wheel ticks, and it is fed
@@ -78,8 +98,63 @@ the sensor rather than from a sloppy integrator.
 5×5 m, walled, with 3–8 obstacles per episode drawn from a fixed pool (MuJoCo compiles
 geometry once, so `GoalNavEnv` moves and resizes pool members each reset — the same runtime
 model-mutation trick `LineFollowerEnv` uses for appearance randomization). Obstacles are
-rejection-sampled so they never land on the spawn, the goal, or each other. Both the spawn
-pose and the goal are randomized, so there is no fixed layout to memorize.
+rejection-sampled so they never land on the spawn, the goal, or each other, and which pool
+slots get used is shuffled so the box/cylinder mix is random too, not just the count. Both the
+spawn pose and the goal are randomized, so there is no fixed layout to memorize.
+
+### Obstacles have to be *in the way*
+
+The first version of this sampled obstacle positions uniformly inside the arena, which sounds
+right and is not. Measured over 3000 episodes, the straight line from spawn to goal was
+blocked in only **19.9%** of them — four episodes in five were "drive to a point" with
+scenery, and a policy trained on that reached a 98% arrival rate with a 0% collision rate
+after 500k steps without ever having to avoid much.
+
+So `PATH_OBSTACLE_FRACTION` (0.6) of each layout is now sampled *along the direct route*
+instead — a random point between 25% and 80% of the way there, scattered sideways by
+`PATH_LATERAL_STD` — which blocks the route in **95.8%** of full-task episodes while leaving
+the rest of the arena randomly populated. The curriculum inherits a natural difficulty ramp
+from this, since shorter routes have less room to hide an obstacle:
+
+| Level | Obstacles | Route blocked |
+|-------|-----------|---------------|
+| 1 | 1–3 | 60.0% |
+| 2 | 2–5 | 88.7% |
+| 3 (full task) | 3–8 | 95.8% |
+
+If you change the arena size or obstacle radii, re-measure this — it is the difference between
+training an avoidance policy and training a waypoint follower.
+
+### Keep-out zones: the goal has to stay finishable
+
+Making obstacles obstruct is only half of it. The clearances are all *derived* from the rover's
+own footprint (`ROVER_HALF_WIDTH` 0.093 m, `ROVER_RADIUS` 0.156 m — what it sweeps turning in
+place) rather than picked by eye, so each one guarantees something specific:
+
+| Constant | Value | Guarantees |
+|----------|-------|-----------|
+| `CLEARANCE_START` | 0.44 m | The spawn is collision-free with room to turn around |
+| `CLEARANCE_GOAL` | 0.46 m | `GOAL_TOLERANCE_M` + `ROVER_RADIUS` + slack — *every* arrival pose is collision-free |
+| `CLEARANCE_BETWEEN` | 0.24 m | Wider than the rover (0.186 m), so no two obstacles form a gap it cannot fit through |
+
+Two things were wrong before this was worked through:
+
+1. **`CLEARANCE_GOAL` was 0.35 m, below the 0.406 m the geometry needs.** Arrival is the
+   rover's *centre* within `GOAL_TOLERANCE_M`, but its body sweeps `ROVER_RADIUS` past that.
+   In a measured 25.2% of episodes there existed an arrival pose that was simultaneously in
+   contact — worth `+SUCCESS_BONUS` and `-COLLISION_PENALTY` on the same step, which is a
+   contradictory signal on a quarter of episodes. Now 0.0%.
+2. **Box corners were ignored.** The pool holds boxes as well as cylinders and `radius` is the
+   box *half-extent*, so a corner reaches `radius * sqrt(2)`. Comparing clearances against the
+   nominal radius let a large box sit 0.293 m from a goal that claimed 0.35 m of clearance.
+   `CORNER_FACTOR` now applies to every clearance comparison; the measured minimum is 0.458 m
+   against a stated 0.456 m.
+
+Reachability is checked by flood fill over the real compiled geometry (obstacles inflated by
+the rover's radius, connectivity from spawn to the arrival disc): **100% of 400 episodes are
+solvable** under both the half-width and the turn-in-place radius. Tightening the keep-outs
+cost some obstruction — the full task went from 95.8% to 89.2% blocked — which is the right
+trade: an unfinishable episode teaches nothing, and 89% is still an avoidance task.
 
 The chassis needed a collision proxy for any of this to mean anything. Every chassis geom that
 came out of the URDF import is visual-only (`contype`/`conaffinity` 0), so before
@@ -89,6 +164,27 @@ and the rover drove straight through anything shorter than its deck. That proxy 
 floor does not — so the line-follower scenes that share `rover.xml` keep exactly the contact
 set they were trained against. (Verified: both scenes settle to the same height with the same
 contact count.)
+
+## Curriculum
+
+Success here is far sparser than in line following — a policy that never learns to turn never
+reaches a goal behind it — so each env instance starts easy and promotes *itself*:
+
+| Level | Obstacles | Goal distance |
+|-------|-----------|---------------|
+| 0 | 0 | 0.5–1.2 m |
+| 1 | 1–3 | 0.75–1.8 m |
+| 2 | 2–5 | 1.0–2.5 m |
+| 3 | 3–8 | 1.0–3.5 m (the full task) |
+
+Promotion is on arrival rate: `CURRICULUM_PROMOTE_RATE` (0.7) over the last
+`CURRICULUM_WINDOW` (50) episodes. Each env keeps its own history rather than sharing one
+schedule, because there is no cheap way to share state across a `SubprocVecEnv` — and letting
+workers advance independently is a feature, since the batch stays a mix of difficulties
+instead of every worker stepping up in lockstep.
+
+Curriculum is **off** by default (`GoalNav-v0` is the full task) and turned on by
+`train_goal_nav.py`. Evaluation always runs the full task.
 
 ## Reward
 
@@ -105,6 +201,23 @@ Shaped like the line follower's, for the same reasons:
 Reward uses ground-truth position. That is the same reward-only privilege `LineFollowerEnv`
 documents: reward is a training-time construct that doesn't exist at deployment, unlike the
 observation, which stays honest.
+
+## Training configuration
+
+`train_goal_nav.py` deviates from the SB3 defaults in three places, all for reasons:
+
+- **`n_steps=512`** (default 2048). Times 24 envs, the default is a 49k-step rollout — only
+  ~160 gradient updates across an 8M-step budget, which underfits badly. 512 gives ~650.
+- **`gamma=0.995`** (default 0.99). Episodes run to 400 steps and `SUCCESS_BONUS` lands only
+  at the very end; a ~100-step effective horizon discounts arrival too heavily to steer the
+  early decisions that determine whether the rover gets there at all.
+- **`ent_coef=0.01`** (default 0.0). Straight from the line-follower sweep, where 0.0
+  plateaued from under-exploration while 0.01 was still climbing at 3M steps. This task needs
+  more exploration, not less.
+
+`ProgressCallback` logs `task/arrival_rate`, `task/collision_rate` and
+`task/curriculum_level`, because `ep_rew_mean` alone can't distinguish a policy that stops
+just short of every goal from one that arrives.
 
 ## Running it
 

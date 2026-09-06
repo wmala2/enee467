@@ -26,12 +26,51 @@ OBSTACLE_RADIUS_RANGE = (0.05, 0.18)
 # Where an unused obstacle goes: outside the walls, so it is neither visible nor collidable.
 OBSTACLE_PARKING_XY = (ARENA_HALF + 5.0, ARENA_HALF + 5.0)
 
+# Rover footprint, read off rover.xml: the chassis collision proxy is 0.09 half-width, the
+# wheels stick out slightly further, and the body is 0.125 long from centre to end.
+ROVER_HALF_WIDTH = 0.093
+ROVER_HALF_LENGTH = 0.125
+# What the rover sweeps turning in place. Every clearance below is derived from this rather
+# than picked by eye, so the guarantees actually hold instead of happening to hold.
+ROVER_RADIUS = math.hypot(ROVER_HALF_WIDTH, ROVER_HALF_LENGTH)  # ~0.156 m
+
+# How close the rover's centre has to get for the goal to count as reached. Lives here rather
+# than in goal_nav_env.py because CLEARANCE_GOAL below is derived from it.
+GOAL_TOLERANCE_M = 0.25
+
 # Sampling margins, all in meters.
 WALL_MARGIN = 0.35  # keep spawns/goals off the walls
 GOAL_MIN_DISTANCE = 1.0  # a goal closer than this is not much of a task
-CLEARANCE_START = 0.45  # obstacle-free radius around the rover's spawn
-CLEARANCE_GOAL = 0.35  # ...and around the goal, so it is always reachable
-CLEARANCE_BETWEEN = 0.30  # minimum gap between two obstacles
+CLEARANCE_MARGIN = 0.05  # slack on top of each derived minimum
+
+# The spawn must be collision-free with room to turn around in.
+CLEARANCE_START = ROVER_RADIUS + 0.28  # ~0.44 m
+
+# Every pose that counts as "arrived" must also be collision-free, or the rover can satisfy
+# the goal and hit something on the same step -- worth +SUCCESS_BONUS and -COLLISION_PENALTY
+# at once, which is a contradictory training signal. That needs the arrival disc *plus* the
+# body radius to be clear, not just the body radius: at CLEARANCE_GOAL=0.35 this was violated
+# in a measured 25.2% of episodes.
+CLEARANCE_GOAL = GOAL_TOLERANCE_M + ROVER_RADIUS + CLEARANCE_MARGIN  # ~0.46 m
+
+# Two obstacles must never form a gap the rover cannot fit through, or a layout can be
+# reachable on paper and impassable in practice.
+CLEARANCE_BETWEEN = 2 * ROVER_HALF_WIDTH + CLEARANCE_MARGIN  # ~0.24 m
+
+# Clearances are compared against an obstacle's *corner*, not its nominal radius. The pool
+# holds boxes as well as cylinders and `radius` is the box half-extent, so a box's corner
+# reaches radius*sqrt(2) -- treating every obstacle as a disc of that size is conservative for
+# cylinders and correct for boxes. Without this, a big box could sit ~0.075 m closer to the
+# goal than CLEARANCE_GOAL claimed (measured: 0.293 m against a stated 0.35 m).
+CORNER_FACTOR = math.sqrt(2.0)
+
+# Obstacles placed uniformly in a 5x5 m arena almost never end up in the way: measured, the
+# straight line from spawn to goal was blocked in only 19.9% of episodes, so four episodes in
+# five were "drive to a point" with scenery. This fraction of each layout is instead sampled
+# along the direct route, which takes that to ~85% and makes avoidance the actual task.
+PATH_OBSTACLE_FRACTION = 0.6
+PATH_SPAN = (0.25, 0.80)  # where along the route (as a fraction of its length) they can land
+PATH_LATERAL_STD = 0.22  # m: sideways scatter off the route, so it is blocked but not walled
 
 # Lidar, mirroring the real rover's three-beam sensor (rover_control/encoder_poller.py).
 LIDAR_SPLAY_DEG = 30.0  # outer beams either side of straight ahead; matches rover.xml's sites
@@ -52,41 +91,73 @@ def sample_start(rng):
     return rng.uniform(-limit, limit, size=2), rng.uniform(-math.pi, math.pi)
 
 
-def sample_goal(rng, start_xy):
-    """A goal position inside the arena at least GOAL_MIN_DISTANCE from `start_xy`, kept
-    WALL_MARGIN clear of the walls."""
+def sample_goal(rng, start_xy, min_distance=GOAL_MIN_DISTANCE, max_distance=None):
+    """A goal position inside the arena, `min_distance` to `max_distance` metres from
+    `start_xy` and kept WALL_MARGIN clear of the walls.
+
+    Sampled as a bearing plus a distance rather than as a uniform point in the arena, because
+    the curriculum needs to control *how far away* the goal is independently of where the
+    rover happens to have spawned."""
     limit = ARENA_HALF - WALL_MARGIN
+    if max_distance is None:
+        max_distance = 2.0 * limit
     for _ in range(200):
-        xy = rng.uniform(-limit, limit, size=2)
-        if np.linalg.norm(xy - start_xy) >= GOAL_MIN_DISTANCE:
+        bearing = rng.uniform(-math.pi, math.pi)
+        distance = rng.uniform(min_distance, max_distance)
+        xy = start_xy + distance * np.array([math.cos(bearing), math.sin(bearing)])
+        if np.all(np.abs(xy) <= limit):
             return xy
-    # Cornered spawn with no far-enough sample: step out toward the middle instead of looping.
+    # Cornered spawn with no sample that fits: head toward the middle instead of looping.
     direction = -start_xy / (np.linalg.norm(start_xy) or 1.0)
-    return np.clip(start_xy + direction * GOAL_MIN_DISTANCE, -limit, limit)
+    return np.clip(start_xy + direction * min_distance, -limit, limit)
 
 
-def sample_obstacles(rng, start_xy, goal_xy, count):
+def sample_obstacles(rng, start_xy, goal_xy, count, path_fraction=PATH_OBSTACLE_FRACTION):
     """`count` (x, y, radius) obstacles inside the walls, none of them sitting on top of the
-    spawn, the goal, or each other. Rejection sampling with a retry budget rather than a
-    solver: at these densities it lands in a handful of tries, and a short layout is better
-    than a hung reset."""
+    spawn, the goal, or each other.
+
+    `path_fraction` of them are sampled along the direct spawn-to-goal route rather than
+    uniformly in the arena -- see PATH_OBSTACLE_FRACTION for why uniform placement made this a
+    navigation task with decorations rather than an avoidance one. Rejection sampling with a
+    retry budget rather than a solver: at these densities it lands in a handful of tries, and a
+    short layout is better than a hung reset."""
     limit = ARENA_HALF - WALL_MARGIN
     placed = []
-    for _ in range(count * 30):
+
+    route = np.asarray(goal_xy, dtype=float) - np.asarray(start_xy, dtype=float)
+    route_len = float(np.linalg.norm(route))
+    unit = route / route_len if route_len else np.array([1.0, 0.0])
+    normal = np.array([-unit[1], unit[0]])
+    n_on_path = round(count * path_fraction) if route_len else 0
+
+    def acceptable(xy, radius):
+        reach = radius * CORNER_FACTOR
+        if np.any(np.abs(xy) > limit):
+            return False
+        if np.linalg.norm(xy - start_xy) < CLEARANCE_START + reach:
+            return False
+        if np.linalg.norm(xy - goal_xy) < CLEARANCE_GOAL + reach:
+            return False
+        return not any(
+            np.linalg.norm(xy - other_xy) < reach + other_r * CORNER_FACTOR + CLEARANCE_BETWEEN
+            for other_xy, other_r in placed
+        )
+
+    for attempt in range(count * 40):
         if len(placed) == count:
             break
         radius = rng.uniform(*OBSTACLE_RADIUS_RANGE)
-        xy = rng.uniform(-limit, limit, size=2)
-        if np.linalg.norm(xy - start_xy) < CLEARANCE_START + radius:
-            continue
-        if np.linalg.norm(xy - goal_xy) < CLEARANCE_GOAL + radius:
-            continue
-        if any(
-            np.linalg.norm(xy - other_xy) < radius + other_r + CLEARANCE_BETWEEN
-            for other_xy, other_r in placed
-        ):
-            continue
-        placed.append((xy, radius))
+        # Try the route first; fall back to uniform once the quota is met, and also once the
+        # retry budget is half gone, so a cramped route can never starve the whole layout.
+        on_path = len(placed) < n_on_path and attempt < count * 20
+        if on_path:
+            along = rng.uniform(*PATH_SPAN) * route_len
+            offset = rng.normal(0.0, PATH_LATERAL_STD)
+            xy = start_xy + along * unit + offset * normal
+        else:
+            xy = rng.uniform(-limit, limit, size=2)
+        if acceptable(xy, radius):
+            placed.append((xy, radius))
     return placed
 
 

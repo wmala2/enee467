@@ -48,7 +48,32 @@ SCENE_FILE = "rover_arena_real.xml"
 CAMERA_ANGLE_DEG = 60.0
 
 MAX_EPISODE_STEPS = 400  # control steps @ CONTROL_HZ = 40 simulated seconds
-GOAL_TOLERANCE_M = 0.25  # how close counts as "arrived"
+# Defined in envs/arena.py because the obstacle clearances are derived from it -- re-exported
+# here since this is where callers expect to find it.
+GOAL_TOLERANCE_M = arena.GOAL_TOLERANCE_M
+
+# The three vector observations live on wildly different scales -- ticks in the hundreds,
+# lidar in single metres, the goal in metres -- and SB3's MultiInputPolicy concatenates them
+# raw into one MLP with no normalization of its own. Dividing each by a fixed constant here
+# (rather than a running VecNormalize) keeps the policy's input conditioned *and* keeps
+# deployment simple: the bridge applies the same three constants, with no statistics file to
+# ship alongside the weights.
+ENCODER_SCALE = ENCODER_TICKS_BOUND
+LIDAR_SCALE = arena.LIDAR_MAX_RANGE
+GOAL_SCALE = arena.ARENA_SIZE * 1.5
+
+# Curriculum. This task's success signal is much sparser than line following -- a policy that
+# never turns never reaches a goal behind it -- so each env instance starts on short goals in
+# an empty arena and promotes itself once it can actually finish them. The last level is the
+# full task the policy has to end up solving: 3-8 obstacles, goals up to 3.5 m away.
+CURRICULUM = (
+    {"obstacles": (0, 0), "goal_distance": (0.5, 1.2)},
+    {"obstacles": (1, 3), "goal_distance": (0.75, 1.8)},
+    {"obstacles": (2, 5), "goal_distance": (1.0, 2.5)},
+    {"obstacles": (3, arena.MAX_OBSTACLES), "goal_distance": (1.0, 3.5)},
+)
+CURRICULUM_WINDOW = 50  # episodes of history each env keeps
+CURRICULUM_PROMOTE_RATE = 0.7  # arrive this often over that window and the level goes up
 
 # Reward weights, deliberately shaped like LineFollowerEnv's: a dominant progress term
 # normalized so a complete run sums to ~PROGRESS_WEIGHT no matter how far away the goal was
@@ -94,30 +119,44 @@ class GoalNavEnv(gym.Env):
 
     metadata: ClassVar[dict] = {"render_modes": ["human"], "render_fps": 50}
 
-    def __init__(self, render_mode=None, domain_randomize=True):
+    def __init__(
+        self, render_mode=None, domain_randomize=True, include_image=True, curriculum=False
+    ):
         super().__init__()
         self.domain_randomize = domain_randomize
         self.render_mode = render_mode
+        # Rendering the 64x64 camera costs ~4.8 ms of a 5.4 ms step -- 89% of the budget --
+        # for a sensor measured to see 0% of an obstacle 0.4 m ahead at the line follower's
+        # mount angle and ~8% at this env's. include_image=False drops it, which is how
+        # train_goal_nav.py runs: ~9x the throughput for a signal the lidar already carries.
+        self.include_image = include_image
+        self.curriculum = curriculum
+        self._level = 0
+        self._recent_arrivals = deque(maxlen=CURRICULUM_WINDOW)
 
         model_path = os.path.join(
             os.path.dirname(__file__), "../../assets/robots/rover", SCENE_FILE
         )
         self.model = mujoco.MjModel.from_xml_path(model_path)
         self.data = mujoco.MjData(self.model)
-        self.renderer = mujoco.Renderer(self.model, height=CAM_RES, width=CAM_RES)
+        self.renderer = (
+            mujoco.Renderer(self.model, height=CAM_RES, width=CAM_RES) if include_image else None
+        )
 
         self.action_space = spaces.Box(low=-10.0, high=10.0, shape=(2,), dtype=np.float32)
-        # The goal bound is the arena diagonal plus headroom, since odometry drift can put the
-        # estimate outside the walls.
-        goal_bound = np.float32(arena.ARENA_SIZE * 1.5)
-        self.observation_space = spaces.Dict({
-            "image": spaces.Box(low=0, high=255, shape=(CAM_RES, CAM_RES, 1), dtype=np.uint8),
-            "encoders": spaces.Box(
-                low=-ENCODER_TICKS_BOUND, high=ENCODER_TICKS_BOUND, shape=(2,), dtype=np.float32
-            ),
-            "lidar": spaces.Box(low=0.0, high=arena.LIDAR_MAX_RANGE, shape=(3,), dtype=np.float32),
-            "goal": spaces.Box(low=-goal_bound, high=goal_bound, shape=(2,), dtype=np.float32),
-        })
+        # All three vector fields are normalized (see the *_SCALE constants), so every bound
+        # here is +/-1 rather than the raw sensor range. The goal can exceed 1 only if odometry
+        # drift pushes the estimate past the arena diagonal, hence the headroom in GOAL_SCALE.
+        obs_spaces = {
+            "encoders": spaces.Box(low=-1.0, high=1.0, shape=(2,), dtype=np.float32),
+            "lidar": spaces.Box(low=0.0, high=1.0, shape=(3,), dtype=np.float32),
+            "goal": spaces.Box(low=-1.0, high=1.0, shape=(2,), dtype=np.float32),
+        }
+        if include_image:
+            obs_spaces["image"] = spaces.Box(
+                low=0, high=255, shape=(CAM_RES, CAM_RES, 1), dtype=np.uint8
+            )
+        self.observation_space = spaces.Dict(obs_spaces)
 
         left_jid = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, "left_axle")
         right_jid = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, "right_axle")
@@ -161,7 +200,8 @@ class GoalNavEnv(gym.Env):
     def close(self):
         """Release the offscreen renderer's GL context -- see LineFollowerEnv.close() for why
         skipping this breaks every Renderer built after it in the same process."""
-        self.renderer.close()
+        if self.renderer is not None:
+            self.renderer.close()
         super().close()
 
     def reset(self, seed=None, options=None):
@@ -173,6 +213,7 @@ class GoalNavEnv(gym.Env):
         # `options={"goal": (forward, left)}` commands a specific offset in the rover's own
         # starting frame -- this is how "drive to (1, 2)" is issued from a script or from the
         # real-rover bridge, rather than letting the env pick.
+        level = CURRICULUM[self._level] if self.curriculum else CURRICULUM[-1]
         if options and "goal" in options:
             forward, left = options["goal"]
             self._goal_xy = start_xy + np.array([
@@ -180,9 +221,10 @@ class GoalNavEnv(gym.Env):
                 forward * math.sin(start_yaw) + left * math.cos(start_yaw),
             ])
         else:
-            self._goal_xy = arena.sample_goal(rng, start_xy)
+            self._goal_xy = arena.sample_goal(rng, start_xy, *level["goal_distance"])
 
-        n_obstacles = int(rng.integers(3, arena.MAX_OBSTACLES + 1))
+        low, high = level["obstacles"]
+        n_obstacles = int(rng.integers(low, high + 1))
         self._place_obstacles(rng, start_xy, self._goal_xy, n_obstacles)
 
         self.data.qpos[0], self.data.qpos[1], self.data.qpos[2] = start_xy[0], start_xy[1], 0.1
@@ -209,7 +251,10 @@ class GoalNavEnv(gym.Env):
         self._lidar_reading = self._read_lidar(force=True)
         self._cached_image = self._capture_processed_image()
 
-        return self._get_obs(), {"goal_command": self._goal_local_truth}
+        return self._get_obs(), {
+            "goal_command": self._goal_local_truth,
+            "curriculum_level": self._level,
+        }
 
     def step(self, action):
         action = np.clip(action, self.action_space.low, self.action_space.high)
@@ -247,7 +292,10 @@ class GoalNavEnv(gym.Env):
 
         terminated = arrived or collided or tipped_over
         truncated = self._episode_steps >= MAX_EPISODE_STEPS
+        if terminated or truncated:
+            self._record_outcome(arrived)
         info = {
+            "curriculum_level": self._level,
             "arrived": arrived,
             "collided": collided,
             "distance": distance,
@@ -256,6 +304,23 @@ class GoalNavEnv(gym.Env):
             ),
         }
         return obs, reward, terminated, truncated, info
+
+    def _record_outcome(self, arrived):
+        """Promote this env to the next curriculum level once it arrives often enough.
+
+        Each env instance keeps its own history rather than sharing one schedule across the
+        vec-env: with SubprocVecEnv there is no cheap way to share state, and letting workers
+        advance independently is a feature anyway -- the batch stays a mix of difficulties
+        instead of every worker stepping up in lockstep."""
+        if not self.curriculum:
+            return
+        self._recent_arrivals.append(bool(arrived))
+        at_last_level = self._level >= len(CURRICULUM) - 1
+        if at_last_level or len(self._recent_arrivals) < CURRICULUM_WINDOW:
+            return
+        if np.mean(self._recent_arrivals) >= CURRICULUM_PROMOTE_RATE:
+            self._level += 1
+            self._recent_arrivals.clear()
 
     def _world_to_start_frame(self, xy):
         """World (x, y) expressed in the rover's spawn frame -- the frame the goal command and
@@ -283,9 +348,15 @@ class GoalNavEnv(gym.Env):
         randomization uses."""
         layout = arena.sample_obstacles(rng, start_xy, goal_xy, count)
         park_x, park_y = arena.OBSTACLE_PARKING_XY
+        # The pool alternates box/cylinder by slot, so using slots 0..n-1 in order would make
+        # the shape mix a fixed function of the count. Shuffling which slots get used makes the
+        # mix of shapes random too, not just the number of them.
+        chosen = list(rng.permutation(len(self._obstacle_gids)))
+        order = {gid_index: rank for rank, gid_index in enumerate(chosen)}
         for slot, gid in enumerate(self._obstacle_gids):
-            if slot < len(layout):
-                xy, radius = layout[slot]
+            rank = order[slot]
+            if rank < len(layout):
+                xy, radius = layout[rank]
                 self.model.geom_pos[gid] = [xy[0], xy[1], arena.OBSTACLE_HEIGHT / 2]
                 size = self._obstacle_default_size[slot].copy()
                 size[0] = radius
@@ -364,6 +435,8 @@ class GoalNavEnv(gym.Env):
 
     def _capture_processed_image(self):
         """Same camera-realism pipeline as LineFollowerRealEnv._capture_processed_image()."""
+        if not self.include_image:
+            return None
         self.renderer.update_scene(self.data, camera="top_cam")
         rgb = self.renderer.render().astype(np.float32) * self._white_balance
         gray = rgb.mean(axis=-1, keepdims=True) * self._brightness
@@ -388,9 +461,11 @@ class GoalNavEnv(gym.Env):
         self._odom = arena.integrate_odometry(self._odom, ticks[0], ticks[1], ENCODER_CPR_WHEEL)
         goal_local = arena.goal_in_body_frame(self._odom, self._goal_local_truth)
 
-        return {
-            "image": self._cached_image,
-            "encoders": ticks.astype(np.float32),
-            "lidar": self._lidar_reading,
-            "goal": goal_local,
+        obs = {
+            "encoders": (ticks / ENCODER_SCALE).astype(np.float32),
+            "lidar": (self._lidar_reading / LIDAR_SCALE).astype(np.float32),
+            "goal": (goal_local / GOAL_SCALE).astype(np.float32),
         }
+        if self.include_image:
+            obs["image"] = self._cached_image
+        return obs

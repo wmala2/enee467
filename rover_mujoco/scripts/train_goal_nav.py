@@ -1,36 +1,86 @@
 """Trains a PPO policy on GoalNav-v0: drive to a commanded (x, y) offset inside a walled 5x5 m
-arena without hitting the obstacles scattered around it. See docs/rl-goal-nav.md.
+arena while avoiding a random number and mix of obstacles. See docs/rl-goal-nav.md.
 
-Same sim-to-real footing as train_real.py's line follower -- camera + noisy encoders + the
-rover's three-beam lidar, wheel-velocity actions, and the same domain randomization ranges --
-with the goal handed to the policy as a dead-reckoned vector that drifts, rather than as
-privileged ground truth.
+Same sim-to-real footing as train_real.py's line follower -- noisy encoders, the rover's
+three-beam lidar, wheel-velocity actions, the same domain randomization ranges -- with the
+goal handed to the policy as a dead-reckoned vector that drifts rather than as ground truth.
 
-Dict observations (image + encoders + lidar + goal) need "MultiInputPolicy", not "CnnPolicy".
+Two choices here are worth knowing about before changing them:
+
+* `include_image=False`. Rendering the onboard camera costs ~4.8 ms of a 5.4 ms step, and the
+  camera was measured to see 0% of an obstacle 0.4 m ahead at the line follower's mount angle
+  and ~8% at this env's (see docs/rl-goal-nav.md). The lidar carries the obstacle signal, so
+  the image buys almost nothing here and costs ~4.5x the wall-clock. Turn it back on if you
+  want to study vision for this task -- just budget an order of magnitude more time.
+* `curriculum=True`. Success is much sparser than line following, so each env starts on short
+  goals in an empty arena and promotes itself once it arrives reliably. The final level is the
+  full task: 3-8 obstacles, goals up to 3.5 m. See CURRICULUM in envs/tasks/goal_nav_env.py.
+
+Dict observations (encoders + lidar + goal) need "MultiInputPolicy", not "MlpPolicy".
 """
 
 import os
 
 import envs  # noqa: F401  (imported for its side effect: registers GoalNav-v0)
+import numpy as np
 from stable_baselines3 import PPO
+from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.callbacks import CheckpointCallback
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import SubprocVecEnv
 
 ENV_ID = "GoalNav-v0"
-# Starting point, not a tuned number. The line follower needed 10M steps to handle full DR
-# (see train_real.py), and this task is harder -- it has to avoid obstacles *and* correct for
-# odometry drift -- so treat this as the first checkpoint to inspect, not the finish line.
-TOTAL_TIMESTEPS = 10_000_000
+TOTAL_TIMESTEPS = 8_000_000
 MODEL_DIR = os.path.join(os.path.dirname(__file__), "../runs/ppo_goal_nav")
 
-# Rollouts are rendering/physics-bound, same as train_real.py -- see its comment for why 8.
-N_ENVS = 8
+# Without the camera render the rollout is physics-bound and cheap, so this scales further
+# than train_real.py's 8 (which was rendering-bound). Measured on this machine before picking.
+N_ENVS = 24
 
-# ent_coef: the line-follower sweep found the default 0.0 plateaued from under-exploration
-# while 0.01 was still climbing at 3M steps (see sweep_hparams.py / continue_sweep_winner.py).
-# This task needs more exploration, not less -- a policy that never turns never finds a goal
-# behind it -- so start from that sweep's winner rather than from the SB3 default.
+# ent_coef: the line-follower sweep found the SB3 default of 0.0 plateaued from
+# under-exploration while 0.01 was still climbing at 3M steps (see sweep_hparams.py). This
+# task needs more exploration, not less -- a policy that never turns never finds a goal behind
+# it -- so start from that sweep's winner rather than from the default.
 ENT_COEF = 0.01
+
+# n_steps is the one hyperparameter here that is *not* an SB3 default, and it matters more
+# than it looks: the default 2048, times N_ENVS, is a 49k-step rollout, which over this budget
+# is only ~160 gradient updates for the whole run. 512 gives ~650 instead, at the cost of a
+# shorter advantage horizon -- worth it when the reward is dense (progress every step).
+N_STEPS = 512
+BATCH_SIZE = 512
+# Episodes run up to MAX_EPISODE_STEPS=400, and the SUCCESS_BONUS lands only at the very end,
+# so the default gamma=0.99 (~100-step horizon) discounts arrival too heavily to steer early
+# decisions. 0.995 roughly doubles that horizon.
+GAMMA = 0.995
+
+ENV_KWARGS = {"include_image": False, "curriculum": True}
+
+
+class ProgressCallback(BaseCallback):
+    """Logs the things that actually say whether this task is being learned -- how often the
+    rover arrives, how often it crashes, and how far the curriculum has advanced -- none of
+    which are visible in ep_rew_mean alone (a policy that stops just short of every goal and
+    one that arrives look similar in reward, and very different here)."""
+
+    def _on_step(self):
+        # Only count *finished* episodes. GoalNavEnv puts "arrived"/"collided" in the info dict
+        # on every step, so averaging over all infos silently divides the rate by the episode
+        # length -- which made a ~100% arrival rate read as 0.006 in the first run of this.
+        infos = self.locals.get("infos", [])
+        dones = self.locals.get("dones", [])
+        finished = [info for info, done in zip(infos, dones, strict=False) if done]
+        if finished:
+            self.logger.record_mean(
+                "task/arrival_rate", float(np.mean([i["arrived"] for i in finished]))
+            )
+            self.logger.record_mean(
+                "task/collision_rate", float(np.mean([i["collided"] for i in finished]))
+            )
+        levels = [i["curriculum_level"] for i in infos if "curriculum_level" in i]
+        if levels:
+            self.logger.record_mean("task/curriculum_level", float(np.mean(levels)))
+        return True
 
 
 def main():
@@ -39,13 +89,30 @@ def main():
     env = make_vec_env(
         ENV_ID,
         n_envs=N_ENVS,
+        env_kwargs=ENV_KWARGS,
         vec_env_cls=SubprocVecEnv,
         vec_env_kwargs={"start_method": "fork"},
     )
-    model = PPO("MultiInputPolicy", env, ent_coef=ENT_COEF, verbose=1, tensorboard_log=MODEL_DIR)
+    model = PPO(
+        "MultiInputPolicy",
+        env,
+        n_steps=N_STEPS,
+        batch_size=BATCH_SIZE,
+        gamma=GAMMA,
+        ent_coef=ENT_COEF,
+        verbose=1,
+        tensorboard_log=MODEL_DIR,
+    )
     print(f"Training on device: {model.device}")
 
-    model.learn(total_timesteps=TOTAL_TIMESTEPS)
+    callbacks = [
+        ProgressCallback(),
+        # Checkpoints so a long run is inspectable (and resumable) before it finishes.
+        CheckpointCallback(
+            save_freq=max(1, 250_000 // N_ENVS), save_path=MODEL_DIR, name_prefix="checkpoint"
+        ),
+    ]
+    model.learn(total_timesteps=TOTAL_TIMESTEPS, callback=callbacks)
 
     model.save(os.path.join(MODEL_DIR, "model"))
     print(f"Saved trained model to {MODEL_DIR}/model.zip")
