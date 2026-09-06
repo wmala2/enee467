@@ -45,8 +45,14 @@ def build_arena_xml():
         )
 
     lines.append(
-        "    <!-- Obstacle pool: parked outside the walls, moved into place each reset"
-        " (see envs/tasks/goal_nav_env.py) -->"
+        "    <!-- Obstacle pool: parked outside the walls, moved into place each reset\n"
+        "         (see envs/tasks/goal_nav_env.py). Each is a MOCAP body rather than a bare\n"
+        "         worldbody geom, and that is load-bearing: MuJoCo precomputes broadphase\n"
+        "         bounding volumes for static (world) geoms, so one moved at runtime via\n"
+        "         model.geom_pos still renders and ray-casts at its new position but collides\n"
+        "         at its old one -- the rover drove clean through every obstacle. Mocap bodies\n"
+        "         are program-movable and go through the dynamic broadphase, so contacts\n"
+        "         follow them. -->"
     )
     park_x, park_y = arena.OBSTACLE_PARKING_XY
     for i in range(arena.MAX_OBSTACLES):
@@ -58,11 +64,15 @@ def build_arena_xml():
             kind, size = "box", f"{radius} {radius} {half_h}"
         else:
             kind, size = "cylinder", f"{radius} {half_h}"
-        lines.append(
-            f'    <geom name="obstacle_{i}" type="{kind}" group="{OBSTACLE_GROUP}"'
-            f' pos="{park_x + i * 0.5} {park_y} {half_h}" size="{size}"'
-            f' {COLLIDE_BITS} rgba="0.35 0.35 0.4 1"/>'
+        body_open = (
+            f'    <body name="obstacle_{i}" mocap="true"'
+            f' pos="{park_x + i * 0.5} {park_y} {half_h}">'
         )
+        geom = (
+            f'      <geom name="obstacle_{i}" type="{kind}" group="{OBSTACLE_GROUP}"'
+            f' size="{size}" {COLLIDE_BITS} rgba="0.35 0.35 0.4 1"/>'
+        )
+        lines.extend([body_open, geom, "    </body>"])
 
     lines += ["  </worldbody>", "</mujoco>", ""]
     return "\n".join(lines)

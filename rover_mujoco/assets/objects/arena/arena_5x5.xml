@@ -5,14 +5,37 @@
     <geom name="wall_south" type="box" pos="0 -2.55 0.075" size="2.55 0.05 0.075" contype="3" conaffinity="3" rgba="0.6 0.6 0.65 1"/>
     <geom name="wall_east" type="box" pos="2.55 0 0.075" size="0.05 2.55 0.075" contype="3" conaffinity="3" rgba="0.6 0.6 0.65 1"/>
     <geom name="wall_west" type="box" pos="-2.55 0 0.075" size="0.05 2.55 0.075" contype="3" conaffinity="3" rgba="0.6 0.6 0.65 1"/>
-    <!-- Obstacle pool: parked outside the walls, moved into place each reset (see envs/tasks/goal_nav_env.py) -->
-    <geom name="obstacle_0" type="box" group="4" pos="7.5 7.5 0.06" size="0.11499999999999999 0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
-    <geom name="obstacle_1" type="cylinder" group="4" pos="8.0 7.5 0.06" size="0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
-    <geom name="obstacle_2" type="box" group="4" pos="8.5 7.5 0.06" size="0.11499999999999999 0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
-    <geom name="obstacle_3" type="cylinder" group="4" pos="9.0 7.5 0.06" size="0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
-    <geom name="obstacle_4" type="box" group="4" pos="9.5 7.5 0.06" size="0.11499999999999999 0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
-    <geom name="obstacle_5" type="cylinder" group="4" pos="10.0 7.5 0.06" size="0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
-    <geom name="obstacle_6" type="box" group="4" pos="10.5 7.5 0.06" size="0.11499999999999999 0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
-    <geom name="obstacle_7" type="cylinder" group="4" pos="11.0 7.5 0.06" size="0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
+    <!-- Obstacle pool: parked outside the walls, moved into place each reset
+         (see envs/tasks/goal_nav_env.py). Each is a MOCAP body rather than a bare
+         worldbody geom, and that is load-bearing: MuJoCo precomputes broadphase
+         bounding volumes for static (world) geoms, so one moved at runtime via
+         model.geom_pos still renders and ray-casts at its new position but collides
+         at its old one -- the rover drove clean through every obstacle. Mocap bodies
+         are program-movable and go through the dynamic broadphase, so contacts
+         follow them. -->
+    <body name="obstacle_0" mocap="true" pos="7.5 7.5 0.06">
+      <geom name="obstacle_0" type="box" group="4" size="0.11499999999999999 0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
+    </body>
+    <body name="obstacle_1" mocap="true" pos="8.0 7.5 0.06">
+      <geom name="obstacle_1" type="cylinder" group="4" size="0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
+    </body>
+    <body name="obstacle_2" mocap="true" pos="8.5 7.5 0.06">
+      <geom name="obstacle_2" type="box" group="4" size="0.11499999999999999 0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
+    </body>
+    <body name="obstacle_3" mocap="true" pos="9.0 7.5 0.06">
+      <geom name="obstacle_3" type="cylinder" group="4" size="0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
+    </body>
+    <body name="obstacle_4" mocap="true" pos="9.5 7.5 0.06">
+      <geom name="obstacle_4" type="box" group="4" size="0.11499999999999999 0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
+    </body>
+    <body name="obstacle_5" mocap="true" pos="10.0 7.5 0.06">
+      <geom name="obstacle_5" type="cylinder" group="4" size="0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
+    </body>
+    <body name="obstacle_6" mocap="true" pos="10.5 7.5 0.06">
+      <geom name="obstacle_6" type="box" group="4" size="0.11499999999999999 0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
+    </body>
+    <body name="obstacle_7" mocap="true" pos="11.0 7.5 0.06">
+      <geom name="obstacle_7" type="cylinder" group="4" size="0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
+    </body>
   </worldbody>
 </mujoco>

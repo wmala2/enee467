@@ -174,6 +174,14 @@ class GoalNavEnv(gym.Env):
             gi for gi in range(self.model.ngeom) if self.model.geom_group[gi] == 4
         ]
         self._obstacle_default_size = self.model.geom_size[self._obstacle_gids].copy()
+        # Each obstacle geom hangs off its own mocap body (see scripts/gen_arena.py) -- moving
+        # the body is what makes contacts follow it, so cache the mocap index per obstacle.
+        self._obstacle_mocap_ids = [
+            int(self.model.body_mocapid[self.model.geom_bodyid[gid]]) for gid in self._obstacle_gids
+        ]
+        assert all(mid >= 0 for mid in self._obstacle_mocap_ids), (
+            "obstacles must be mocap bodies; re-run scripts/gen_arena.py"
+        )
         wall_names = ("wall_north", "wall_south", "wall_east", "wall_west")
         self._wall_gids = [
             mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, n) for n in wall_names
@@ -354,17 +362,25 @@ class GoalNavEnv(gym.Env):
         chosen = list(rng.permutation(len(self._obstacle_gids)))
         order = {gid_index: rank for rank, gid_index in enumerate(chosen)}
         for slot, gid in enumerate(self._obstacle_gids):
+            mocap_id = self._obstacle_mocap_ids[slot]
             rank = order[slot]
             if rank < len(layout):
                 xy, radius = layout[rank]
-                self.model.geom_pos[gid] = [xy[0], xy[1], arena.OBSTACLE_HEIGHT / 2]
+                self.data.mocap_pos[mocap_id] = [xy[0], xy[1], arena.OBSTACLE_HEIGHT / 2]
                 size = self._obstacle_default_size[slot].copy()
                 size[0] = radius
                 if self.model.geom_type[gid] == mujoco.mjtGeom.mjGEOM_BOX:
                     size[1] = radius
                 self.model.geom_size[gid] = size
+                # geom_rbound is the compiled bounding-sphere radius the broadphase culls
+                # with; resizing a geom without it leaves the cull using the old size.
+                self.model.geom_rbound[gid] = float(np.linalg.norm(size))
             else:
-                self.model.geom_pos[gid] = [park_x + slot * 0.5, park_y, arena.OBSTACLE_HEIGHT / 2]
+                self.data.mocap_pos[mocap_id] = [
+                    park_x + slot * 0.5,
+                    park_y,
+                    arena.OBSTACLE_HEIGHT / 2,
+                ]
 
     def _randomize(self, rng):
         """Per-episode domain randomization. Deliberately the same knobs and ranges as

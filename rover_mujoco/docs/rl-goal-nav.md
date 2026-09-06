@@ -95,9 +95,8 @@ the sensor rather than from a sloppy integrator.
 
 ## The arena
 
-5×5 m, walled, with 3–8 obstacles per episode drawn from a fixed pool (MuJoCo compiles
-geometry once, so `GoalNavEnv` moves and resizes pool members each reset — the same runtime
-model-mutation trick `LineFollowerEnv` uses for appearance randomization). Obstacles are
+5×5 m, walled, with 3–8 obstacles per episode drawn from a fixed pool. MuJoCo compiles
+geometry once, so `GoalNavEnv` moves and resizes pool members each reset. Obstacles are
 rejection-sampled so they never land on the spawn, the goal, or each other, and which pool
 slots get used is shuffled so the box/cylinder mix is random too, not just the count. Both the
 spawn pose and the goal are randomized, so there is no fixed layout to memorize.
@@ -124,6 +123,31 @@ from this, since shorter routes have less room to hide an obstacle:
 
 If you change the arena size or obstacle radii, re-measure this — it is the difference between
 training an avoidance policy and training a waypoint follower.
+
+### Obstacles must be mocap bodies, not worldbody geoms
+
+This one cost a training run. The pool started as bare `<geom>`s in the worldbody, moved each
+reset with `model.geom_pos` — the same runtime model-mutation `LineFollowerEnv` uses for
+appearance. Appearance is fine; **position is not**. MuJoCo precomputes broadphase bounding
+volumes for static (world-body) geoms, so a moved one renders at its new position, ray-casts
+at its new position, and *collides at its old one*.
+
+The result was obstacles that were visible to the camera and detected by the lidar at exactly
+the right distance, but completely intangible. Measured: driving straight at a box 0.7 m ahead
+registered a collision in 2 of 20 attempts, and the rover ended up 0.17 m past the box's centre
+having passed clean through it. A never-moved obstacle collided normally (19 contacts), which
+is what isolates the cause. The policy trained against this happily reported a 0% collision
+rate — it had never been penalised for anything, and could ignore the lidar entirely.
+
+Each obstacle is now its own `mocap="true"` body, moved with `data.mocap_pos`. Mocap bodies are
+program-movable and go through the *dynamic* broadphase, so contacts follow them: the same test
+now registers 17 of 20. `geom_rbound` (the compiled bounding-sphere radius the broadphase culls
+with) is also updated whenever an obstacle is resized, for the same class of reason.
+
+A minimal two-geom test model does *not* reproduce this — with few enough geoms MuJoCo skips
+broadphase pruning and checks all pairs, so the stale bounds never matter. It only appears once
+the scene has enough static geoms, which is exactly the situation you are in when you have a
+walled arena and an obstacle pool.
 
 ### Keep-out zones: the goal has to stay finishable
 
