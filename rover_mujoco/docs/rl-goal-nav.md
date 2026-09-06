@@ -296,6 +296,82 @@ the padding is a plausible past rather than zeros.
 `task/curriculum_level`, because `ep_rew_mean` alone can't distinguish a policy that stops
 just short of every goal from one that arrives.
 
+## Domain randomization
+
+Every parameter resampled each episode. These are **starting points bracketing plausible
+hardware, not measured values** -- the one exception is the actuator envelope, which comes
+straight from `rover_control/rover.py`. Measuring the real rover (motor step response, command
+latency, wheel radius and track width, camera FOV and exposure, the stall dead zone) and
+re-centring these ranges on it is the highest-value outstanding work; until then DR costs
+sample efficiency to buy robustness against guesses.
+
+| Parameter | Description | Min | Max |
+|---|---|---|---|
+| `Action noise` | Gaussian jitter on each commanded wheel speed (rad/s) | 0 | 0.3 |
+| `Action latency` | Control steps of command delay @ 10 Hz | 0 steps | 2 steps |
+| `Wheel friction` | Sliding friction of the wheel/floor contact; stands in for surface | 0.4 | 1.2 |
+| `Encoder noise` | Pre-quantization jitter on the wheel angle (stray/missed edges) | 0 | 0.1 |
+| `Wheel radius scale` | Per-wheel systematic radius error; unequal values curve the odometry | 0.99 x | 1.01 x |
+| `Wheel slip` | Fraction of wheel travel not converted to motion (carpet, grass) | 0 | 0.03 |
+| `Max speed scale` | Unit-to-unit variation in the motors' top speed | 0.85 x | 1.15 x |
+| `Min speed scale` | Variation in the stall dead zone with surface and battery | 0.7 x | 1.3 x |
+| `Camera FOV` | Lens field of view; mounting and manufacturing tolerance (deg) | 50 deg | 70 deg |
+| `Camera brightness` | Exposure / ambient light multiplier on pixel value | 0.6 x | 1.4 x |
+| `White balance` | Per-RGB-channel gain before grayscale conversion | 0.85 x | 1.15 x |
+| `Pixel noise` | Gaussian sensor/JPEG noise on the 0-255 scale | 0 | 15 |
+| `Camera mount jitter` | Position slop on the camera mount (m) | -0.005 m | 0.005 m |
+| `Camera tilt jitter` | Angular slop on the camera mount (deg) | -3 deg | 3 deg |
+| `Light intensity` | Scene lighting multiplier | 0.6 x | 1.3 x |
+| `Obstacle colour` | Per-channel RGB of each obstacle | 0.15 | 0.75 |
+| `Effective resolution` | Sensor resolution, approximated by pixelating a fixed render | 16 px | 64 px |
+
+Two of these deserve singling out.
+
+**The actuator envelope is not a guess.** `rover_control/rover.py` gives `MAX_VELOCITY` 0.25
+m/s and `MIN_VELOCITY` 0.075 m/s -- 7.46 and 2.24 rad/s at this wheel radius. The sim used to
+allow +/-10 rad/s with no dead zone, so the policy could command 1.34x the real top speed and
+anything inside the stall band, with `rl_rover.py` clamping at inference instead. Its own
+docstring warns that causes "jerky behavior right at the clamp boundaries". Training inside the
+envelope removes the mismatch rather than patching it at deploy time.
+
+**Systematic odometry error is the one that decides sim-to-real.** Gaussian tick noise averages
+out; a wheel 2% off nominal does not -- it produces a steady curve whose error grows without
+bound. The ranges above were calibrated, not chosen: measured total drift over a 250-step arc
+is 0.10 m mean / 0.21 m max with these disabled entirely (tick quantization and real slip in
+the physics), and the first attempt at these ranges (+/-3% radius, up to 8% slip) pushed it to
+0.31 m mean / 0.84 m max -- past the 0.25 m arrival tolerance, so nothing could tell it had
+arrived and the task became unsolvable. Re-measure this whenever the ranges change.
+
+## The classical baseline
+
+`scripts/goal_nav_baseline.py` is pure pursuit to the goal pose with reactive camera
+avoidance -- no learning. It exists to establish what RL has to beat, and it gets exactly the
+same information the policy does: the odometry-derived goal vector and the same 64x64 frame.
+
+200 episodes on the full task:
+
+| Controller | Arrived | Collided | Stuck | Timeout | Odom drift | Episode length |
+|---|---|---|---|---|---|---|
+| Pure pursuit + camera avoidance | 4.5% | 15.0% | 40.0% | 39.0% | 0.57 m | 281 steps |
+| Pure pursuit, avoidance ablated | **14.5%** | 67.0% | 16.5% | 2.0% | 0.16 m | 84 steps |
+
+Avoidance does its job -- collisions fall from 67% to 15% -- and yet *arrivals fall too*, from
+14.5% to 4.5%. The last two columns say why: avoiding lengthens episodes from 84 to 281 steps,
+and odometry drift grows with them, 0.16 m to 0.57 m. The rover dodges the obstacle
+successfully and then no longer knows where the goal is.
+
+**That tension is the actual problem.** On a platform navigating by dead reckoning, every
+detour costs position knowledge, so avoidance and navigation trade against each other. A policy
+that beats 14.5% arrivals without paying 67% collisions has solved something the obvious
+controller cannot.
+
+Two bugs found while building it are worth knowing, because both are traps on real hardware
+too. Stopping the moment *odometry* says "arrived" leaves the rover short of the true goal by
+roughly the drift -- 0.40 m mean final distance against a 0.25 m tolerance, 13% arrivals -- so
+the controller aims at half the tolerance instead, and that alone took level 0 from 13% to 87%.
+And any command below the motors' dead zone produces no motion at all, so a fine alignment
+command silently becomes a stop; commands are pushed out to the floor instead.
+
 ## Running it
 
 ```shell
