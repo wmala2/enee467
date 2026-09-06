@@ -107,6 +107,8 @@ def main():
     prev_error = 0.0
 
     with mujoco.viewer.launch_passive(model, data) as viewer:
+        # Track geoms are group 3; the viewer shows only 0-2 by default.
+        viewer.opt.geomgroup[3] = 1
         while viewer.is_running():
             step_start = time.time()
 

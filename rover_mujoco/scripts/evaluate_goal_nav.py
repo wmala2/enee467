@@ -89,6 +89,10 @@ def run_viewer(model, env, options):
     episode_reward = 0.0
 
     with mujoco.viewer.launch_passive(mj_model, mj_data) as viewer:
+        # Obstacles are geom group 4 and the viewer shows only 0-2 by default, so without this
+        # the rover appears to swerve around nothing.
+        for group in (3, 4):
+            viewer.opt.geomgroup[group] = 1
         while viewer.is_running():
             step_start = time.time()
 
