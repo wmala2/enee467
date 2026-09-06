@@ -24,7 +24,11 @@ import numpy as np
 CRUISE = 0.85 * arena.MAX_WHEEL_SPEED  # rad/s, a little under the ceiling for steering headroom
 TURN_GAIN = 3.0  # rad/s of differential per radian of bearing error
 ALIGN_GAIN = 2.5  # same, for the final in-place heading alignment
-FACE_FIRST_RAD = math.radians(50.0)  # beyond this bearing error, turn in place before driving
+# Only spin in place when the goal is genuinely behind. At 50 degrees the controller spent 40%
+# of its steps pirouetting -- avoidance manoeuvres leave a large bearing error, which triggered
+# a spin, which was then undone by the next avoidance. Instrumented over 40 episodes: the only
+# episodes that arrived were ones where avoidance never fired at all.
+FACE_FIRST_RAD = math.radians(110.0)
 
 # Aim *inside* the tolerance. The controller only knows where odometry says the goal is, and
 # that estimate drifts ~0.10 m even with domain randomization off, so stopping the instant
@@ -66,9 +70,21 @@ GROUND_BAND = 0.25
 # the camera domain randomization to darken or blur the frame without losing the obstacle.
 OBSTACLE_PIXEL_FRACTION = 0.08
 AVOID_TURN = 0.9 * arena.MAX_WHEEL_SPEED
-# Once committed to a side, keep turning that way for a few steps. Reactive avoiders oscillate
-# without this: the obstacle leaves view, goal-seeking turns back into it, it reappears.
-AVOID_COMMIT_STEPS = 8
+# Keep real forward speed while arcing around. Crawling makes the manoeuvre long, and every
+# extra step of manoeuvring is extra odometry drift -- the mechanism that made avoidance cost
+# more arrivals than it saved.
+AVOID_CRUISE = 0.55 * CRUISE
+# Below this the obstacle is close enough to straight ahead that the image has no useful
+# opinion about which side to pass it.
+CENTROID_DEAD_AHEAD = 0.2
+# Having picked a side, keep turning that way until the near ground is actually clear, then a
+# few steps more. A fixed-length blind arc was the earlier design and it fails for a reason
+# worth recording: measured reaction distance is 1.11 m and turning out of the way needs only
+# 0.09 m, so margin was never the problem -- but arcing blind for a fixed 8 steps through a
+# field of 3-8 obstacles simply finds a different one. Clearing the view is the right exit
+# condition; the extra steps stop it re-triggering on the obstacle it just passed.
+AVOID_CLEAR_STEPS = 6
+AVOID_MAX_STEPS = 40  # give up on the manoeuvre rather than circling forever
 
 
 def obstacle_bearing(image):
@@ -95,6 +111,7 @@ class Controller:
         self.avoid = avoid
         self._commit_steps = 0
         self._commit_turn = 0.0
+        self._avoid_elapsed = 0
 
     def __call__(self, obs):
         """Returns a normalized action. The controller reasons in rad/s because that is what
@@ -117,18 +134,41 @@ def control(obs, avoid=True, state=None):
         turn = ALIGN_GAIN * math.atan2(sin_dh, cos_dh)
         return escape_dead_zone([turn, turn])
 
+    bearing = math.atan2(left, forward)
+
     if avoid:
         fraction, centroid = obstacle_bearing(obs["image"])
+        blocked = fraction > OBSTACLE_PIXEL_FRACTION
         committed = state is not None and state._commit_steps > 0
         if committed:
-            state._commit_steps -= 1
-            crawl = 0.45 * CRUISE
-            turn = state._commit_turn
-            return np.array([crawl + turn, -crawl + turn], dtype=np.float32)
-        if fraction > OBSTACLE_PIXEL_FRACTION:
+            state._avoid_elapsed += 1
+            if state._avoid_elapsed > AVOID_MAX_STEPS:
+                state._commit_steps = 0  # bail out; circling is its own failure
+            elif blocked:
+                state._commit_steps = AVOID_CLEAR_STEPS  # still blocked: keep going
+            else:
+                state._commit_steps -= 1  # clear: run out the trailing steps
+            if state._commit_steps > 0:
+                turn = state._commit_turn
+                return escape_dead_zone([AVOID_CRUISE + turn, -AVOID_CRUISE + turn])
+        if blocked:
             if state is not None:
-                state._commit_steps = AVOID_COMMIT_STEPS
-                state._commit_turn = AVOID_TURN if centroid > 0 else -AVOID_TURN
+                state._commit_steps = AVOID_CLEAR_STEPS
+                state._avoid_elapsed = 0
+                # Which way to go round. The pixels decide it whenever they have an opinion:
+                # turn away from where the obstacle mass actually is. Only when it is squarely
+                # dead ahead, and the image gives no preferred side, does the goal break the
+                # tie -- going round the side the goal is on saves a spin later.
+                #
+                # Getting this backwards is expensive and not obvious from the code: an earlier
+                # version preferred the goal side whenever the bearing exceeded 20 degrees,
+                # which steers straight into any obstacle sitting between the rover and the
+                # goal. Collisions went from 15% to 85%, worse than no avoidance at all.
+                if abs(centroid) >= CENTROID_DEAD_AHEAD:
+                    side = -1.0 if centroid > 0 else 1.0
+                else:
+                    side = 1.0 if bearing > 0 else -1.0
+                state._commit_turn = side * AVOID_TURN
             # Steer away from whichever side the obstacle mass sits on. Equal-sign commands
             # spin this rover in place (rover.xml mirrors the right wheel).
             # Obstacle mass to the right (centroid > 0) means turn left, i.e. positive.
@@ -138,14 +178,16 @@ def control(obs, avoid=True, state=None):
             crawl = 0.45 * CRUISE
             return np.array([crawl + turn, -crawl + turn], dtype=np.float32)
 
-    bearing = math.atan2(left, forward)
     if abs(bearing) > FACE_FIRST_RAD:
         turn = ALIGN_GAIN * bearing
         return escape_dead_zone([turn, turn])
 
     # Differential drive: equal and opposite is straight ahead, the offset steers.
+    # Drive and steer at once, easing off the throttle as the bearing error grows rather than
+    # stopping to turn. cos() keeps forward speed high when nearly aligned and low when not.
+    speed = CRUISE * max(math.cos(bearing), 0.25)
     turn = TURN_GAIN * bearing
-    return escape_dead_zone([CRUISE + turn, -CRUISE + turn])
+    return escape_dead_zone([speed + turn, -speed + turn])
 
 
 def main():
@@ -163,6 +205,7 @@ def main():
     for i in range(args.episodes):
         obs, _ = env.reset(seed=args.seed + i)
         controller._commit_steps = 0
+        controller._avoid_elapsed = 0
         total = 0.0
         steps = 0
         while True:

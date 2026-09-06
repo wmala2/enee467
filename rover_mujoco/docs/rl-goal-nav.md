@@ -372,6 +372,55 @@ the controller aims at half the tolerance instead, and that alone took level 0 f
 And any command below the motors' dead zone produces no motion at all, so a fine alignment
 command silently becomes a stop; commands are pushed out to the floor instead.
 
+## The binding constraint: odometry has a coherence time
+
+Everything else in this document is downstream of one measured number. Dead reckoning from
+these encoders stays usable for about **15 seconds**, and then it does not:
+
+| Elapsed | p90 drift | Usable against the 0.25 m tolerance |
+|---|---|---|
+| 10.0 s | 0.15 m | yes |
+| 15.0 s | 0.25 m | borderline |
+| 17.5 s | 0.38 m | no |
+| 20.0 s | 0.68 m | no |
+| 30.0 s | 1.32 m | no |
+
+That single fact explains the baseline table above. Runs without avoidance finish in 84 control
+steps (8.4 s), comfortably inside the budget, so their arrival rate is capped by *collisions*.
+Runs with avoidance take 308 steps (30.8 s), by which point the goal estimate is over a metre
+out, so they are capped by *not knowing where the goal is*. Four different avoidance designs
+were tried -- cautious, fast blind arc, clear-view exit, and none -- and every one of them
+traded arrivals against collisions along the same curve, because none of them addressed this.
+
+Two consequences worth acting on:
+
+**`MAX_EPISODE_STEPS = 400` is 40 seconds, i.e. 2.7x the coherence time.** Episodes that run
+long are unwinnable by construction, and both the policy and the baseline spend much of their
+time in that regime. Either the episode budget should come down to something odometry can
+actually support, or the task needs a different sensor.
+
+**The repo already contains the fix.** `ArUco_detector/` does absolute pose estimation from the
+same camera. A tag or two on the arena wall would bound the drift instead of letting it
+integrate, which is the standard answer and turns a 15-second navigation budget into an
+open-ended one. That is a larger change than tuning a controller, and it is the one that would
+actually move the numbers.
+
+## What RL costs here, measured
+
+The camera is not free as an observation. Same env, same hyperparameters, 300k steps, camera on
+versus off:
+
+| Observation | Curriculum progress |
+|---|---|
+| encoders + goal (no camera) | 54.8% arrivals in the first quarter, promoting through levels |
+| camera + encoders + goal | ~10% arrivals at 400k steps, never left level 0 |
+
+The visual encoder is the entire difference. Earlier vector-only runs learned quickly for
+exactly this reason -- they had no CNN to train. Camera-only RL is viable here, but not on a
+two-hour budget, and at curriculum level 0 the image carries no task information at all: there
+are no obstacles, so it is 4096 dimensions the policy must learn to ignore before it can learn
+anything else.
+
 ## Running it
 
 ```shell
