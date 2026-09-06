@@ -2,13 +2,22 @@
 start point facing along the track, then steers using the rover's onboard camera (see
 rover.xml's "top_cam") instead of ground-truth position. Supports both a PID controller and
 a simpler bang-bang controller (see CONTROLLER below) on the same centroid-error signal.
+
+    uv run python scripts/line_follower.py            # MuJoCo viewer
+    uv run python scripts/line_follower.py --camera   # ...plus a live onboard-camera window
+
+The --camera window is what the controller actually sees: the 64x64 frame, the near-field band
+the centroid is taken over, the detected line pixels, and the resulting error. Tuning KP/KI/KD
+by watching the rover from outside is guesswork; tuning them against this is not.
 """
 
+import argparse
 import math
 import os
 import random
 import time
 
+from envs.camera import onboard_scene_option
 from envs.camera import set_camera_tilt
 from gen_track import oval_waypoints
 from gen_track import s_curve_waypoints
@@ -38,6 +47,9 @@ CAMERA_ANGLE_DEG = 60.0
 
 CAM_RES = 64  # onboard camera resolution (small + square keeps centroid math cheap)
 DARK_THRESHOLD = 60  # pixel value below which we call a pixel "line"
+# Fraction of the frame, measured up from the bottom, that the centroid is taken over. The
+# near ground: the only part of a forward-tilted view where "dark" can only mean track.
+GROUND_BAND = 0.5
 
 
 def start_pose(waypoints_fn):
@@ -56,14 +68,51 @@ def start_pose(waypoints_fn):
 
 def line_error(cam_renderer, data):
     """Normalized horizontal offset of the black line's centroid from image center,
-    in [-1, 1], or None if no line pixels are visible this frame."""
-    cam_renderer.update_scene(data, camera="top_cam")
+    in [-1, 1], or None if no line pixels are visible this frame.
+
+    Only the bottom GROUND_BAND of the frame is used. That is standard line-follower practice
+    -- it is the ground just ahead of the rover, which is what you actually steer on -- and
+    here it is also load-bearing: with a forward-tilted camera the upper frame contains the
+    horizon, and anything above it is sky rather than floor. Measuring the whole frame let
+    distant track (and, before the scenes gained a skybox, the black void itself) drag the
+    centroid toward the middle, which pinned the error near zero and drove the rover straight
+    past every bend.
+
+    The centroid is weighted by how many dark pixels each column holds, not by which columns
+    happen to contain one, so a thick near stripe outvotes a thin far one."""
+    cam_renderer.update_scene(data, camera="top_cam", scene_option=onboard_scene_option())
     img = cam_renderer.render()
-    dark_cols = np.where(np.all(img < DARK_THRESHOLD, axis=-1).any(axis=0))[0]
-    if len(dark_cols) == 0:
+    band = img[int(CAM_RES * (1.0 - GROUND_BAND)) :, :, :]
+    dark = np.all(band < DARK_THRESHOLD, axis=-1)
+    weights = dark.sum(axis=0).astype(np.float64)
+    if weights.sum() == 0:
         return None
-    centroid = dark_cols.mean()
+    centroid = float((np.arange(CAM_RES) * weights).sum() / weights.sum())
     return (centroid - CAM_RES / 2) / (CAM_RES / 2)
+
+
+def camera_overlay(img, error, scale=6):
+    """The onboard frame, blown up, with the near-field band and detected line marked.
+
+    Draws with numpy rather than cv2 so this stays a MuJoCo-only dependency; the window itself
+    is cv2, which the workspace already ships for the ArUco and YOLO packages."""
+    view = np.repeat(np.repeat(img, scale, axis=0), scale, axis=1).astype(np.uint8).copy()
+    band_top = int(CAM_RES * (1.0 - GROUND_BAND)) * scale
+    view[band_top, :, :] = [0, 160, 255]  # boundary of the band the centroid uses
+
+    dark = np.all(img < DARK_THRESHOLD, axis=-1)
+    dark_big = np.repeat(np.repeat(dark, scale, axis=0), scale, axis=1)
+    tint = np.zeros_like(view)
+    tint[..., 0] = 255
+    view[dark_big] = (0.45 * view[dark_big] + 0.55 * tint[dark_big]).astype(np.uint8)
+
+    mid = view.shape[1] // 2
+    view[:, mid - 1 : mid + 1, :] = [90, 90, 90]  # image centre
+    if error is not None:
+        col = int((error * (CAM_RES / 2) + CAM_RES / 2) * scale)
+        col = max(1, min(view.shape[1] - 2, col))
+        view[:, col - 1 : col + 1, :] = [0, 255, 0]  # measured line centroid
+    return view
 
 
 def pid_control(error, integral, prev_error):
@@ -87,6 +136,15 @@ def bang_bang_control(error):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--camera", action="store_true", help="show a live window of the onboard camera"
+    )
+    args = parser.parse_args()
+    show_camera = args.camera
+    if show_camera:
+        import cv2
+
     scene_rel, wp_fn = random.choice(list(TRACKS.items()))
     model_path = os.path.join(os.path.dirname(__file__), scene_rel)
     print(f"Track: {os.path.basename(scene_rel)}, controller: {CONTROLLER}")
@@ -112,6 +170,14 @@ def main():
             step_start = time.time()
 
             error = line_error(cam_renderer, data)
+            if show_camera:
+                cam_renderer.update_scene(
+                    data, camera="top_cam", scene_option=onboard_scene_option()
+                )
+                frame = camera_overlay(cam_renderer.render(), error)
+                cv2.imshow("rover camera (red = line, green = centroid)", frame[:, :, ::-1])
+                if cv2.waitKey(1) & 0xFF == 27:
+                    break
             if error is None:
                 error = prev_error  # line briefly out of view: hold last correction
 

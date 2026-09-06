@@ -13,6 +13,15 @@
 
   <option integrator="implicitfast"/>
 
+  <asset>
+    <!-- Light skybox. Without this, everything above the horizon renders pure black, which is
+         indistinguishable from a black line: the onboard camera's dark-pixel test locked onto
+         the sky instead of the track, full width, so its centroid sat dead centre and the
+         steering error was frozen at -0.016 no matter where the rover was. -->
+    <texture name="skybox" type="skybox" builtin="gradient"
+             rgb1="0.75 0.80 0.86" rgb2="0.55 0.62 0.70" width="256" height="256"/>
+  </asset>
+
   <worldbody>
     <!-- Overhead light so the rover, obstacles and walls are visible in the viewer -->
     <light diffuse=".8 .8 .8" pos="0 0 3" dir="0 0 -1"/>

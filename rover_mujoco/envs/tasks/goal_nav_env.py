@@ -23,6 +23,7 @@ import numpy as np
 
 from envs import arena
 from envs import motor
+from envs.camera import onboard_scene_option
 from envs.camera import set_camera_tilt
 from envs.tasks.line_follower_env import CAM_RES
 from envs.tasks.line_follower_env import CONTROL_HZ
@@ -647,7 +648,7 @@ class GoalNavEnv(gym.Env):
         """Same camera-realism pipeline as LineFollowerRealEnv._capture_processed_image()."""
         if not self.include_image:
             return None
-        self.renderer.update_scene(self.data, camera="top_cam")
+        self.renderer.update_scene(self.data, camera="top_cam", scene_option=onboard_scene_option())
         rgb = self.renderer.render().astype(np.float32) * self._white_balance
         gray = rgb.mean(axis=-1, keepdims=True) * self._brightness
         gray += self.np_random.normal(0.0, self._pixel_noise_std, size=gray.shape)

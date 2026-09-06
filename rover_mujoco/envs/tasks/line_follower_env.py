@@ -9,6 +9,7 @@ import mujoco
 import numpy as np
 
 from envs import tracks
+from envs.camera import onboard_scene_option
 from envs.tracks import oval_waypoints
 from envs.tracks import s_curve_waypoints
 
@@ -256,7 +257,7 @@ class LineFollowerEnv(gym.Env):
         mujoco.mju_mulQuat(self.model.cam_quat[self._cam_id], self._default_cam_quat, jitter_quat)
 
     def _get_obs(self):
-        self.renderer.update_scene(self.data, camera="top_cam")
+        self.renderer.update_scene(self.data, camera="top_cam", scene_option=onboard_scene_option())
         rgb = self.renderer.render()
         gray = rgb.mean(axis=-1, keepdims=True).astype(np.uint8)
         return gray
