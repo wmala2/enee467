@@ -209,10 +209,22 @@ class GoalNavEnv(gym.Env):
         self._hazard_gids = set(self._obstacle_gids) | set(self._wall_gids)
         self._floor_gid = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, "floor")
 
-        self._lidar_adr = [
-            self.model.sensor_adr[mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_SENSOR, name)]
-            for name in ("range_left", "range_center", "range_right")
-        ]
+        # One rangefinder per ray, grouped per beam: each beam's fan is folded to a single
+        # distance by taking the minimum, which is what a real cone-FOV ToF part reports.
+        # Looked up by name so adding any other sensor to the scene cannot silently shift what
+        # the lidar observation reads.
+        self._lidar_adr = np.array([
+            [
+                self.model.sensor_adr[
+                    mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_SENSOR, f"range_{beam}_{i}")
+                ]
+                for i in range(arena.LIDAR_RAYS_PER_BEAM)
+            ]
+            for beam in arena.LIDAR_BEAM_NAMES
+        ])
+        assert self._lidar_adr.min() >= 0, (
+            "lidar sensors missing; re-run scripts/gen_rover_lidar.py"
+        )
 
         self._cam_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_CAMERA, "top_cam")
         set_camera_tilt(self.model, "top_cam", CAMERA_ANGLE_DEG)
@@ -465,9 +477,12 @@ class GoalNavEnv(gym.Env):
         alternating encoder/lidar queries (see LIDAR_DECIMATION)."""
         if not force and self._episode_steps % LIDAR_DECIMATION != 0:
             return self._lidar_reading
-        raw = np.array(self.data.sensordata[self._lidar_adr], dtype=np.float64)
-        # MuJoCo reports -1 for "the beam hit nothing"; so does anything past our stated range.
-        raw = np.where(raw < 0, arena.LIDAR_MAX_RANGE, raw)
+        rays = np.array(self.data.sensordata[self._lidar_adr], dtype=np.float64)
+        # MuJoCo reports -1 for "the ray hit nothing"; so does anything past our stated range.
+        rays = np.where(rays < 0, arena.LIDAR_MAX_RANGE, rays)
+        # Fold each beam's fan to its nearest return -- a cone-FOV sensor reports the closest
+        # thing anywhere in the cone, not whatever happens to sit exactly on the axis.
+        raw = rays.min(axis=1)
         raw = raw + self.np_random.normal(0.0, self._lidar_noise_std, size=3)
         raw = np.clip(raw, 0.0, arena.LIDAR_MAX_RANGE)
         return (np.round(raw / LIDAR_QUANTUM_M) * LIDAR_QUANTUM_M).astype(np.float32)

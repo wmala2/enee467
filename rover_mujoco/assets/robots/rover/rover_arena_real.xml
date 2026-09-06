@@ -15,14 +15,26 @@
   </worldbody>
 
   <sensor>
-    <!-- The physical rover's three-beam lidar. Each rangefinder casts along its site's local
-         +Z (rover.xml orients them via zaxis) and reports the distance to the first geom it
-         hits, or -1 when nothing is within range. Ordered left/center/right to match the
+    <!-- BEGIN generated lidar sensors (scripts/gen_rover_lidar.py) -->
+    <!-- One rangefinder per lidar ray. Ordered left/centre/right to match the
          firmware's "l" reply, so the observation lines up field-for-field with what
          rover_control/encoder_poller.py's lidar_latest() returns on the real rover. -->
-    <rangefinder name="range_left" site="lidar_left"/>
-    <rangefinder name="range_center" site="lidar_center"/>
-    <rangefinder name="range_right" site="lidar_right"/>
+    <rangefinder name="range_left_0" site="lidar_left_0"/>
+    <rangefinder name="range_left_1" site="lidar_left_1"/>
+    <rangefinder name="range_left_2" site="lidar_left_2"/>
+    <rangefinder name="range_left_3" site="lidar_left_3"/>
+    <rangefinder name="range_left_4" site="lidar_left_4"/>
+    <rangefinder name="range_center_0" site="lidar_center_0"/>
+    <rangefinder name="range_center_1" site="lidar_center_1"/>
+    <rangefinder name="range_center_2" site="lidar_center_2"/>
+    <rangefinder name="range_center_3" site="lidar_center_3"/>
+    <rangefinder name="range_center_4" site="lidar_center_4"/>
+    <rangefinder name="range_right_0" site="lidar_right_0"/>
+    <rangefinder name="range_right_1" site="lidar_right_1"/>
+    <rangefinder name="range_right_2" site="lidar_right_2"/>
+    <rangefinder name="range_right_3" site="lidar_right_3"/>
+    <rangefinder name="range_right_4" site="lidar_right_4"/>
+    <!-- END generated lidar sensors -->
   </sensor>
 
   <actuator>

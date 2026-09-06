@@ -73,9 +73,35 @@ PATH_SPAN = (0.25, 0.80)  # where along the route (as a fraction of its length) 
 PATH_LATERAL_STD = 0.22  # m: sideways scatter off the route, so it is blocked but not walled
 
 # Lidar, mirroring the real rover's three-beam sensor (rover_control/encoder_poller.py).
-LIDAR_SPLAY_DEG = 30.0  # outer beams either side of straight ahead; matches rover.xml's sites
 LIDAR_MAX_RANGE = 2.0  # m: beyond this the env reports "nothing there", as a real sensor does
-LIDAR_NAMES = ("lidar_left", "lidar_center", "lidar_right")
+
+# A real time-of-flight beam is a cone (the VL53L0X-class parts used on rovers like this are
+# ~25 deg), but MuJoCo's <rangefinder> casts one infinitely thin ray. Modelling each beam as a
+# single ray therefore understates the hardware badly and leaves wide blind wedges between the
+# beams: measured, 84% of collisions happened with no beam reading anything under 0.6 m
+# beforehand, and 16% with all three still reading max range at the moment of impact. The rover
+# was mostly hitting things it could not see. Each beam is now a fan of LIDAR_RAYS_PER_BEAM
+# rays spanning LIDAR_FOV_DEG, reported as the minimum -- which is what a ToF part returns.
+LIDAR_FOV_DEG = 25.0
+LIDAR_RAYS_PER_BEAM = 5
+# Splay equals the FOV so the three cones tile without a gap between them. The real sensor's
+# mounting angles are an assumption to reconcile against hardware; contiguous coverage is the
+# defensible default until then.
+LIDAR_SPLAY_DEG = LIDAR_FOV_DEG
+LIDAR_BEAM_NAMES = ("left", "center", "right")
+
+
+def lidar_ray_angles():
+    """Angle of every ray, in degrees left of straight ahead, grouped per beam (left, centre,
+    right). Shared by scripts/gen_rover_lidar.py, which writes the sites into rover.xml, and by
+    GoalNavEnv, which folds each fan back down to one distance."""
+    half = LIDAR_FOV_DEG / 2.0
+    step = LIDAR_FOV_DEG / (LIDAR_RAYS_PER_BEAM - 1)
+    return [
+        [centre - half + i * step for i in range(LIDAR_RAYS_PER_BEAM)]
+        for centre in (LIDAR_SPLAY_DEG, 0.0, -LIDAR_SPLAY_DEG)
+    ]
+
 
 # Differential-drive geometry, read off rover.xml's wheel body positions
 # (left_wheel x=+0.0798, right_wheel x=-0.0828) and the wheel mesh radius.
