@@ -100,4 +100,5 @@ matrix_lab_rover_above/
 | Sim Manual Control | [rover_mujoco/scripts/](rover_mujoco/scripts/) | Drives the simulated rover around the MuJoCo viewer with WASD/arrow keys. |
 | Sim Line Follower (PID) | [rover_mujoco/scripts/](rover_mujoco/scripts/) | Classical camera-only line following — PID or bang-bang — around a generated track. |
 | Sim Line Follower (RL) | [rover_mujoco/scripts/](rover_mujoco/scripts/) | Trains and evaluates a PPO line-following policy on `LineFollower-v0` / `LineFollowerReal-v0`. |
+| Sim Goal Navigation (RL) | [rover_mujoco/scripts/](rover_mujoco/scripts/) | Trains a PPO policy to drive to a commanded (x, y) offset in a 5x5 m arena while avoiding obstacles, using encoder odometry and the rover's lidar. |
 | RL Line Follower (Real) | [rover_control/examples/](rover_control/examples/) | Runs the PPO policy trained in `rover_mujoco/` on the physical rover. |

@@ -39,6 +39,26 @@
            envs/camera.py's set_camera_tilt() at runtime instead of editing this default;
            see docs/pid-line-follower.md. -->
       <camera name="top_cam" pos="0 0.12 0.07" quat="0.99120281 0.13235175 0 0" fovy="60"/>
+      <!-- Three forward range beams, matching the physical rover's lidar: the firmware's
+           "l" UDP command answers with left/center/right distances in mm (see
+           rover_control/encoder_poller.py). A rangefinder site casts along its own local +Z,
+           so zaxis points each beam down the driving direction (+Y, per teleop_rover.py's
+           differential-drive convention) with the outer two splayed LIDAR_SPLAY_DEG either
+           side. Mounted low and forward, roughly where the sensor sits on the real chassis.
+           These are massless, collision-free sites: scenes that don't declare matching
+           <rangefinder> sensors (every line-follower scene) pay nothing for them. -->
+      <!-- Chassis collision proxy. Every mesh geom on this body is visual-only
+           (contype/conaffinity 0, straight from the URDF import), so without this box the
+           only things that can collide are the three wheels, and the rover drives through
+           anything shorter than its deck. The contype/conaffinity 2 bitmask makes it hit
+           *only* geoms that opt in with bit 2 -- the goal-nav arena's walls and obstacles
+           (see scripts/gen_arena.py) -- and notably not the floor, so the line-follower
+           scenes that share rover.xml keep exactly the contact set they trained against. -->
+      <geom name="chassis_collision" type="box" pos="0 0.015 -0.035" size="0.09 0.125 0.035"
+            contype="2" conaffinity="2" group="5" rgba="0.9 0.4 0.1 0.25"/>
+      <site name="lidar_left" pos="0 0.13 -0.06" size="0.005" zaxis="-0.5 0.866 0"/>
+      <site name="lidar_center" pos="0 0.13 -0.06" size="0.005" zaxis="0 1 0"/>
+      <site name="lidar_right" pos="0 0.13 -0.06" size="0.005" zaxis="0.5 0.866 0"/>
       <geom pos="0.0160863 -0.0852797 0.272765" quat="0.707105 0 0.707108 0" type="mesh" contype="0" conaffinity="0" rgba="0.647059 0.647059 0.647059 1" mesh="left_motor"/>
       <geom pos="-0.0886915 -0.18808 -0.0273587" quat="0.707105 0 0 -0.707108" type="mesh" contype="0" conaffinity="0" rgba="0.917647 0.917647 0.917647 1" mesh="base_plate"/>
       <geom pos="-0.473714 0.0946882 -0.0468587" quat="1.76043e-12 1.32679e-06 -1 -1.32679e-06" type="mesh" contype="0" conaffinity="0" rgba="0.498039 0.498039 0.498039 1" mesh="front_wheel_upper_joint"/>

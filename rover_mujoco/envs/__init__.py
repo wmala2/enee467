@@ -14,3 +14,8 @@ register(
     id="LineFollowerReal-v0",
     entry_point="envs.tasks.line_follower_real_env:LineFollowerRealEnv",
 )
+
+register(
+    id="GoalNav-v0",
+    entry_point="envs.tasks.goal_nav_env:GoalNavEnv",
+)

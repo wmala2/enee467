@@ -1,0 +1,18 @@
+<mujoco model="arena_5x5">
+  <worldbody>
+    <!-- 5x5 m walled arena -->
+    <geom name="wall_north" type="box" pos="0 2.55 0.075" size="2.55 0.05 0.075" contype="3" conaffinity="3" rgba="0.6 0.6 0.65 1"/>
+    <geom name="wall_south" type="box" pos="0 -2.55 0.075" size="2.55 0.05 0.075" contype="3" conaffinity="3" rgba="0.6 0.6 0.65 1"/>
+    <geom name="wall_east" type="box" pos="2.55 0 0.075" size="0.05 2.55 0.075" contype="3" conaffinity="3" rgba="0.6 0.6 0.65 1"/>
+    <geom name="wall_west" type="box" pos="-2.55 0 0.075" size="0.05 2.55 0.075" contype="3" conaffinity="3" rgba="0.6 0.6 0.65 1"/>
+    <!-- Obstacle pool: parked outside the walls, moved into place each reset (see envs/tasks/goal_nav_env.py) -->
+    <geom name="obstacle_0" type="box" group="4" pos="7.5 7.5 0.06" size="0.11499999999999999 0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
+    <geom name="obstacle_1" type="cylinder" group="4" pos="8.0 7.5 0.06" size="0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
+    <geom name="obstacle_2" type="box" group="4" pos="8.5 7.5 0.06" size="0.11499999999999999 0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
+    <geom name="obstacle_3" type="cylinder" group="4" pos="9.0 7.5 0.06" size="0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
+    <geom name="obstacle_4" type="box" group="4" pos="9.5 7.5 0.06" size="0.11499999999999999 0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
+    <geom name="obstacle_5" type="cylinder" group="4" pos="10.0 7.5 0.06" size="0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
+    <geom name="obstacle_6" type="box" group="4" pos="10.5 7.5 0.06" size="0.11499999999999999 0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
+    <geom name="obstacle_7" type="cylinder" group="4" pos="11.0 7.5 0.06" size="0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
+  </worldbody>
+</mujoco>
