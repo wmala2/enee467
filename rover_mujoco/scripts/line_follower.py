@@ -35,7 +35,15 @@ TRACKS = {
 CONTROLLER = "pid"  # "pid" or "bang_bang" — see pid_control()/bang_bang_control() below
 
 LINEAR_SPEED = 3.0  # constant forward wheel speed (rad/s)
-KP, KI, KD = 6.0, 0.0, 1.5  # PID gains on normalized camera centroid error
+# PID gains on the normalized camera centroid error. Swept against the working error signal
+# (the old 6.0/0.0/1.5 were tuned when the camera could not see the track at all, so they were
+# fitted to noise). Lower KP tracks better here: the plant is already well damped by the motor
+# model, and the error signal is a look-ahead measurement, which adds its own phase lead.
+#
+# KD earns very little on this track -- 1.5 and 3.0 give identical trajectories, because the
+# error changes slowly compared to the 10 Hz control step. It is kept small and nonzero rather
+# than removed, since a faster LINEAR_SPEED or a tighter track would give it something to do.
+KP, KI, KD = 2.0, 0.0, 1.0
 BANG_TURN_SPEED = 3.0  # angular speed (rad/s) the bang-bang controller applies when off-line
 BANG_DEADBAND = 0.05  # normalized error within which bang-bang just drives straight
 
@@ -49,7 +57,19 @@ CAM_RES = 64  # onboard camera resolution (small + square keeps centroid math ch
 DARK_THRESHOLD = 60  # pixel value below which we call a pixel "line"
 # Fraction of the frame, measured up from the bottom, that the centroid is taken over. The
 # near ground: the only part of a forward-tilted view where "dark" can only mean track.
-GROUND_BAND = 0.5
+#
+# This is the single biggest lever on tracking accuracy, far more than any gain. A wide band
+# samples the line further ahead, and steering to centre a look-ahead point puts the *body*
+# outside the curve -- measured, the offset at which the error reads zero swings from -13.5 cm
+# to +14.2 cm depending on local curvature, which no gain can correct because it is geometry
+# rather than dynamics. Narrowing the band samples closer to the wheels:
+#     band  mean deviation  max
+#     0.50      5.3 cm      10.1 cm
+#     0.30      4.5 cm       8.7 cm
+#     0.20      4.0 cm       7.9 cm
+#     0.15      3.4 cm       6.8 cm
+# Below ~0.12 the band gets too few pixels to be reliable on a faint or distant line.
+GROUND_BAND = 0.15
 
 
 def start_pose(waypoints_fn):
