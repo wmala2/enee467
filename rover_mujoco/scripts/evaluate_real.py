@@ -36,6 +36,20 @@ def load_model(use_hub, env):
     return PPO.load(os.path.join(MODEL_DIR, "model"), env=env)
 
 
+def track_deviation(env, position):
+    """Distance from the rover to the track polyline, in metres.
+
+    To the polyline rather than to its nearest waypoint: waypoints are ~4.3 cm apart, so a
+    vertex-only measure adds up to half that as pure discretization. This is the same metric
+    the classical follower is scored on (3.2 cm on the s-curve, 3.7 cm on the oval), so the
+    two are directly comparable -- which is the whole point of keeping a baseline."""
+    pts = np.asarray(env.unwrapped._path_waypoints)
+    a, b = pts[:-1], pts[1:]
+    ab = b - a
+    t = np.clip(((position - a) * ab).sum(1) / (ab * ab).sum(1), 0.0, 1.0)
+    return float(np.min(np.linalg.norm(a + t[:, None] * ab - position, axis=1)))
+
+
 def episode_outcome(env):
     """LineFollowerRealEnv returns an empty info dict, so read the episode's own state. A track
     is 'completed' when a closed track has been lapped or an open one driven end to end."""
@@ -54,14 +68,18 @@ def run_headless(model, env, episodes):
     for _ in range(episodes):
         obs, _ = env.reset()
         total = 0.0
+        devs = []
         while True:
             action, _ = model.predict(obs, deterministic=True)
             obs, reward, terminated, truncated, _ = env.step(action)
             total += reward
+            devs.append(track_deviation(env, env.unwrapped.data.qpos[:2].copy()))
             if terminated or truncated:
                 break
         out = episode_outcome(env)
         out["reward"] = total
+        out["mean_dev"] = float(np.mean(devs))
+        out["max_dev"] = float(np.max(devs))
         results.append(out)
 
     done = sum(r["completed"] for r in results)
@@ -72,6 +90,11 @@ def run_headless(model, env, episodes):
     print(f"  mean track progress       : {np.mean([r['progress'] for r in results]):6.1%}")
     print(f"  mean episode reward       : {np.mean([r['reward'] for r in results]):7.1f}")
     print(f"  mean episode length       : {np.mean([r['steps'] for r in results]):5.0f} steps")
+    print(
+        f"  mean deviation from line  : {np.mean([r['mean_dev'] for r in results]) * 100:6.1f} cm"
+    )
+    print(f"  worst deviation           : {np.max([r['max_dev'] for r in results]) * 100:6.1f} cm")
+    print("  (classical PID baseline   :    3.2 cm s-curve, 3.7 cm oval)")
 
 
 def run_viewer(model, env):

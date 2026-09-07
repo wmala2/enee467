@@ -3,8 +3,11 @@ start point facing along the track, then steers using the rover's onboard camera
 rover.xml's "top_cam") instead of ground-truth position. Supports both a PID controller and
 a simpler bang-bang controller (see CONTROLLER below) on the same centroid-error signal.
 
-    uv run python scripts/line_follower.py            # MuJoCo viewer
-    uv run python scripts/line_follower.py --camera   # ...plus a live onboard-camera window
+    uv run python scripts/line_follower.py                 # random track, MuJoCo viewer
+    uv run python scripts/line_follower.py --track circle  # a specific track
+    uv run python scripts/line_follower.py --list-tracks   # what is available
+    uv run python scripts/line_follower.py --camera        # live onboard-camera window
+    uv run python scripts/line_follower.py --controller bang_bang
 
 The --camera window is what the controller actually sees: the 64x64 frame, the near-field band
 the centroid is taken over, the detected line pixels, and the resulting error. Tuning KP/KI/KD
@@ -25,12 +28,44 @@ import mujoco
 import mujoco.viewer
 import numpy as np
 
-# Each track maps to the waypoint function that generated it, so the start pose below
+# Generated tracks: each maps to the waypoint function that produced it, so the start pose
 # stays in sync with the actual line geometry without duplicating the path math.
 TRACKS = {
     "../assets/robots/rover/rover_line_oval.xml": oval_waypoints,
     "../assets/robots/rover/rover_line_s_curve.xml": s_curve_waypoints,
 }
+
+# Imported tracks: real geometry converted from the Webots PROTOs by
+# scripts/import_webots_track.py. These are meshes rather than parametric curves, so there is
+# no waypoint function to spawn from -- mesh_start_pose() derives a pose from the mesh itself.
+IMPORTED_TRACKS = {
+    "figure8": ("../assets/robots/rover/rover_Figure8Track.xml", "Figure8Track"),
+}
+
+# The other six Webots tracks convert and load but do not render, so the camera cannot see
+# them and the follower drives blind. They are listed separately rather than offered and left
+# to fail.
+#
+# Cause: the OnShape exporter writes each track as a *solid* whose thickness rounds to zero --
+# every vertex lands on the same z, extent exactly 0.000 -- so its side walls are zero-area
+# triangles that MuJoCo discards at compile. CircleTrack's 1128 faces become 288, MidTrack's
+# 996 become 2, and what survives does not form a visible surface. Figure8Track came out of
+# Tinkercad instead and has real geometry, which is what isolates the exporter rather than the
+# importer: normalizing the face format (f v//vn -> f v v v) was necessary but not sufficient.
+#
+# The fix is not more mesh wrangling. Extracting each track's centreline and emitting it as the
+# same thin-box polyline scripts/gen_track.py already produces would render reliably, collide
+# correctly, and -- the part that matters for RL -- yield the waypoints LineFollowerEnv needs
+# for its progress reward, which a mesh cannot provide.
+UNSUPPORTED_TRACKS = {
+    "circle": "CircleTrack",
+    "goomba": "GoombaTrack",
+    "hard": "HardTrack",
+    "medium": "MediumCompTrack",
+    "mid": "MidTrack",
+    "swing": "SwingTrack",
+}
+GENERATED_NAMES = {"oval": 0, "s_curve": 1}
 
 CONTROLLER = "pid"  # "pid" or "bang_bang" — see pid_control()/bang_bang_control() below
 
@@ -84,6 +119,43 @@ def start_pose(waypoints_fn):
     yaw = math.atan2(tx, -ty)
     quat = [math.cos(yaw / 2), 0.0, 0.0, math.sin(yaw / 2)]
     return (x0, y0), quat
+
+
+def mesh_start_pose(model, geom_name, rng):
+    """A spawn pose on an imported mesh track.
+
+    The generated tracks come with waypoints; a mesh does not, so the pose is derived from the
+    geometry: pick a vertex, fit the local tangent to its neighbours, and choose the direction
+    along that tangent with more track ahead of it. Fitting a direction to neighbours gives an
+    axis but not a sign, and picking the wrong sign spawns the rover facing off the end of the
+    line."""
+    gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, geom_name)
+    mesh_id = model.geom_dataid[gid]
+    start, count = model.mesh_vertadr[mesh_id], model.mesh_vertnum[mesh_id]
+    verts = model.mesh_vert[start : start + count].astype(np.float64)
+    rot = np.zeros(9)
+    mujoco.mju_quat2Mat(rot, model.geom_quat[gid])
+    world = verts @ rot.reshape(3, 3).T + model.geom_pos[gid]
+    xy = world[:, :2]
+
+    origin = xy[rng.integers(len(xy))]
+    neighbours = xy[np.argsort(np.linalg.norm(xy - origin, axis=1))[1:12]]
+    centred = neighbours - neighbours.mean(axis=0)
+    # Principal direction of the neighbourhood is the line's local tangent.
+    tangent = np.linalg.svd(centred, full_matrices=False)[2][0]
+    ahead = [
+        np.sum(np.linalg.norm(xy - (origin + sign * tangent * 0.15), axis=1) < 0.12)
+        for sign in (1.0, -1.0)
+    ]
+    tangent = tangent * (1.0 if ahead[0] >= ahead[1] else -1.0)
+
+    yaw = math.atan2(tangent[0], -tangent[1])  # local -Y onto the tangent
+    return (float(origin[0]), float(origin[1])), [
+        math.cos(yaw / 2),
+        0.0,
+        0.0,
+        math.sin(yaw / 2),
+    ]
 
 
 def line_error(cam_renderer, data):
@@ -201,20 +273,64 @@ def main():
     parser.add_argument(
         "--camera", action="store_true", help="show a live window of the onboard camera"
     )
+    parser.add_argument(
+        "--track",
+        help="which track to drive; omit for a random generated one, --list-tracks to see all",
+    )
+    parser.add_argument("--list-tracks", action="store_true", help="list tracks and exit")
+    parser.add_argument(
+        "--controller", choices=("pid", "bang_bang"), default=CONTROLLER, help="steering law"
+    )
+    parser.add_argument("--seed", type=int, default=0, help="seed for imported-track spawn")
     args = parser.parse_args()
+
+    if args.list_tracks:
+        print("generated (parametric, with waypoints):")
+        for name in GENERATED_NAMES:
+            print(f"  {name}")
+        print("imported (Webots meshes, spawn derived from geometry):")
+        for name, (_, geom) in IMPORTED_TRACKS.items():
+            print(f"  {name:10s} ({geom})")
+        print("unavailable — convert and load, but do not render (see UNSUPPORTED_TRACKS):")
+        for name, geom in UNSUPPORTED_TRACKS.items():
+            print(f"  {name:10s} ({geom})")
+        return
+
+    controller = args.controller
     show_camera = args.camera
     if show_camera:
         import cv2
 
-    scene_rel, wp_fn = random.choice(list(TRACKS.items()))
+    rng = np.random.default_rng(args.seed)
+    imported_geom = None
+    if args.track in IMPORTED_TRACKS:
+        scene_rel, imported_geom = IMPORTED_TRACKS[args.track]
+        wp_fn = None
+    elif args.track in GENERATED_NAMES:
+        scene_rel = list(TRACKS)[GENERATED_NAMES[args.track]]
+        wp_fn = TRACKS[scene_rel]
+    elif args.track is None:
+        scene_rel, wp_fn = random.choice(list(TRACKS.items()))
+    elif args.track in UNSUPPORTED_TRACKS:
+        raise SystemExit(
+            f"{args.track!r} converts but does not render — its OnShape export collapsed to a "
+            "zero-thickness solid, so MuJoCo discards its faces. See UNSUPPORTED_TRACKS."
+        )
+    else:
+        known = ", ".join(list(GENERATED_NAMES) + list(IMPORTED_TRACKS))
+        raise SystemExit(f"unknown track {args.track!r}; choose from: {known}")
+
     model_path = os.path.join(os.path.dirname(__file__), scene_rel)
-    print(f"Track: {os.path.basename(scene_rel)}, controller: {CONTROLLER}")
+    print(f"Track: {os.path.basename(scene_rel)}, controller: {controller}")
 
     model = mujoco.MjModel.from_xml_path(model_path)
     data = mujoco.MjData(model)
     set_camera_tilt(model, "top_cam", CAMERA_ANGLE_DEG)
 
-    (sx, sy), quat = start_pose(wp_fn)
+    if imported_geom is not None:
+        (sx, sy), quat = mesh_start_pose(model, imported_geom, rng)
+    else:
+        (sx, sy), quat = start_pose(wp_fn)
     mujoco.mj_resetData(model, data)
     data.qpos[0], data.qpos[1], data.qpos[2] = sx, sy, 0.1
     data.qpos[3:7] = quat
@@ -250,7 +366,7 @@ def main():
             if error is None:
                 error = prev_error  # line briefly out of view: hold last correction
 
-            if CONTROLLER == "bang_bang":
+            if controller == "bang_bang":
                 angular = bang_bang_control(error)
             else:
                 angular, integral = pid_control(error, integral, prev_error)

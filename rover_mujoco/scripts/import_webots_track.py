@@ -15,7 +15,6 @@ it the same way they include the generated tracks (see assets/robots/rover/rover
 import argparse
 import os
 import re
-import shutil
 
 import numpy as np
 
@@ -40,6 +39,31 @@ def parse_proto(proto_dir):
     scale_match = re.search(r"scale\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)", text)
     scale = np.array([float(v) for v in scale_match.groups()]) if scale_match else np.ones(3)
     return os.path.join(proto_dir, match.group(1)), scale
+
+
+def normalize_obj(src, dst):
+    """Copy an OBJ, rewriting faces as bare vertex indices.
+
+    MuJoCo's OBJ reader mishandles the `f v//vn` form that OnShape exports: CircleTrack's 1128
+    face lines compiled to 288 faces, and MidTrack's 996 to *two*, leaving both meshes
+    invisible from either side. The Tinkercad-exported track, whose faces are plain `f v v v`,
+    compiled correctly -- which is what isolates the file format rather than the geometry.
+    Stripping the normal and texture references leaves the form MuJoCo handles, and costs
+    nothing here: these are flat black decals whose shading does not matter."""
+    kept = 0
+    with (
+        open(src, encoding="utf-8", errors="ignore") as fin,
+        open(dst, "w", encoding="utf-8") as fout,
+    ):
+        for line in fin:
+            if line.startswith("f "):
+                idx = [tok.split("/")[0] for tok in line.split()[1:] if tok.strip()]
+                if len(idx) >= 3:
+                    fout.write("f " + " ".join(idx) + "\n")
+                    kept += 1
+            elif line.startswith(("v ", "g ", "o ", "# ")):
+                fout.write(line)
+    return kept
 
 
 def mesh_bounds(obj_path):
@@ -72,7 +96,7 @@ def convert(proto_dir, out_dir):
     # the including -- same as rover.xml's "meshes/left_motor.stl". Every scene that includes a
     # track lives in assets/robots/rover/, so the path is written relative to there.
     mesh_file = f"../../objects/tracks/{name}.obj"
-    shutil.copy(obj_path, os.path.join(out_dir, f"{name}.obj"))
+    faces = normalize_obj(obj_path, os.path.join(out_dir, f"{name}.obj"))
 
     planar = sorted(extent)[-2:]
     xml = f"""<mujoco model="{name}">
@@ -100,7 +124,10 @@ def convert(proto_dir, out_dir):
     out_path = os.path.join(out_dir, f"{name}.xml")
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(xml)
-    print(f"  {name:18s} {planar[1]:5.2f} x {planar[0]:5.2f} m -> {os.path.basename(out_path)}")
+    print(
+        f"  {name:18s} {planar[1]:5.2f} x {planar[0]:5.2f} m {faces:5d} faces"
+        f" -> {os.path.basename(out_path)}"
+    )
     return out_path
 
 

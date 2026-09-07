@@ -20,6 +20,14 @@
     <geom name="floor" type="plane" size="6 6 0.1" rgba=".8 .8 .8 1"/>
   </worldbody>
 
+  <sensor>
+    <!-- Declared so MuJoCo's viewer can plot them live, and so read_telemetry() works on every
+         track scene rather than only the generated ones. -->
+    <jointvel name="left_wheel_speed" joint="left_axle"/>
+    <jointvel name="right_wheel_speed" joint="right_axle"/>
+    <velocimeter name="base_velocity" site="base_imu"/>
+  </sensor>
+
   <actuator>
     <velocity name="left_wheel_motor" joint="left_axle" kv="0.2" ctrlrange="-10 10"/>
     <velocity name="right_wheel_motor" joint="right_axle" kv="0.2" ctrlrange="-10 10"/>
