@@ -85,3 +85,28 @@ def apply_friction(friction_model, model, dof_adr, dtheta):
     frictionloss, damping = friction_model.compute_frictions(0.0, 0.0, dtheta)
     model.dof_frictionloss[dof_adr] = frictionloss
     model.dof_damping[dof_adr] = damping
+
+
+# --- The real rover's actuator envelope, from rover_control/rover.py -----------------------
+# MAX_VELOCITY 0.25 m/s and MIN_VELOCITY 0.075 m/s at this wheel radius. The dead zone is not
+# a safety margin: below it the wheels cannot overcome friction and simply do not turn, so a
+# command inside it produces no motion at all. Any env whose policy is meant to run on the
+# physical rover should train inside this envelope rather than let rl_rover.py clamp at
+# inference -- its own docstring warns that causes "jerky behavior right at the clamp
+# boundaries".
+WHEEL_RADIUS = 0.0335
+MAX_WHEEL_SPEED = 0.25 / WHEEL_RADIUS  # ~7.46 rad/s
+MIN_WHEEL_SPEED = 0.075 / WHEEL_RADIUS  # ~2.24 rad/s
+
+
+def apply_actuator_envelope(omega, max_omega=None, min_omega=None):
+    """Clip to the motors' top speed and zero anything inside their dead zone.
+
+    Takes and returns wheel speeds in rad/s. Pass explicit bounds to apply per-episode
+    domain randomization over unit-to-unit motor variation."""
+    import numpy as np
+
+    top = MAX_WHEEL_SPEED if max_omega is None else max_omega
+    floor = MIN_WHEEL_SPEED if min_omega is None else min_omega
+    omega = np.clip(omega, -top, top)
+    return np.where(np.abs(omega) < floor, 0.0, omega)

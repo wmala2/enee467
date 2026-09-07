@@ -10,6 +10,8 @@ import math
 
 import numpy as np
 
+from envs import motor
+
 # Arena: a 5x5 m square with walls, matching the "work inside a 5x5 meter space" spec.
 ARENA_SIZE = 5.0
 ARENA_HALF = ARENA_SIZE / 2.0
@@ -108,14 +110,11 @@ def lidar_ray_angles():
 WHEEL_BASE = 0.1626
 WHEEL_RADIUS = 0.0335
 
-# --- Actuator envelope, straight from rover_control/rover.py -------------------------------
-# The real motors have both a ceiling and a dead zone: below MIN_VELOCITY the wheels cannot
-# overcome friction at all. The sim used to allow +/-10 rad/s with no dead zone, i.e. 1.34x the
-# real top speed plus a band of commands the hardware simply cannot execute, and rl_rover.py
-# papered over it by clamping at inference -- its own docstring warns of "jerky behavior right
-# at the clamp boundaries". Training inside the real envelope removes that mismatch.
-MAX_WHEEL_SPEED = 0.25 / WHEEL_RADIUS  # ~7.46 rad/s
-MIN_WHEEL_SPEED = 0.075 / WHEEL_RADIUS  # ~2.24 rad/s, below which the wheel stalls
+# --- Actuator envelope ---------------------------------------------------------------------
+# Defined in envs/motor.py, which is where the rover's actuator properties belong; re-exported
+# here because the goal-nav code refers to them through this module.
+MAX_WHEEL_SPEED = motor.MAX_WHEEL_SPEED
+MIN_WHEEL_SPEED = motor.MIN_WHEEL_SPEED
 MAX_SPEED_SCALE_RANGE = (0.85, 1.15)  # DR: unit-to-unit motor variation
 MIN_SPEED_SCALE_RANGE = (0.70, 1.30)  # DR: dead zone varies with surface and battery state
 

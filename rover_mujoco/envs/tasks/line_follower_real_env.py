@@ -56,6 +56,37 @@ WHITE_BALANCE_RANGE = (0.85, 1.15)  # per-RGB-channel gain before grayscale conv
 PIXEL_NOISE_STD_RANGE = (0.0, 15.0)  # Gaussian sensor/JPEG-quality noise (0-255 scale)
 RESOLUTION_LEVELS = (16, 32, 64)  # effective sensor resolution; must all divide CAM_RES
 
+# --- What the policy is actually given ------------------------------------------------------
+# Two line readings rather than raw pixels, because this env exists to teach RL as a *control*
+# problem on hardware that already solves the perception half. The laptop that drives the real
+# rover receives a JPEG and runs exactly this extraction in OpenCV, so what the policy sees in
+# sim is what it will see deployed -- no CNN to train and none to run at 10 Hz.
+#
+# Measured justification, from the goal-nav ablation: at equal step counts a vector-observation
+# policy reached 54.8% task success while the same policy taking the raw image reached ~10%.
+# The visual encoder was the entire difference. Handing over the centroid costs nothing that
+# the physical rover would not have computed anyway.
+#
+# NEAR is the position error the controller closes on. FAR is curvature preview -- the thing
+# every competitive line follower uses to know a bend is coming, and the input that makes
+# slowing into corners possible instead of reacting after the fact.
+# Both are 100% available when the rover is on the line. Under domain randomization the
+# further band washes out first -- pixelation and brightness jitter erase a thin distant line
+# -- so FAR sits only moderately ahead: measured over straight-line rollouts, (0.20, 0.40) is
+# seen ~48% of the time against ~21% for (0.35, 0.55). A preview that is usually missing is
+# not a preview.
+NEAR_BAND = (0.00, 0.15)  # fractions of frame height, measured up from the bottom
+FAR_BAND = (0.20, 0.40)
+
+# Steps of line/encoder history handed to the policy. A memoryless controller cannot tell a
+# line drifting left from one already left and coming back, and cannot estimate its own
+# turn rate from a single encoder sample.
+OBS_HISTORY = 4
+
+# Reward for losing sight of the line entirely. Deliberately larger than a step of centring
+# reward is worth: on the real rover, off the line means the run is over.
+LINE_LOST_PENALTY = 2.0
+
 
 def _pixelate(img, level, full_res):
     """Block-average `img` down to `level`x`level` then nearest-neighbor back up to
@@ -79,23 +110,31 @@ TRACKS_REAL = {
 
 class LineFollowerRealEnv(LineFollowerEnv):
     """LineFollowerEnv, constrained to what the real rover can actually sense and command,
-    plus domain randomization over the physical properties sim can't otherwise get right.
+        plus domain randomization over the physical properties sim can't otherwise get right.
 
-    Observation: the same onboard camera image as LineFollowerEnv, refreshed only at
-    CAMERA_RATE_HZ (not every physics step), plus left/right wheel encoder ticks accrued
-    since the last control step (quantized, noisy — matching the real rover's raw quadrature
-    count query, not an idealized velocity; see ENCODER_CPR_WHEEL) — no ground-truth
-    position, and no privileged image update rate either.
+    This is the deployable variant: everything it senses, the physical rover senses, and
+        everything it commands, the physical rover can execute.
 
-    Action: left/right wheel velocity commands, same shape/units as LineFollowerEnv and
-    teleop_rover.py. This is an assumption pending the real rover-firmware repo's exact
-    command format (units, scaling, PWM vs. velocity) — reconcile it once that's available;
-    everything else in this env (motor model, latency, noise) layers on top of whatever the
-    real command interface turns out to be.
+        Observation, all of it computable on the laptop that drives the real rover:
+          line      -- the last OBS_HISTORY readings of (near error, near seen, far error,
+                       far seen). Near is the position error; far is curvature preview. Extracted
+                       from the camera by the same centroid the classical follower uses, so no
+                       CNN is trained here and none has to run at 10 Hz on deployment.
+          encoders  -- the last OBS_HISTORY left/right wheel tick deltas, quantized and noisy,
+                       matching the raw quadrature counts the firmware's "e" command returns.
 
-    Wheel torque comes from envs/motor.py's JGA25-371 DC-motor model (BAM friction + a
-    hand-derived electrical model from the datasheet) instead of MuJoCo's built-in velocity
-    servo, so this env's scenes (assets/robots/rover/*_real.xml) use raw torque actuators.
+        No image, and no ground-truth position. LineFollower-v0 keeps the raw-pixel observation
+        for anyone who wants to study learning perception end to end; this one is about control.
+
+        Action: normalized [-1, 1] per wheel, scaled to the motors' real envelope -- top speed
+        MAX_WHEEL_SPEED and a dead zone below MIN_WHEEL_SPEED where the wheels do not turn at
+        all. Normalized rather than in rad/s because SB3's Gaussian policy starts at std ~= 1
+        around zero: an action space in physical units puts almost every sampled command inside
+        the dead zone, and the rover simply never moves.
+
+        Wheel torque comes from envs/motor.py's JGA25-371 DC-motor model (BAM friction + a
+        hand-derived electrical model from the datasheet) instead of MuJoCo's built-in velocity
+        servo, so this env's scenes (assets/robots/rover/*_real.xml) use raw torque actuators.
     """
 
     TRACKS = TRACKS_REAL
@@ -104,11 +143,12 @@ class LineFollowerRealEnv(LineFollowerEnv):
         super().__init__(render_mode=render_mode, domain_randomize=domain_randomize)
 
         self.observation_space = spaces.Dict({
-            "image": spaces.Box(low=0, high=255, shape=(CAM_RES, CAM_RES, 1), dtype=np.uint8),
-            "encoders": spaces.Box(
-                low=-ENCODER_TICKS_BOUND, high=ENCODER_TICKS_BOUND, shape=(2,), dtype=np.float32
-            ),
+            # (near error, near seen, far error, far seen) per step, most recent first.
+            "line": spaces.Box(low=-1.0, high=1.0, shape=(OBS_HISTORY, 4), dtype=np.float32),
+            "encoders": spaces.Box(low=-1.0, high=1.0, shape=(OBS_HISTORY, 2), dtype=np.float32),
         })
+        self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(2,), dtype=np.float32)
+        self._history = deque(maxlen=OBS_HISTORY)
 
         left_jid = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, "left_axle")
         right_jid = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, "right_axle")
@@ -156,6 +196,9 @@ class LineFollowerRealEnv(LineFollowerEnv):
         # jitter, not this subclass's own motor/camera-realism DR) — fixed so "DR off"
         # actually means off, for clean single-variable eval/debugging.
         if self.domain_randomize:
+            # Unit-to-unit motor variation, so the policy cannot assume one exact envelope.
+            self._max_omega = motor.MAX_WHEEL_SPEED * rng.uniform(0.85, 1.15)
+            self._min_omega = motor.MIN_WHEEL_SPEED * rng.uniform(0.70, 1.30)
             wheel_friction = rng.uniform(*WHEEL_FRICTION_RANGE)
             self.model.cam_fovy[self._cam_id] = rng.uniform(*FOVY_RANGE)
             self._brightness = rng.uniform(*BRIGHTNESS_RANGE)
@@ -163,6 +206,8 @@ class LineFollowerRealEnv(LineFollowerEnv):
             self._pixel_noise_std = rng.uniform(*PIXEL_NOISE_STD_RANGE)
             self._resolution_level = int(rng.choice(RESOLUTION_LEVELS))
         else:
+            self._max_omega = motor.MAX_WHEEL_SPEED
+            self._min_omega = motor.MIN_WHEEL_SPEED
             wheel_friction = 1.0
             self.model.cam_fovy[self._cam_id] = 60.0  # rover.xml's own top_cam default
             self._brightness = 1.0
@@ -172,13 +217,18 @@ class LineFollowerRealEnv(LineFollowerEnv):
         for gid in self._wheel_geom_ids:
             self.model.geom_friction[gid, 0] = wheel_friction
 
+        self._history.clear()
         self._cached_image = self._capture_processed_image()
 
         return self._get_real_obs(), info
 
     def step(self, action):
-        action = np.clip(action, self.action_space.low, self.action_space.high)
+        # [-1, 1] in, rad/s out, then the motors' real envelope. Noise is added after scaling
+        # because ACTION_NOISE_STD_RANGE is in rad/s -- a physical quantity, not a fraction of
+        # the action range.
+        action = np.clip(action, -1.0, 1.0) * motor.MAX_WHEEL_SPEED
         noisy_action = action + self.np_random.normal(0.0, self._action_noise_std, size=2)
+        noisy_action = motor.apply_actuator_envelope(noisy_action, self._max_omega, self._min_omega)
 
         # Action latency: queue the noisy command, apply whatever's aged out the other end.
         # The target speed is held fixed for the whole decimation window below — matching
@@ -213,7 +263,7 @@ class LineFollowerRealEnv(LineFollowerEnv):
 
         if error is None:
             self._lost_steps += 1
-            reward = -1.0
+            reward = -LINE_LOST_PENALTY
         else:
             self._lost_steps = 0
             reward = CENTER_WEIGHT * (1.0 - abs(error))
@@ -240,12 +290,39 @@ class LineFollowerRealEnv(LineFollowerEnv):
         gray = np.clip(gray, 0, 255).astype(np.uint8)
         return _pixelate(gray, self._resolution_level, CAM_RES)
 
+    def _band_error(self, band):
+        """(error, seen) for one horizontal slice of the frame, measured up from the bottom.
+
+        Same extraction the classical follower uses and the same one the deployed laptop will
+        run on a JPEG: threshold relative to frame brightness so it survives the shade
+        randomization, then a centroid weighted by how many dark pixels each column holds."""
+        gray = self._cached_image[:, :, 0].astype(np.float32)
+        lo = int(CAM_RES * (1.0 - band[1]))
+        hi = int(CAM_RES * (1.0 - band[0]))
+        window = gray[lo:hi, :]
+        dark = window < (gray.mean() - 25.0)
+        weights = dark.sum(axis=0).astype(np.float64)
+        if weights.sum() == 0:
+            return 0.0, 0.0
+        centroid = float((np.arange(CAM_RES) * weights).sum() / weights.sum())
+        return (centroid - CAM_RES / 2) / (CAM_RES / 2), 1.0
+
+    def _line_error(self, gray_obs, band=None):
+        """Near-band centring error, or None when the line is not in view.
+
+        Overrides the base class so the reward is scored on the same near-field reading the
+        policy is given, rather than on a whole-frame centroid."""
+        near_error, seen = self._band_error(NEAR_BAND)
+        return near_error if seen else None
+
     def _get_real_obs(self):
-        """Left/right encoder ticks accrued since the last control step — the real rover's
-        actual sensor primitive (see ENCODER_CPR_WHEEL above), not a velocity: this is what
-        a client gets by polling the "e" UDP command twice and differencing. Angle-domain
-        noise (stray/missed quadrature edges) is applied before quantizing to integer ticks,
-        so the returned value has the same discreteness a real read would."""
+        """Line features and encoder ticks, both as short histories.
+
+        The encoder read models the real sensor rather than an idealized velocity: the
+        firmware's "e" command returns raw cumulative quadrature counts, so a client derives
+        motion by polling twice and differencing. Angle-domain noise is applied before
+        quantizing to whole ticks, so the value carries the same discreteness a real read
+        would."""
         wheel_angle = self.data.qpos[self._wheel_qpos_adr]
         delta_angle = wheel_angle - self._prev_wheel_angle
         self._prev_wheel_angle = wheel_angle.copy()
@@ -254,4 +331,17 @@ class LineFollowerRealEnv(LineFollowerEnv):
             0.0, self._encoder_noise_std * self._physics_dt * self._decimation, size=2
         )
         ticks = np.round((delta_angle + noise_rad) * ENCODER_CPR_WHEEL / (2 * np.pi))
-        return {"image": self._cached_image, "encoders": ticks.astype(np.float32)}
+
+        near_error, near_seen = self._band_error(NEAR_BAND)
+        far_error, far_seen = self._band_error(FAR_BAND)
+        self._history.appendleft((
+            np.array([near_error, near_seen, far_error, far_seen], dtype=np.float32),
+            (ticks / ENCODER_TICKS_BOUND).astype(np.float32),
+        ))
+        frames = list(self._history)
+        frames += [frames[-1]] * (OBS_HISTORY - len(frames))
+
+        return {
+            "line": np.clip(np.stack([f[0] for f in frames]), -1.0, 1.0),
+            "encoders": np.clip(np.stack([f[1] for f in frames]), -1.0, 1.0),
+        }
