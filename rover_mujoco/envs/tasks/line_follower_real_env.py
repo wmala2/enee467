@@ -1,9 +1,12 @@
 from collections import deque
+import math
 
+import cv2
 from gymnasium import spaces
 import mujoco
 import numpy as np
 
+from envs import arena
 from envs import motor
 from envs.camera import onboard_scene_option
 from envs.tasks.line_follower_env import CAM_RES
@@ -108,6 +111,34 @@ CENTER_WEIGHT_REAL = 1.5
 # Progress and COMPLETION_BONUS still reward finishing, so there is a reason to move on.
 MIN_PROGRESS_SPEED = 0.04  # m/s, well under the classical follower's 0.10
 
+# --- Action space: (linear, angular), from the Webots controller's design -------------------
+# One dimension is speed and one is turning, both independently useful. Per-wheel commands make
+# the policy first discover that the sum is speed and the difference is turn -- a rotated basis
+# it has to learn before it can learn control at all.
+#
+# The limits are this rover's, not the Webots model's. Its controller allowed 0.35 m/s, which
+# is 10.45 rad/s at our wheel radius: past both the actuator range and the real rover's ceiling,
+# so the top of that action range was not physically reachable. Ours come from
+# rover_control/rover.py: 0.25 m/s, and the angular limit that both wheels opposed at maximum
+# can produce.
+# Geometry from rover.xml, via the modules that already own it.
+WHEEL_RADIUS = motor.WHEEL_RADIUS
+WHEEL_SEPARATION = arena.WHEEL_BASE
+
+MAX_LINEAR_VEL = motor.MAX_WHEEL_SPEED * WHEEL_RADIUS  # 0.25 m/s
+MAX_ANGULAR_VEL = 2.0 * motor.MAX_WHEEL_SPEED * WHEEL_RADIUS / WHEEL_SEPARATION  # ~3.08 rad/s
+
+# Line orientation, fitted to the largest contour. The other half of the Webots design: the
+# policy learns which way the line *runs*, not just where it is, so it can anticipate a bend.
+# Without it the only curvature cue is the near/far centroid difference, which is implicit and
+# weak -- consistent with the previous policy cutting corners at 0.159 m/s while the classical
+# follower holds 0.101 and tracks twice as tightly.
+#
+# Thresholding stays relative to frame brightness rather than the Webots controller's absolute
+# 100: that is what keeps the line visible through the shade randomization, and the absolute
+# version is what made the faithful port lose the oval from 7 of 11 on-track poses.
+ANGLE_CONTOUR_MIN_AREA = 3.0  # px^2; below this the fit is noise
+
 
 def _pixelate(img, level, full_res):
     """Block-average `img` down to `level`x`level` then nearest-neighbor back up to
@@ -164,10 +195,13 @@ class LineFollowerRealEnv(LineFollowerEnv):
         super().__init__(render_mode=render_mode, domain_randomize=domain_randomize)
 
         self.observation_space = spaces.Dict({
-            # (near error, near seen, far error, far seen) per step, most recent first.
-            "line": spaces.Box(low=-1.0, high=1.0, shape=(OBS_HISTORY, 4), dtype=np.float32),
+            # (near error, near angle, near seen, far error, far seen), most recent first.
+            "line": spaces.Box(low=-1.0, high=1.0, shape=(OBS_HISTORY, 5), dtype=np.float32),
             "encoders": spaces.Box(low=-1.0, high=1.0, shape=(OBS_HISTORY, 2), dtype=np.float32),
         })
+        # Normalized; scaled to (linear, angular) in step(). Normalized rather than physical
+        # units because SB3's Gaussian policy starts at std ~= 1 around zero -- an action space
+        # in m/s and rad/s puts almost every sampled command outside the useful range.
         self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(2,), dtype=np.float32)
         self._history = deque(maxlen=OBS_HISTORY)
 
@@ -244,10 +278,17 @@ class LineFollowerRealEnv(LineFollowerEnv):
         return self._get_real_obs(), info
 
     def step(self, action):
-        # [-1, 1] in, rad/s out, then the motors' real envelope. Noise is added after scaling
-        # because ACTION_NOISE_STD_RANGE is in rad/s -- a physical quantity, not a fraction of
-        # the action range.
-        action = np.clip(action, -1.0, 1.0) * motor.MAX_WHEEL_SPEED
+        # [-1, 1] in, (linear m/s, angular rad/s) out, then differential-drive mixing to wheel
+        # speeds and the motors' real envelope. Linear maps to [0, MAX] rather than
+        # [-MAX, MAX]: a zero-mean policy then starts at half speed forward, which is a useful
+        # prior and keeps it out of the dead zone while it explores.
+        action = np.clip(action, -1.0, 1.0)
+        linear = MAX_LINEAR_VEL * (action[0] + 1.0) / 2.0
+        angular = MAX_ANGULAR_VEL * action[1]
+        left = (linear - angular * WHEEL_SEPARATION / 2.0) / WHEEL_RADIUS
+        right = (linear + angular * WHEEL_SEPARATION / 2.0) / WHEEL_RADIUS
+        # rover.xml's left axle reads negative when its wheel rolls the rover forward.
+        action = np.array([-left, right])
         noisy_action = action + self.np_random.normal(0.0, self._action_noise_std, size=2)
         noisy_action = motor.apply_actuator_envelope(noisy_action, self._max_omega, self._min_omega)
 
@@ -322,12 +363,14 @@ class LineFollowerRealEnv(LineFollowerEnv):
         ]
         return -float(self.data.sensordata[adr + 1])
 
-    def _band_error(self, band):
-        """(error, seen) for one horizontal slice of the frame, measured up from the bottom.
+    def _band_error(self, band, with_angle=False):
+        """(error, seen) -- or (error, angle, seen) -- for one horizontal slice of the frame,
+        measured up from the bottom.
 
-        Same extraction the classical follower uses and the same one the deployed laptop will
-        run on a JPEG: threshold relative to frame brightness so it survives the shade
-        randomization, then a centroid weighted by how many dark pixels each column holds."""
+        The same extraction the deployed laptop will run on a JPEG: threshold relative to frame
+        brightness so it survives the shade randomization, then a centroid weighted by how many
+        dark pixels each column holds. With `with_angle`, additionally fit a line to the largest
+        contour so the policy learns the track's orientation, not only its offset."""
         gray = self._cached_image[:, :, 0].astype(np.float32)
         lo = int(CAM_RES * (1.0 - band[1]))
         hi = int(CAM_RES * (1.0 - band[0]))
@@ -335,9 +378,22 @@ class LineFollowerRealEnv(LineFollowerEnv):
         dark = window < (gray.mean() - 25.0)
         weights = dark.sum(axis=0).astype(np.float64)
         if weights.sum() == 0:
-            return 0.0, 0.0
+            return (0.0, 0.0, 0.0) if with_angle else (0.0, 0.0)
         centroid = float((np.arange(CAM_RES) * weights).sum() / weights.sum())
-        return (centroid - CAM_RES / 2) / (CAM_RES / 2), 1.0
+        error = (centroid - CAM_RES / 2) / (CAM_RES / 2)
+        if not with_angle:
+            return error, 1.0
+
+        angle = 0.0
+        contours, _ = cv2.findContours(
+            dark.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        )
+        if contours:
+            largest = max(contours, key=cv2.contourArea)
+            if cv2.contourArea(largest) >= ANGLE_CONTOUR_MIN_AREA and len(largest) >= 2:
+                vx, vy, _, _ = cv2.fitLine(largest, cv2.DIST_L2, 0, 0.01, 0.01).ravel()
+                angle = float(np.arctan2(vx, vy)) / math.pi
+        return error, float(np.clip(angle, -1.0, 1.0)), 1.0
 
     def _line_error(self, gray_obs, band=None):
         """Near-band centring error, or None when the line is not in view.
@@ -364,10 +420,10 @@ class LineFollowerRealEnv(LineFollowerEnv):
         )
         ticks = np.round((delta_angle + noise_rad) * ENCODER_CPR_WHEEL / (2 * np.pi))
 
-        near_error, near_seen = self._band_error(NEAR_BAND)
+        near_error, near_angle, near_seen = self._band_error(NEAR_BAND, with_angle=True)
         far_error, far_seen = self._band_error(FAR_BAND)
         self._history.appendleft((
-            np.array([near_error, near_seen, far_error, far_seen], dtype=np.float32),
+            np.array([near_error, near_angle, near_seen, far_error, far_seen], dtype=np.float32),
             (ticks / ENCODER_TICKS_BOUND).astype(np.float32),
         ))
         frames = list(self._history)
