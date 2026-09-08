@@ -168,21 +168,43 @@ class LineFollowerRealEnv(LineFollowerEnv):
         everything it commands, the physical rover can execute.
 
         Observation, all of it computable on the laptop that drives the real rover:
-          line      -- the last OBS_HISTORY readings of (near error, near seen, far error,
-                       far seen). Near is the position error; far is curvature preview. Extracted
-                       from the camera by the same centroid the classical follower uses, so no
-                       CNN is trained here and none has to run at 10 Hz on deployment.
+          line      -- the last OBS_HISTORY readings of (near error, near angle, near seen,
+                       far error, far seen). Near is the position error and the fitted
+                       orientation of the track; far is curvature preview. Extracted from the
+                       camera by the same centroid the classical follower uses, so no CNN is
+                       trained here and none has to run at 10 Hz on deployment.
           encoders  -- the last OBS_HISTORY left/right wheel tick deltas, quantized and noisy,
                        matching the raw quadrature counts the firmware's "e" command returns.
 
         No image, and no ground-truth position. LineFollower-v0 keeps the raw-pixel observation
         for anyone who wants to study learning perception end to end; this one is about control.
 
-        Action: normalized [-1, 1] per wheel, scaled to the motors' real envelope -- top speed
-        MAX_WHEEL_SPEED and a dead zone below MIN_WHEEL_SPEED where the wheels do not turn at
-        all. Normalized rather than in rad/s because SB3's Gaussian policy starts at std ~= 1
-        around zero: an action space in physical units puts almost every sampled command inside
-        the dead zone, and the rover simply never moves.
+        Action: normalized [-1, 1] mapping to (linear, angular) velocity, mixed to wheel speeds
+        inside the env and passed through the motors' real envelope -- top speed and a dead zone
+        below which the wheels do not turn at all. Normalized rather than physical units because
+        SB3's Gaussian policy starts at std ~= 1 around zero, so m/s and rad/s put almost every
+        sampled command outside the useful range.
+
+        RESULTS, all at 300k steps with the same reward, so the comparison isolates design:
+
+            per-wheel actions, no line angle : 10.0% completion, 6.1 cm mean deviation
+            (v, omega) actions + line angle  : 86.7% completion, 5.6 cm on completed episodes
+            classical PID, for reference     : 3.2 cm s-curve / 3.7 cm oval
+
+        The design change bought *completion*, not precision, which matches what the two
+        additions provide: (v, omega) makes the control problem separable -- one dimension is
+        speed, one is turning -- and the line angle says which way the track runs so a bend can
+        be anticipated. Neither makes the steering finer. Reward per step reached 1.52 against
+        the classical follower's 1.54.
+
+        The completions are real rather than a reward hack: sampled directly, completed episodes
+        have the line in view 90.3% of the time, so the rover follows the track rather than
+        circling it and letting the arc-length projection register laps.
+
+        The open problem is variance. Aggregated over 30 evaluations the mean is 11.6 cm with a
+        worst case of 118.3 cm, well outside a 1.2 x 0.8 m track, because roughly one episode in
+        seven fails badly and drags the average. That is a tail-risk question to diagnose on its
+        own terms, not something more reward tuning of the common case will reach.
 
         Wheel torque comes from envs/motor.py's JGA25-371 DC-motor model (BAM friction + a
         hand-derived electrical model from the datasheet) instead of MuJoCo's built-in velocity
