@@ -37,43 +37,56 @@ def main():
         action="store_true",
         help="log to Weights & Biases as well as TensorBoard (see scripts/wandb_logging.py)",
     )
+    parser.add_argument(
+        "--timesteps", type=int, default=TOTAL_TIMESTEPS, help="override the training budget"
+    )
+    parser.add_argument("--n-envs", type=int, default=N_ENVS, help="override worker count")
+    parser.add_argument(
+        "--run-name", default=None, help="subdirectory under runs/ so runs do not overwrite"
+    )
     args = parser.parse_args()
 
-    os.makedirs(MODEL_DIR, exist_ok=True)
+    model_dir = (
+        MODEL_DIR
+        if args.run_name is None
+        else os.path.join(os.path.dirname(MODEL_DIR), args.run_name)
+    )
+
+    os.makedirs(model_dir, exist_ok=True)
 
     env = make_vec_env(
         ENV_ID,
-        n_envs=N_ENVS,
+        n_envs=args.n_envs,
         vec_env_cls=SubprocVecEnv,
         vec_env_kwargs={"start_method": "fork"},
     )
-    model = PPO("MultiInputPolicy", env, verbose=1, tensorboard_log=MODEL_DIR)
+    model = PPO("MultiInputPolicy", env, verbose=1, tensorboard_log=model_dir)
     print(f"Training on device: {model.device}")
 
     run, wandb_callback = (
         start_run(
             project="rover-line-follower",
-            name=os.path.basename(MODEL_DIR),
+            name=os.path.basename(model_dir),
             config={
                 "env_id": ENV_ID,
-                "total_timesteps": TOTAL_TIMESTEPS,
-                "n_envs": N_ENVS,
+                "total_timesteps": args.timesteps,
+                "n_envs": args.n_envs,
                 "env_kwargs": {},
             },
-            model_dir=MODEL_DIR,
+            model_dir=model_dir,
         )
         if args.wandb
         else (None, None)
     )
     callbacks = [wandb_callback] if wandb_callback is not None else None
 
-    model.learn(total_timesteps=TOTAL_TIMESTEPS, callback=callbacks)
+    model.learn(total_timesteps=args.timesteps, callback=callbacks)
 
-    model.save(os.path.join(MODEL_DIR, "model"))
+    model.save(os.path.join(model_dir, "model"))
     if run is not None:
         run.finish()
-    print(f"Saved trained model to {MODEL_DIR}/model.zip")
-    print(f"View training curves with: uv run tensorboard --logdir {MODEL_DIR}")
+    print(f"Saved trained model to {model_dir}/model.zip")
+    print(f"View training curves with: uv run tensorboard --logdir {model_dir}")
 
 
 if __name__ == "__main__":

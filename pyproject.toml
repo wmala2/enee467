@@ -21,6 +21,7 @@ dependencies = [
     "stable-baselines3",
     "transformers",
     "ultralytics",
+    "wandb>=0.29.0",
 ]
 
 # torch is not a plain dependency: pick exactly one of these extras at sync time.
