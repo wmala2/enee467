@@ -66,6 +66,18 @@ MOTION_WEIGHT = 5.0
 SMOOTHNESS_WEIGHT = -0.1
 LINE_LOST_PENALTY = 10.0
 
+# Wheel acceleration limit, in rad/s^2, taken from scripts/teleop_rover.py's MAX_ACCEL.
+#
+# Not a tuning knob and not a deviation from the Webots design: this rover physically cannot
+# change wheel speed instantly, and teleop_rover.py already documents why the ramp exists --
+# "a direction key or a '+' press would snap straight to the target speed, which is exactly
+# what caused the wheelie popups". A MuJoCo <velocity> servo applies whatever torque it takes
+# to hit its target on the next step, so without the ramp the policy can flip the rover simply
+# by changing its mind. Measured: random actions tipped it in 12 of 12 episodes, ending them
+# after ~76 steps, which is a plant difference from Webots' motors rather than anything about
+# the observation or reward being compared here.
+MAX_WHEEL_ACCEL = 15.0
+
 # Their steps_per_episode was 20000, which at 10 Hz is a 33-minute episode and only about five
 # resets across a 100k-step run. Shortened so the policy sees both tracks often; this is the
 # one place the port deliberately diverges, and it should make learning easier, not harder.
@@ -123,6 +135,7 @@ class LineFollowerWebotsEnv(gym.Env):
         self._scene = None
         self._load_scene(track or next(iter(TRACKS)))
         self._episode_steps = 0
+        self._wheel_targets = np.zeros(2)
 
     def _load_scene(self, scene_file):
         if self._scene == scene_file:
@@ -200,6 +213,7 @@ class LineFollowerWebotsEnv(gym.Env):
         mujoco.mj_forward(self.model, self.data)
 
         self._episode_steps = 0
+        self._wheel_targets = np.zeros(2)
         return self._get_obs(), {}
 
     def step(self, action):
@@ -208,8 +222,13 @@ class LineFollowerWebotsEnv(gym.Env):
         left, right = velocity_to_wheels(linear, angular)
         # rover.xml's left axle reads negative when its wheel rolls the rover forward; see
         # envs/arena.py's integrate_odometry for the same convention undone in reverse.
-        self.data.ctrl[:] = [-left, right]
+        commanded = np.array([-left, right])
+        # Ramp toward the command rather than snapping to it -- see MAX_WHEEL_ACCEL.
+        max_delta = MAX_WHEEL_ACCEL * self._physics_dt
         for _ in range(self._decimation):
+            step = np.clip(commanded - self._wheel_targets, -max_delta, max_delta)
+            self._wheel_targets += step
+            self.data.ctrl[:] = self._wheel_targets
             mujoco.mj_step(self.model, self.data)
         self._episode_steps += 1
 
