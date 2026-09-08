@@ -19,3 +19,8 @@ register(
     id="GoalNav-v0",
     entry_point="envs.tasks.goal_nav_env:GoalNavEnv",
 )
+
+register(
+    id="LineFollowerWebots-v0",
+    entry_point="envs.tasks.line_follower_webots_env:LineFollowerWebotsEnv",
+)
