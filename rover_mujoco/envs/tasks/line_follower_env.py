@@ -74,12 +74,23 @@ class LineFollowerEnv(gym.Env):
     TRACKS = TRACKS  # class attribute so subclasses (e.g. LineFollowerRealEnv) can point
     # at different scene files (different actuators) without re-implementing __init__
 
-    def __init__(self, render_mode=None, domain_randomize=True):
+    def __init__(self, render_mode=None, domain_randomize=True, track=None):
         super().__init__()
         self.domain_randomize = domain_randomize
         self.render_mode = render_mode
 
-        scene_file, self._waypoints_fn = random.choice(list(self.TRACKS.items()))
+        # The track is fixed for the lifetime of the env instance, not resampled per reset --
+        # MuJoCo compiles a model once and the two tracks are different scene files. `track`
+        # pins it, which evaluation needs: without it a run silently measures whichever track
+        # the constructor happened to draw, and the two are not equally hard. Measured on the
+        # same policy: 100% completion on one and 86.7% on the other.
+        if track is not None:
+            if track not in self.TRACKS:
+                raise ValueError(f"unknown track {track!r}; choose from {list(self.TRACKS)}")
+            scene_file, self._waypoints_fn = track, self.TRACKS[track]
+        else:
+            scene_file, self._waypoints_fn = random.choice(list(self.TRACKS.items()))
+        self.track_name = scene_file
         # Track geometry (and thus its arc-length table) is fixed for this env instance's
         # whole lifetime, same as scene_file/waypoints_fn above — only the per-episode
         # progress *state* (self._prev_arc_s etc., set in reset()) changes between resets.

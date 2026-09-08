@@ -213,8 +213,8 @@ class LineFollowerRealEnv(LineFollowerEnv):
 
     TRACKS = TRACKS_REAL
 
-    def __init__(self, render_mode=None, domain_randomize=True):
-        super().__init__(render_mode=render_mode, domain_randomize=domain_randomize)
+    def __init__(self, render_mode=None, domain_randomize=True, track=None):
+        super().__init__(render_mode=render_mode, domain_randomize=domain_randomize, track=track)
 
         self.observation_space = spaces.Dict({
             # (near error, near angle, near seen, far error, far seen), most recent first.
