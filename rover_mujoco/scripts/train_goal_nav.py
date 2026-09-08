@@ -19,6 +19,7 @@ Two choices here are worth knowing about before changing them:
 Dict observations (encoders + lidar + goal) need "MultiInputPolicy", not "MlpPolicy".
 """
 
+import argparse
 import os
 
 import envs  # noqa: F401  (imported for its side effect: registers GoalNav-v0)
@@ -28,6 +29,7 @@ from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.callbacks import CheckpointCallback
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import SubprocVecEnv
+from wandb_logging import start_run
 
 ENV_ID = "GoalNav-v0"
 TOTAL_TIMESTEPS = 2_000_000
@@ -92,6 +94,14 @@ class ProgressCallback(BaseCallback):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--wandb",
+        action="store_true",
+        help="log to Weights & Biases as well as TensorBoard (see scripts/wandb_logging.py)",
+    )
+    args = parser.parse_args()
+
     os.makedirs(MODEL_DIR, exist_ok=True)
 
     env = make_vec_env(
@@ -120,9 +130,29 @@ def main():
             save_freq=max(1, 250_000 // N_ENVS), save_path=MODEL_DIR, name_prefix="checkpoint"
         ),
     ]
+    run, wandb_callback = (
+        start_run(
+            project="rover-goal-nav",
+            name=os.path.basename(MODEL_DIR),
+            config={
+                "env_id": ENV_ID,
+                "total_timesteps": TOTAL_TIMESTEPS,
+                "n_envs": N_ENVS,
+                "env_kwargs": ENV_KWARGS,
+            },
+            model_dir=MODEL_DIR,
+        )
+        if args.wandb
+        else (None, None)
+    )
+    if wandb_callback is not None:
+        callbacks.append(wandb_callback)
+
     model.learn(total_timesteps=TOTAL_TIMESTEPS, callback=callbacks)
 
     model.save(os.path.join(MODEL_DIR, "model"))
+    if run is not None:
+        run.finish()
     print(f"Saved trained model to {MODEL_DIR}/model.zip")
     print(f"View training curves with: uv run tensorboard --logdir {MODEL_DIR}")
 

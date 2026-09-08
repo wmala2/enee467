@@ -1,9 +1,11 @@
+import argparse
 import os
 
 import envs  # noqa: F401  (imported for its side effect: registers LineFollowerReal-v0)
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import SubprocVecEnv
+from wandb_logging import start_run
 
 # LineFollowerReal-v0: the sim-to-real-constrained line follower — real observation space
 # (camera + noisy wheel encoders, no ground truth), real action space (left/right wheel
@@ -29,6 +31,14 @@ N_ENVS = 8
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--wandb",
+        action="store_true",
+        help="log to Weights & Biases as well as TensorBoard (see scripts/wandb_logging.py)",
+    )
+    args = parser.parse_args()
+
     os.makedirs(MODEL_DIR, exist_ok=True)
 
     env = make_vec_env(
@@ -40,9 +50,28 @@ def main():
     model = PPO("MultiInputPolicy", env, verbose=1, tensorboard_log=MODEL_DIR)
     print(f"Training on device: {model.device}")
 
-    model.learn(total_timesteps=TOTAL_TIMESTEPS)
+    run, wandb_callback = (
+        start_run(
+            project="rover-line-follower",
+            name=os.path.basename(MODEL_DIR),
+            config={
+                "env_id": ENV_ID,
+                "total_timesteps": TOTAL_TIMESTEPS,
+                "n_envs": N_ENVS,
+                "env_kwargs": {},
+            },
+            model_dir=MODEL_DIR,
+        )
+        if args.wandb
+        else (None, None)
+    )
+    callbacks = [wandb_callback] if wandb_callback is not None else None
+
+    model.learn(total_timesteps=TOTAL_TIMESTEPS, callback=callbacks)
 
     model.save(os.path.join(MODEL_DIR, "model"))
+    if run is not None:
+        run.finish()
     print(f"Saved trained model to {MODEL_DIR}/model.zip")
     print(f"View training curves with: uv run tensorboard --logdir {MODEL_DIR}")
 
