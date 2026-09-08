@@ -94,12 +94,19 @@ LINE_LOST_PENALTY = 2.0
 # against the classical follower's 3.2 cm.
 CENTER_WEIGHT_REAL = 1.5
 
-# The centring term is scaled by forward speed, which is what stops the obvious exploit. A
-# flat per-step reward for being centred pays a rover that simply stops on the line, and this
-# env has no step penalty to discourage that. Multiplying by speed means the policy is paid for
-# covering ground *while* centred -- which is the actual objective, and the same quantity a
-# lap-time-optimising line follower maximises.
-SPEED_REFERENCE = 0.20  # m/s that counts as "full speed" for that scaling
+# Centring pays only while the rover is actually moving -- a gate, not a multiplier.
+#
+# The obvious exploit to block is a rover that parks on the line and farms a flat per-step
+# centring reward; this env has no step penalty to discourage that. Scaling the term by speed
+# blocks it, and was tried: it shifted the reward split from 28% centring to 67% exactly as
+# intended, and made tracking *worse*, 6.3 cm to 7.4 cm mean deviation. Scaling pays for speed,
+# and speed costs accuracy -- the policy saturated the speed reference 30% of the time and
+# could no longer turn tightly enough to hold the line, where the classical follower holds a
+# fixed 0.10 m/s and tracks at 3.2 cm.
+#
+# A gate keeps parking worthless without paying anything extra for going faster than this.
+# Progress and COMPLETION_BONUS still reward finishing, so there is a reason to move on.
+MIN_PROGRESS_SPEED = 0.04  # m/s, well under the classical follower's 0.10
 
 
 def _pixelate(img, level, full_res):
@@ -280,10 +287,10 @@ class LineFollowerRealEnv(LineFollowerEnv):
             reward = -LINE_LOST_PENALTY
         else:
             self._lost_steps = 0
-            # Centred *and* moving. See CENTER_WEIGHT_REAL and SPEED_REFERENCE above for why
-            # this is speed-scaled rather than a flat per-step bonus.
-            speed_fraction = min(abs(self._forward_speed()) / SPEED_REFERENCE, 1.0)
-            reward = CENTER_WEIGHT_REAL * speed_fraction * (1.0 - abs(error))
+            # Centred *and* moving, but with no extra paid for extra speed. See
+            # MIN_PROGRESS_SPEED above for why this is a gate rather than a multiplier.
+            moving = abs(self._forward_speed()) >= MIN_PROGRESS_SPEED
+            reward = CENTER_WEIGHT_REAL * (1.0 - abs(error)) if moving else 0.0
         reward += progress_reward
 
         tipped_over = self.data.qpos[2] < FALL_HEIGHT
