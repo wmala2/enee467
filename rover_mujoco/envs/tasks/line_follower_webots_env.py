@@ -22,6 +22,29 @@ Three things it does differently from LineFollowerReal-v0, in the order they pro
    -- the real rover derives velocity from ticks -- but one is far easier to learn from.
 
 Deliberately absent: any domain randomization. This is the clean-room comparison.
+
+RESULT: it does not learn here. 100k steps took the return from -10787 to -7966, still deeply
+negative, where the original solved the task in about 25k. Two measured reasons, neither of
+which is the observation or action design this port exists to test:
+
+1. Under their reward, in our sim, *standing still is optimal*. Scored directly: a stopped
+   rover earns +2.87/step, a PID on (v, omega) earns -0.86, driving straight earns -4.31.
+   Parked on the line collects 2*alignment + 1*heading = 3.0/step risk-free, while driving at
+   0.10 m/s adds only 5 * (0.10 / 0.35) = 1.43 against a -10/step line-loss risk. PPO found
+   the same degenerate optimum. Their weights are only safe when losing the line is rare --
+   the -10 is meant to be hypothetical, not routine.
+
+2. Here it is routine, because of the oval. With the rover placed *on* the track, the line is
+   visible from 11/11 sampled poses on the s-curve but only 4/11 on the oval, which is
+   1.2 x 0.8 m and tight enough that at this camera's 60 degree tilt the line curves out of
+   frame. Their ROI is the bottom 30% with an absolute threshold of 100; LineFollowerReal-v0
+   uses the bottom 15% with a threshold relative to frame brightness, and keeps the line 100%
+   of the time on both tracks with the same camera.
+
+So the Webots design is not magic and ours is not uniquely broken: their reward assumes
+reliable perception, and our tracks are tighter relative to the camera's usable range than
+theirs were. The (v, omega) action space and the line-angle observation still look like real
+improvements, but they could never show through a reward whose optimum is to stop.
 """
 
 import math
