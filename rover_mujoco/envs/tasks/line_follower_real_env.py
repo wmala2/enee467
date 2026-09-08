@@ -7,7 +7,6 @@ import numpy as np
 from envs import motor
 from envs.camera import onboard_scene_option
 from envs.tasks.line_follower_env import CAM_RES
-from envs.tasks.line_follower_env import CENTER_WEIGHT
 from envs.tasks.line_follower_env import CONTROL_HZ
 from envs.tasks.line_follower_env import FALL_HEIGHT
 from envs.tasks.line_follower_env import LineFollowerEnv
@@ -86,6 +85,21 @@ OBS_HISTORY = 4
 # Reward for losing sight of the line entirely. Deliberately larger than a step of centring
 # reward is worth: on the real rover, off the line means the run is over.
 LINE_LOST_PENALTY = 2.0
+
+# How much staying on the line is worth, per step, relative to the base class's
+# PROGRESS_WEIGHT of 100 per lap. The inherited 0.3 was set when the centring signal did not
+# work at all, so it was never really chosen: measured on a trained policy, 72.2% of its return
+# came from progress and 27.8% from centring, i.e. it was paid roughly 4x more for going far
+# than for going straight. It did exactly that -- 6.3 cm mean deviation from a 3 cm line
+# against the classical follower's 3.2 cm.
+CENTER_WEIGHT_REAL = 1.5
+
+# The centring term is scaled by forward speed, which is what stops the obvious exploit. A
+# flat per-step reward for being centred pays a rover that simply stops on the line, and this
+# env has no step penalty to discourage that. Multiplying by speed means the policy is paid for
+# covering ground *while* centred -- which is the actual objective, and the same quantity a
+# lap-time-optimising line follower maximises.
+SPEED_REFERENCE = 0.20  # m/s that counts as "full speed" for that scaling
 
 
 def _pixelate(img, level, full_res):
@@ -266,7 +280,10 @@ class LineFollowerRealEnv(LineFollowerEnv):
             reward = -LINE_LOST_PENALTY
         else:
             self._lost_steps = 0
-            reward = CENTER_WEIGHT * (1.0 - abs(error))
+            # Centred *and* moving. See CENTER_WEIGHT_REAL and SPEED_REFERENCE above for why
+            # this is speed-scaled rather than a flat per-step bonus.
+            speed_fraction = min(abs(self._forward_speed()) / SPEED_REFERENCE, 1.0)
+            reward = CENTER_WEIGHT_REAL * speed_fraction * (1.0 - abs(error))
         reward += progress_reward
 
         tipped_over = self.data.qpos[2] < FALL_HEIGHT
@@ -289,6 +306,14 @@ class LineFollowerRealEnv(LineFollowerEnv):
         gray += self.np_random.normal(0.0, self._pixel_noise_std, size=gray.shape)
         gray = np.clip(gray, 0, 255).astype(np.uint8)
         return _pixelate(gray, self._resolution_level, CAM_RES)
+
+    def _forward_speed(self):
+        """Forward speed in m/s from the base velocimeter -- the same sensor the viewer plots
+        and the same quantity a real rover would publish. Forward is the rover's local -Y."""
+        adr = self.model.sensor_adr[
+            mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_SENSOR, "base_velocity")
+        ]
+        return -float(self.data.sensordata[adr + 1])
 
     def _band_error(self, band):
         """(error, seen) for one horizontal slice of the frame, measured up from the bottom.
