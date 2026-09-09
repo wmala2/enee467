@@ -4,6 +4,7 @@ scripts/gen_track.py (which turns these into MJCF geoms) and envs/tasks/line_fol
 """
 
 import math
+import os
 
 import numpy as np
 
@@ -66,6 +67,24 @@ def hairpin_waypoints(straight=0.5, r=0.25, n=144):
     ]
     pts += [(-straight * i / (n // 4), r) for i in range(1, n // 4 + 1)]
     return pts
+
+
+def goomba_waypoints():
+    """Three-lobed clover track, traced from the CAD part rather than a formula.
+
+    Unlike every other track here this one has no closed form: it comes from an OnShape part
+    studio, exported as a surface mesh with no notion of a path along it. Its centerline was
+    extracted once by scripts/extract_centerline.py and stored beside the mesh, so runtime
+    needs neither the STL nor the rasterizer.
+
+    Two things happened during that extraction and are baked into the stored file. The part is
+    17.8 cm across, smaller than the rover, so it is scaled 7x. And the three points where its
+    lobes meet are cusps, 3 mm of radius at source scale, which no differential-drive rover
+    takes at speed; they are rounded until the tightest radius is 0.190 m, between the
+    figure-eight's 0.155 m and the oval's 0.267 m."""
+    path = os.path.join(os.path.dirname(__file__), "../assets/objects/tracks/goomba_centerline.csv")
+    points = np.loadtxt(path, delimiter=",")
+    return [(float(x), float(y)) for x, y in points]
 
 
 def path_length_table(waypoints):
