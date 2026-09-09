@@ -17,6 +17,8 @@ and uploads nothing, and `wandb sync wandb/` pushes them later if you change you
 
 import argparse
 import os
+import subprocess
+import sys
 
 import envs  # noqa: F401  (imported for its side effect: registers LineFollowerReal-v0)
 from evaluate_real import episode_outcome
@@ -186,6 +188,23 @@ def main():
     unknown = [n for n in names if n not in VARIANTS]
     if unknown:
         parser.error(f"unknown variant(s) {unknown}; choose from {list(VARIANTS)}")
+    # One fresh process per variant. Training forks its workers with SubprocVecEnv, and a GL
+    # context does not survive fork: once this process has built a renderer -- which scoring a
+    # variant does -- every forked worker of the *next* variant dies the moment it constructs
+    # its own, showing up as ConnectionResetError from a worker that never sent its spaces.
+    # Renderer.close() is not enough; the parent has to have never touched GL. Re-exec instead.
+    if len(names) > 1 and not args.score_only:
+        for name in names:
+            argv = [sys.executable, __file__, "--variant", name, "--episodes", str(args.episodes)]
+            if args.wandb:
+                argv.append("--wandb")
+            if args.timesteps:
+                argv += ["--timesteps", str(args.timesteps)]
+            result = subprocess.run(argv, check=False)
+            if result.returncode != 0:
+                print(f"{name}: exited {result.returncode}, continuing with the next variant")
+        return
+
     summary = {}
     for name in names:
         if args.score_only:
