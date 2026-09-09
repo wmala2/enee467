@@ -32,8 +32,9 @@ KT = STALL_TORQUE_OUTPUT_NM / STALL_CURRENT  # N*m/A, output-shaft-referred
 R = VIN / STALL_CURRENT  # ohm, derived from the stall condition (back-EMF = 0 there)
 
 # Caveat, worth knowing before trusting this model too far: plugging KT/R back into the
-# free-run speed equation predicts an output speed of ~1013 RPM, but the datasheet states
-# 463 RPM directly. Cheap gearmotor datasheets are commonly rounded/approximate rather than
+# free-run speed equation (zero torque, so omega = VIN/KT) predicts ~1062 RPM at the output
+# shaft, but the datasheet states 463 RPM directly, a factor of 2.3. Cheap gearmotor
+# datasheets are commonly rounded/approximate rather than
 # bench-measured, so a ~2x mismatch between two independently-quoted numbers is plausible,
 # not obviously a bug here — but it means this model should not be trusted at the level of
 # "matches the datasheet's free-run speed," only "roughly the right order of magnitude."
