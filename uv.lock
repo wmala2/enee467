@@ -1510,6 +1510,7 @@ dependencies = [
     { name = "scipy" },
     { name = "stable-baselines3" },
     { name = "tensorboard" },
+    { name = "wandb" },
 ]
 
 [package.metadata]
@@ -1524,6 +1525,7 @@ requires-dist = [
     { name = "scipy", specifier = ">=1.11.0" },
     { name = "stable-baselines3", specifier = ">=2.3.0" },
     { name = "tensorboard", specifier = ">=2.15.0" },
+    { name = "wandb" },
 ]
 
 [[package]]

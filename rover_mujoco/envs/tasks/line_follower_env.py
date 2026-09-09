@@ -71,6 +71,8 @@ class LineFollowerEnv(gym.Env):
     the observation, which has to work with only what the real rover can sense."""
 
     metadata: ClassVar[dict] = {"render_modes": ["human"], "render_fps": 50}
+    # Held-out; selectable via track=, never drawn at random.
+    EVAL_TRACKS: ClassVar[dict] = {}
     TRACKS = TRACKS  # class attribute so subclasses (e.g. LineFollowerRealEnv) can point
     # at different scene files (different actuators) without re-implementing __init__
 
@@ -85,9 +87,12 @@ class LineFollowerEnv(gym.Env):
         # the constructor happened to draw, and the two are not equally hard. Measured on the
         # same policy: 100% completion on one and 86.7% on the other.
         if track is not None:
-            if track not in self.TRACKS:
-                raise ValueError(f"unknown track {track!r}; choose from {list(self.TRACKS)}")
-            scene_file, self._waypoints_fn = track, self.TRACKS[track]
+            # EVAL_TRACKS are selectable by name but absent from the random draw below, so a
+            # held-out track can be measured without ever leaking into training.
+            selectable = {**self.TRACKS, **self.EVAL_TRACKS}
+            if track not in selectable:
+                raise ValueError(f"unknown track {track!r}; choose from {list(selectable)}")
+            scene_file, self._waypoints_fn = track, selectable[track]
         else:
             scene_file, self._waypoints_fn = random.choice(list(self.TRACKS.items()))
         self.track_name = scene_file

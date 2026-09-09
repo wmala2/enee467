@@ -8,8 +8,11 @@ import itertools
 import math
 import os
 
+from envs.tracks import circle_waypoints
+from envs.tracks import hairpin_waypoints
 from envs.tracks import oval_waypoints
 from envs.tracks import s_curve_waypoints
+from envs.tracks import wave_waypoints
 
 # Visual/collision-free line appearance
 LINE_WIDTH = 0.03
@@ -46,8 +49,14 @@ if __name__ == "__main__":
     os.makedirs(out_dir, exist_ok=True)
 
     tracks = {
+        # Training tracks
         "track_oval": oval_waypoints(),
         "track_s_curve": s_curve_waypoints(),
+        # Held-out evaluation tracks (see envs/tracks.py) -- generated the same way, but the
+        # envs expose them separately so training can never sample them.
+        "track_circle": circle_waypoints(),
+        "track_wave": wave_waypoints(),
+        "track_hairpin": hairpin_waypoints(),
     }
     for name, waypoints in tracks.items():
         path = os.path.join(out_dir, f"{name}.xml")

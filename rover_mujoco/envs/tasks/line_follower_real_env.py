@@ -15,8 +15,11 @@ from envs.tasks.line_follower_env import FALL_HEIGHT
 from envs.tasks.line_follower_env import LineFollowerEnv
 from envs.tasks.line_follower_env import MAX_EPISODE_STEPS
 from envs.tasks.line_follower_env import MAX_LINE_LOST_STEPS
+from envs.tracks import circle_waypoints
+from envs.tracks import hairpin_waypoints
 from envs.tracks import oval_waypoints
 from envs.tracks import s_curve_waypoints
+from envs.tracks import wave_waypoints
 
 # --- Domain randomization ranges ---
 # Starting points, not measured hardware values — see the DR table in
@@ -159,6 +162,17 @@ TRACKS_REAL = {
     "rover_line_s_curve_real.xml": s_curve_waypoints,
 }
 
+# Held-out: never trained on, only measured. Two training tracks cannot tell you whether a
+# policy follows a line or has fit an ellipse and a sine, and "no evaluation failures on
+# varying tracks" is the bar before this goes on hardware -- so these are the varying tracks.
+# Constant curvature, three times the training bend frequency, and one sustained bend tighter
+# than anything in training. See envs/tracks.py for how each was sized.
+EVAL_TRACKS_REAL = {
+    "rover_line_circle_real.xml": circle_waypoints,
+    "rover_line_wave_real.xml": wave_waypoints,
+    "rover_line_hairpin_real.xml": hairpin_waypoints,
+}
+
 
 class LineFollowerRealEnv(LineFollowerEnv):
     """LineFollowerEnv, constrained to what the real rover can actually sense and command,
@@ -212,6 +226,7 @@ class LineFollowerRealEnv(LineFollowerEnv):
     """
 
     TRACKS = TRACKS_REAL
+    EVAL_TRACKS = EVAL_TRACKS_REAL
 
     def __init__(self, render_mode=None, domain_randomize=True, track=None):
         super().__init__(render_mode=render_mode, domain_randomize=domain_randomize, track=track)

@@ -21,6 +21,46 @@ def s_curve_waypoints(length=1.6, amplitude=0.3, n=48):
     ]
 
 
+# Held-out shapes, used only to evaluate generalization -- never to train. Each one stresses
+# something the two training tracks do not contain, so a policy that scores well here is
+# following the line rather than having memorized an oval and a sine.
+
+
+def circle_waypoints(r=0.45, n=48):
+    """Closed loop of constant curvature. The oval's curvature swings between 0.27 m and
+    1.5 m of radius, so a policy can learn a steering schedule keyed to where it is around
+    the lap; a circle removes that cue without being any tighter than the oval's ends."""
+    return [(r * math.cos(t), r * math.sin(t)) for t in [2 * math.pi * i / n for i in range(n + 1)]]
+
+
+def wave_waypoints(length=1.8, amplitude=0.20, cycles=1.5, n=64):
+    """Open path at three times the training s-curve's spatial frequency, so bends arrive
+    far more often than anything seen in training and the far-band curvature preview has to
+    actually be used rather than smoothed over.
+
+    Amplitude and frequency are set together to land the tightest bend near 0.18 m of radius:
+    harder than the oval's 0.27 m, but clear of the 0.081 m the rover physically cannot turn
+    inside (MAX_LINEAR_VEL / MAX_ANGULAR_VEL). A first pass at 2 cycles and 0.25 m amplitude
+    gave 0.085 m, which would have measured the drivetrain's limits, not the policy's."""
+    return [
+        (x, amplitude * math.sin(2 * math.pi * cycles * (x + length / 2) / length))
+        for x in [length * i / n - length / 2 for i in range(n + 1)]
+    ]
+
+
+def hairpin_waypoints(straight=0.5, r=0.25, n=48):
+    """Open path: straight out, 180 degrees around a tight bend, straight back. At r=0.25 m
+    the bend is tighter than any curvature in training (the oval's tightest is 0.27 m), and
+    is the case most likely to swing the line out of the camera's field of view."""
+    pts = [(x, -r) for x in [-straight + straight * i / (n // 4) for i in range(n // 4)]]
+    pts += [
+        (r * math.sin(t), -r * math.cos(t))
+        for t in [math.pi * i / (n // 2) for i in range(n // 2 + 1)]
+    ]
+    pts += [(-straight * i / (n // 4), r) for i in range(1, n // 4 + 1)]
+    return pts
+
+
 def path_length_table(waypoints):
     """Cumulative arc length at each waypoint (parallel array to `waypoints`), and
     whether the path is closed (a lap, like the oval) vs. open (a single traversal

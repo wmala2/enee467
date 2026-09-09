@@ -11,6 +11,7 @@ dependencies = [
     "tensorboard>=2.15.0",
     "numpy>=1.24.0",
     "matplotlib>=3.8.0",
+    "wandb",
     "scipy>=1.11.0",
     "onshape-to-robot>=1.8.3",
     "better-actuator-models>=1.0.2",
