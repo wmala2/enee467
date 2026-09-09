@@ -46,19 +46,48 @@ can also trigger an export directly from the CAD UI if you'd rather not run the 
 Prefer `"type": "velocity"` (or `"position"`) over `"motor"` for small/light parts like
 wheels. See the gotcha below on why a raw torque motor is easy to mistune into instability.
 
+Two things about how those keys are matched, both worth knowing before you debug a joint that
+ignored its settings. Names are matched with `fnmatch`, so `"*"` matches every joint and
+`"*_axle"` matches both wheels. Matches then merge **in the order the keys appear in the JSON**,
+so a specific joint must come *after* the wildcard or the wildcard wins. The one exception is
+the key `"default"`, which is always applied first no matter where it sits, so it is the safer
+way to express "settings for everything, overridden below".
+
 ## 4. Run it, bring the output in
+
+`onshape-to-robot` ships as a console script, not a runnable module, so `python -m
+onshape_to_robot` fails with "No module named onshape_to_robot.__main__". The argument is a
+path to the directory holding `config.json`, which has to be named exactly that:
 
 ```shell
 mkdir -p assets/robots/rover
-cd assets/robots/rover
-python -m onshape_to_robot .
+# write config.json into that directory first
+uv run onshape-to-robot assets/robots/rover
 ```
+
+Useful flags when iterating, since each full run hits the OnShape API:
+
+```shell
+uv run onshape-to-robot assets/robots/rover --retrieve   # fetch CAD only, write robot.pkl
+uv run onshape-to-robot assets/robots/rover --convert    # re-export from robot.pkl, offline
+```
+
+Fetch once with `--retrieve`, then tune `config.json` and re-run `--convert` as many times as
+you like without touching the network. `--safe` disables config features that run custom
+commands or imports, which is what you want when running someone else's `config.json`.
 
 This produces `robot.xml` (the mesh/body/joint/actuator tree), `scene.xml` (floor + light +
 an `<include>` of `robot.xml`, the same composition pattern our hand-built
 `rover_scene.xml` uses), and an `assets/` folder of STLs. Drop the whole directory under
 `assets/robots/<name>/` as-is; no path rewriting needed (unlike the `package://` URDF mesh
 URIs we had to `sed` earlier).
+
+**`scene.xml` is written only if it is not already there.** Your edits to it survive a
+re-export, which is the behavior you want, but it also means a scene you customized months ago
+silently keeps its old contents while `robot.xml` underneath it changes. Delete it if you want
+the generated one back. The generated version is minimal: a skybox, a headlight, one
+directional light, and a checkerboard ground plane, with no `<option>` block at all, which is
+why the integrator gotcha below is something you add rather than something you change.
 
 ## 5. Gotchas specific to the MJCF exporter
 
@@ -91,7 +120,8 @@ URIs we had to `sed` earlier).
   a robot floating away instantly or barely moving under normal-looking actuator commands.
 - **Verify the free joint landed where you expect.** Load the model and check
   `model.njnt`/`joint names` (see the checklist below) rather than assuming the root got a
-  `<freejoint>`. It's silently skipped if the root was marked Fixed in OnShape.
+  `<freejoint>`. It's silently skipped if the root was marked Fixed in OnShape. The exporter
+  names it after the root link, as `<root link name>_freejoint`, so you can grep for it.
 
 ## 6. Quick validation checklist
 
