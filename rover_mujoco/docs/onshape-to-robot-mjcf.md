@@ -101,9 +101,22 @@ curl -s -u "$ONSHAPE_ACCESS_KEY:$ONSHAPE_SECRET_KEY" -H "Accept: application/jso
 | python3 -c "import json,sys; print(len(json.load(sys.stdin)['rootAssembly']['instances']), 'instances')"
 ```
 
-Zero instances means you need to insert the part into the assembly in OnShape first. This is
-the state the `Goomba_Track` document was in: one part in the part studio, an `Assembly 1`
-holding nothing.
+Zero instances means you need to insert the part into the assembly in OnShape first. That was
+the state the `Goomba_Track` document was in: one part in the part studio and an `Assembly 1`
+holding nothing. Dropping the part studio into the assembly by itself is enough, and the export
+then runs clean:
+
+```
+* Found total 0 degrees of freedom
+* Found 1 root nodes:
+  - Goomba_Track <1>
++ Adding part Goomba_Track <1>
+WARNING: part Goomba_Track <1> has no dynamics (maybe it is a surface)
+* Writing robot.xml
+* Writing scene.xml
+```
+
+Read that warning. See the surface-part gotcha in section 5.
 
 ## 2c. Props with no joints: skip the exporter
 
@@ -218,6 +231,21 @@ why the integrator gotcha below is something you add rather than something you c
   penetrating contacts. Use `geom_properties` wildcards in `config.json` (or hand-edit
   `contype`/`conaffinity` after export) to disable collision on parts that are cosmetic or
   rigidly interior. Only surfaces that actually touch the ground or other objects need it on.
+- **A surface part exports as a free body with placeholder mass, and it is a bomb.** A part
+  with no volume (a track, a decal, anything modelled as a sheet) makes the exporter print
+  `WARNING: part <name> has no dynamics (maybe it is a surface)` and emit
+  `mass="1e-09"` with a matching `1e-09` inertia. It also gets a `<freejoint>`, because the
+  root was not marked Fixed in OnShape. On its own it looks fine: it settles 0.2 mm into the
+  floor and sits there with zero velocity indefinitely. But `f = ma` with `m = 1e-9` means any
+  contact at all launches it. Measured on the exported Goomba track, a 1 mN push, roughly a
+  thousandth of the force a 1.5 kg rover delivers in a collision, accelerated it to 499 km/s
+  and 125 km away in half a second. Either mark the root Fixed in OnShape so no freejoint is
+  emitted, or delete the `<freejoint>` and give the body a real mass by hand, or skip the
+  exporter entirely for props (section 2c).
+- **The exporter emits two geoms per mesh, visual and collision.** They come from the default
+  classes at the top of `robot.xml`: `visual` is `group="2"` with `contype`/`conaffinity` 0,
+  `collision` is `group="3"`. For something the rover drives *over* rather than into, drop the
+  collision geom; for something it collides with, replace the mesh collision with a primitive.
 - **Sanity-check scale after export.** OnShape units, if the assembly wasn't authored in
   meters, can produce a robot that's a few orders of magnitude off: this shows up as either
   a robot floating away instantly or barely moving under normal-looking actuator commands.
