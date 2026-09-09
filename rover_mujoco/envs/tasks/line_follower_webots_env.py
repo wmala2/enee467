@@ -59,7 +59,6 @@ import mujoco
 import numpy as np
 
 from envs.camera import onboard_scene_option
-from envs.camera import set_camera_tilt
 from envs.tasks.line_follower_env import CONTROL_HZ
 from envs.tasks.line_follower_env import FALL_HEIGHT
 from envs.tracks import oval_waypoints
@@ -80,7 +79,6 @@ WHEEL_SEPARATION = 0.1626
 CAM_RES = 64
 ROI_RATIO = 0.7  # use the bottom 30% of the frame
 BINARY_THRESHOLD = 100  # cv2.THRESH_BINARY_INV cutoff
-CAMERA_ANGLE_DEG = 60.0  # our mount, not theirs; see scripts/line_follower.py
 
 # --- Reward weights, copied verbatim -------------------------------------------------------
 ALIGNMENT_WEIGHT = 2.0
@@ -169,7 +167,6 @@ class LineFollowerWebotsEnv(gym.Env):
         if getattr(self, "renderer", None) is not None:
             self.renderer.close()
         self.renderer = mujoco.Renderer(self.model, height=CAM_RES, width=CAM_RES)
-        set_camera_tilt(self.model, "top_cam", CAMERA_ANGLE_DEG)
         self._physics_dt = self.model.opt.timestep
         self._decimation = max(1, round(1.0 / (CONTROL_HZ * self._physics_dt)))
         self._waypoints_fn = TRACKS[scene_file]

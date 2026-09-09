@@ -44,9 +44,11 @@
            (quat, not axisangle: this
            file's compiler angle="radian" makes axisangle degrees a common footgun, and an
            earlier version of this line was actually "-50 radians" by that mistake, not
-           "-50 deg" as its comment claimed). Scripts that want a different tilt call
-           envs/camera.py's set_camera_tilt() at runtime instead of editing this default;
-           see docs/pid-line-follower.md. -->
+           "-50 deg" as its comment claimed.) This quat is the only place the tilt is set --
+           quat="0 0 sin(t/2) cos(t/2)" for a tilt of t up from straight-down. Once the
+           camera mount is CADed in with its own rotational joint, the tilt becomes that
+           joint's position and this becomes the mount's rest pose.
+           See docs/pid-line-follower.md. -->
       <camera name="top_cam" pos="0 -0.098 0.07" quat="0 0 0.50000000 0.86602540" fovy="60"/>
       <!-- Massless reference frame for the base velocimeter sensor. -->
       <site name="base_imu" pos="0 0 0" size="0.005"/>

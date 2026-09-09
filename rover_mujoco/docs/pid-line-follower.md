@@ -24,12 +24,15 @@ tracks, and starting logic.
 
 ## Camera angle
 
-The real rover's camera mount can tilt, and this sim models that: `CAMERA_ANGLE_DEG` at the
-top of `line_follower.py` sets it anywhere from 0 (straight down) to 90 (forward-facing,
-perpendicular to the rover), via `envs/camera.py`'s `set_camera_tilt()`. That function mutates
-the compiled model's `cam_quat` directly (the same technique `LineFollowerEnv`'s domain
-randomization uses to jitter the camera each episode), so any script can pick its own angle at
-runtime instead of hand-editing `rover.xml`.
+The real rover's camera mount can tilt, and the sim models that with the `top_cam` quaternion
+in `assets/robots/rover/rover.xml` — the single place the angle is set. It runs from 0
+(straight down) to 90 (forward-facing, perpendicular to the rover), written as
+`quat="0 0 sin(t/2) cos(t/2)"`; the 60° default is `quat="0 0 0.5 0.866"`.
+
+This used to be applied at runtime by an `envs/camera.py` helper that overwrote `cam_quat`
+after compile, so a script could pick its own angle. Every caller passed the same 60°, so the
+indirection only obscured where the angle really came from. When the mount is CADed in with a
+rotational joint, the tilt becomes that joint's position and the quat becomes its rest pose.
 
 Worth knowing before you start changing it:
 

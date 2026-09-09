@@ -24,7 +24,6 @@ import numpy as np
 from envs import arena
 from envs import motor
 from envs.camera import onboard_scene_option
-from envs.camera import set_camera_tilt
 from envs.tasks.line_follower_env import CAM_RES
 from envs.tasks.line_follower_env import CONTROL_HZ
 from envs.tasks.line_follower_env import FALL_HEIGHT
@@ -63,7 +62,6 @@ SCENE_FILE = "rover_arena_real.xml"
 # The information is still present at 90 deg (an obstacle changes ~26% of pixels against a
 # fixed empty reference, so a CNN could learn it), but nothing classical can segment it, and
 # the learning problem is much harder for no benefit.
-CAMERA_ANGLE_DEG = 60.0
 
 MAX_EPISODE_STEPS = 400  # control steps @ CONTROL_HZ = 40 simulated seconds
 # Defined in envs/arena.py because the obstacle clearances are derived from it.
@@ -265,7 +263,6 @@ class GoalNavEnv(gym.Env):
         )
 
         self._cam_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_CAMERA, "top_cam")
-        set_camera_tilt(self.model, "top_cam", CAMERA_ANGLE_DEG)
         self._default_cam_pos = self.model.cam_pos[self._cam_id].copy()
         self._default_cam_quat = self.model.cam_quat[self._cam_id].copy()
         self._default_light_diffuse = self.model.light_diffuse.copy()

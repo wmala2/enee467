@@ -21,7 +21,6 @@ import random
 import time
 
 from envs.camera import onboard_scene_option
-from envs.camera import set_camera_tilt
 from gen_track import oval_waypoints
 from gen_track import s_curve_waypoints
 import mujoco
@@ -86,7 +85,6 @@ BANG_DEADBAND = 0.05  # normalized error within which bang-bang just drives stra
 # rover) — see docs/pid-line-follower.md. The camera sits above the caster, so a shallow tilt
 # points it at the rover's own chassis rather than the track: measured over 12 poses on each
 # track, line_error() finds the line 0/12 times at 45 deg, 9/12 at 55, and 12/12 at 60.
-CAMERA_ANGLE_DEG = 60.0
 
 CAM_RES = 64  # onboard camera resolution (small + square keeps centroid math cheap)
 DARK_THRESHOLD = 60  # pixel value below which we call a pixel "line"
@@ -325,7 +323,6 @@ def main():
 
     model = mujoco.MjModel.from_xml_path(model_path)
     data = mujoco.MjData(model)
-    set_camera_tilt(model, "top_cam", CAMERA_ANGLE_DEG)
 
     if imported_geom is not None:
         (sx, sy), quat = mesh_start_pose(model, imported_geom, rng)
