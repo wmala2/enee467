@@ -30,6 +30,42 @@ controller configuration, JSON episode outcomes, CSV trajectories, initial camer
 overlays, and a trajectory comparison plot.
 Use a fresh `--output` directory for each experiment to preserve previous results.
 
+## Shared track assets
+
+`scripts/line_follower.py` builds its scene through `gen_track.py`'s `build_track_xml`
+and `envs/tracks.py`'s waypoint functions, both shared with the RL environments.
+Three changes to those shared files landed alongside this baseline and affect what the
+runner renders.
+
+The waypoint functions now default to 144 segments per shape, up from 48
+(`figure8_waypoints` is unchanged at 160).
+Tracks are polylines of flat boxes, so the segment count sets how closely they follow
+the analytic curve.
+At 48 segments the worst heading step between neighboring boxes was 11.2 degrees, which
+put the centerline 1.29 mm off the true curve and pushed each box corner 1.47 mm past
+its neighbor on the outside of a bend.
+At 144 those figures are 3.9 degrees, 0.14 mm, and 0.51 mm: under 2% of the 2-inch tape
+width, and finer than the 64×64 camera resolves.
+The serration only ever added area on the outside of a curve, so it biased the centroid
+outward on exactly the frames where steering matters.
+
+Track segments are emitted in geom group 2 rather than 3.
+MuJoCo's default `MjvOption` mask is `[1, 1, 1, 0, 0, 0]`, so group 3 was invisible to
+every renderer unless each call site re-enabled it.
+Group 2 renders by default, which is why the `--camera` diagnostic view and the viewer
+both show the line without any scene-option handling.
+
+Segments also carry names, `line_0`, `line_1`, and so on.
+The RL environments' appearance randomization selects them by name instead of by geom
+group, which is what allowed the group number to change at all.
+
+The line width differs by consumer, deliberately.
+This runner passes 0.0508 m (2 inches) to match physical tape, while `gen_track.py`'s
+default, used for the RL scene assets in `assets/objects/tracks/`, stays at 0.03 m.
+A policy trained against the RL assets sees a line about 40% narrower than this baseline
+does, which scales the centroid error the two consume.
+Aligning them is outstanding work before any sim-to-real comparison.
+
 ## Controller and measurements
 
 The controller samples the bottom 15% of a 64×64 RGB image, thresholds dark pixels,
@@ -118,6 +154,10 @@ is in `artifacts/pid/no-steering`.
 | figure8 | 20/20 | 1.84 cm | 5.01 cm |
 | oval | 20/20 | 1.97 cm | 4.07 cm |
 | s_curve | 0/20 | 1.88 cm | 4.17 cm |
+
+Re-running the same seeds after the track resolution went to 144 segments reproduced
+every figure in this table to two decimal places, so the baseline covers the current
+geometry; that run is in `artifacts/pid/revalidation-n144`.
 
 Errors include all episodes, including incomplete S-curve trials.
 The three closed tracks had zero line-loss frames across all 60 trials.
