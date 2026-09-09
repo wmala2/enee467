@@ -57,10 +57,14 @@ DEFAULTS = {
 def evaluate_per_track(model_path, episodes=20):
     """Completion rate and deviation on each track separately, reusing evaluate_real.py's
     metrics so a sweep number and a hand-run evaluation always mean the same thing."""
+    from envs.tasks.line_follower_real_env import EVAL_TRACKS_REAL
     from envs.tasks.line_follower_real_env import TRACKS_REAL
 
     results = {}
-    for track in TRACKS_REAL:
+    # Training tracks first, then the held-out ones. The held-out numbers are the ones that
+    # answer "will this survive a track it has not seen", which is the deployment question;
+    # the training numbers are only there to show whether a gap opened up.
+    for track in list(TRACKS_REAL) + list(EVAL_TRACKS_REAL):
         env = gym.make(ENV_ID, track=track)
         model = PPO.load(model_path, env=env)
         outcomes = []
@@ -93,6 +97,17 @@ def evaluate_per_track(model_path, episodes=20):
             else float("nan"),
         }
     return results
+
+
+def print_scores(scores):
+    from envs.tasks.line_follower_real_env import EVAL_TRACKS_REAL
+
+    for track, s in scores.items():
+        print(
+            f"  {track:32s} {'held-out' if track in EVAL_TRACKS_REAL else 'training':9s} "
+            f"completion {s['completion']:6.1%}  "
+            f"mean {s['mean_dev_cm']:5.1f} cm  worst {s['worst_dev_cm']:6.1f} cm"
+        )
 
 
 def _wandb_has_credentials():
@@ -133,11 +148,7 @@ def run_variant(name, use_wandb, timesteps=None, episodes=20):
     env.close()
 
     scores = evaluate_per_track(os.path.join(model_dir, "model"), episodes)
-    for track, s in scores.items():
-        print(
-            f"  {track:28s} completion {s['completion']:6.1%}  "
-            f"mean {s['mean_dev_cm']:5.1f} cm  worst {s['worst_dev_cm']:6.1f} cm"
-        )
+    print_scores(scores)
     if run is not None:
         run.log({f"eval/{t}/{k}": v for t, s in scores.items() for k, v in s.items()})
         run.finish()
@@ -148,6 +159,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--variant", help="comma-separated variants to run (default: all)")
     parser.add_argument("--list", action="store_true", help="list variants and exit")
+    parser.add_argument(
+        "--score-only",
+        action="store_true",
+        help="re-score already-trained variants without retraining them",
+    )
     parser.add_argument("--wandb", action="store_true", help="also log to Weights & Biases")
     parser.add_argument(
         "--timesteps", type=int, help="override every variant's budget (smoke test)"
@@ -172,7 +188,16 @@ def main():
         parser.error(f"unknown variant(s) {unknown}; choose from {list(VARIANTS)}")
     summary = {}
     for name in names:
-        summary[name] = run_variant(name, args.wandb, args.timesteps, args.episodes)
+        if args.score_only:
+            model_path = os.path.join(RUNS_DIR, name, "model")
+            if not os.path.exists(model_path + ".zip"):
+                print(f"{name}: no model at {model_path}.zip, skipping")
+                continue
+            print(f"\n=== {name} (scoring only)")
+            summary[name] = evaluate_per_track(model_path, args.episodes)
+            print_scores(summary[name])
+        else:
+            summary[name] = run_variant(name, args.wandb, args.timesteps, args.episodes)
 
     print("\n=== sweep summary (completion per track) ===")
     for name, scores in summary.items():
