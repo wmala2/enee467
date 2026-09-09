@@ -11,10 +11,57 @@ visual/collision splitting.
 `onshape-to-robot` is already a project dependency (see `pyproject.toml`), so a plain
 `uv sync` (see `docs/workspace-setup.md`) is all you need. Nothing extra to install here.
 
-You'll also need an OnShape API key/secret (from https://dev-portal.onshape.com), exported
-as `ONSHAPE_ACCESS_KEY` / `ONSHAPE_ACCESS_SECRET`, or placed in a `.onshape` credentials file.
+You'll also need an OnShape API key and secret. Sign in, open **My account** from the
+top-right menu, pick **Developer** in the left sidebar, then the **API keys** tab, name the key
+and grant it permissions:
+
+![Creating an OnShape API key](images/create_new_api_key_labelled.png)
+
+The exporter reads **three** environment variables, and all three are required:
+
+```shell
+export ONSHAPE_API=https://cad.onshape.com
+export ONSHAPE_ACCESS_KEY=...
+export ONSHAPE_SECRET_KEY=...
+```
+
+Keep them in the repo's gitignored `.env` and source it (`set -a; . ./.env; set +a`) rather
+than putting them in `config.json`; the exporter still reads them from there but prints a
+deprecation warning. Two traps in that list, both of which cost real time here:
+
+- The secret variable is `ONSHAPE_SECRET_KEY`, not `ONSHAPE_ACCESS_SECRET`.
+- `ONSHAPE_API` is easy to miss because omitting it produces the error
+  `ERROR: No Onshape API access key are set`, which blames the key when the URL is what's
+  absent.
+
 The [OnShape "File Export" app](https://cad.onshape.com/appstore/apps/File%20Export/698b9abb84adb494ca5d5d5a)
 can also trigger an export directly from the CAD UI if you'd rather not run the CLI.
+
+### If you get 401 Unauthenticated with credentials that are definitely correct
+
+Check your system clock. OnShape signs each request with the `Date` header, and rejects
+anything more than a few minutes from its own clock as `{"message":"Unauthenticated API
+request", "status":401}`, which is indistinguishable from a bad key. This bit us with the
+machine running about six minutes fast:
+
+```shell
+# what the server thinks the time is, versus what you think it is
+curl -sI https://cad.onshape.com/api/users/sessioninfo | grep -i '^date:'
+date -u '+%a, %d %b %Y %H:%M:%S GMT'
+
+timedatectl                             # "System clock synchronized: no" is the tell
+sudo timedatectl set-ntp true           # the fix
+```
+
+A quick way to tell a clock problem from a bad key: HTTP Basic auth does not involve the
+signature, so it still works when the signed request does not.
+
+```shell
+curl -s -o /dev/null -w '%{http_code}\n' -u "$ONSHAPE_ACCESS_KEY:$ONSHAPE_SECRET_KEY" \
+  https://cad.onshape.com/api/users/sessioninfo
+```
+
+200 there plus 401 from the exporter means the credentials are fine and the clock is not.
 
 ## 2. In the OnShape assembly, before exporting
 
@@ -24,6 +71,62 @@ can also trigger an export directly from the CAD UI if you'd rather not run the 
   whether to emit a `<freejoint>` on the root body.
 - **Mate connectors** at joint axes become MJCF joints; name them something you'll recognize
   in the XML (`left_axle`, `right_axle`, etc.), same as we did by hand on the rover.
+
+## 2b. The URL has to point at a non-empty Assembly
+
+`onshape-to-robot` reads assemblies, never part studios. The URL in your browser points at
+whichever tab you happen to be on, and a part studio tab produces:
+
+```
+! ERROR (400) while using Onshape API
+! { "message" : "Element must be an assembly", "status" : 400 }
+```
+
+An assembly that exists but is empty fails differently, as a bare `KeyError: 'occurrences'`
+from `assembly.py`, because the API omits that key entirely when nothing has been inserted.
+Neither message names the real problem, so list the document's elements and pick the assembly
+deliberately:
+
+```shell
+curl -s -u "$ONSHAPE_ACCESS_KEY:$ONSHAPE_SECRET_KEY" -H "Accept: application/json" \
+  "https://cad.onshape.com/api/documents/d/<did>/w/<wid>/elements" \
+| python3 -c "import json,sys; [print(e['elementType'], e['id'], e['name']) for e in json.load(sys.stdin)]"
+```
+
+Then confirm it actually contains something before exporting:
+
+```shell
+curl -s -u "$ONSHAPE_ACCESS_KEY:$ONSHAPE_SECRET_KEY" -H "Accept: application/json" \
+  "https://cad.onshape.com/api/assemblies/d/<did>/w/<wid>/e/<assembly eid>" \
+| python3 -c "import json,sys; print(len(json.load(sys.stdin)['rootAssembly']['instances']), 'instances')"
+```
+
+Zero instances means you need to insert the part into the assembly in OnShape first. This is
+the state the `Goomba_Track` document was in: one part in the part studio, an `Assembly 1`
+holding nothing.
+
+## 2c. Props with no joints: skip the exporter
+
+A track, a ramp, or a wall has no joints, no actuators, and no free-floating base, so none of
+what `onshape-to-robot` does applies. Pull the mesh straight out of the part studio and write
+a few lines of MJCF around it. The STL endpoint answers with a 307 to a *different* host
+(`cad-usw2.onshape.com`), and `curl -L` drops the `Authorization` header across hosts, so
+following the redirect by hand is the difference between a mesh and a 401:
+
+```shell
+URL="https://cad.onshape.com/api/partstudios/d/<did>/w/<wid>/e/<part studio eid>/stl?mode=binary&units=meter&grouping=true"
+curl -s -o /dev/null -D /tmp/h.txt -u "$ONSHAPE_ACCESS_KEY:$ONSHAPE_SECRET_KEY" \
+  -H "Accept: application/vnd.onshape.v1+octet-stream" "$URL"
+LOC=$(awk 'tolower($1)=="location:"{print $2}' /tmp/h.txt | tr -d '\r')
+curl -s -u "$ONSHAPE_ACCESS_KEY:$ONSHAPE_SECRET_KEY" \
+  -H "Accept: application/vnd.onshape.v1+octet-stream" "$LOC" -o part.stl
+```
+
+Ask for `units=meter`; MuJoCo works in metres and OnShape will happily hand you millimetres.
+`assets/objects/tracks/goomba_track.xml` is the result of exactly this, and shows the two
+attributes a flat CAD part needs: `inertia="shell"` on the mesh, because a part 0.1 mm thick
+is degenerate under MuJoCo's volume-based inertia, and `contype="0" conaffinity="0"` on the
+geom, because paint on the floor is not something to drive into.
 
 ## 3. config.json
 

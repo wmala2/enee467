@@ -1,0 +1,19 @@
+<mujoco model="goomba_track">
+  <!-- Exported from OnShape, document fab2eef12ec093763b6fbb35, part studio Goomba_Track.
+       Fetched as an STL in metres rather than through onshape-to-robot: that tool reads
+       assemblies only, and this document's assembly is empty (the geometry lives in the part
+       studio). A track has no joints or actuators, so nothing in the exporter's job applies.
+       See docs/onshape-to-robot-mjcf.md. -->
+  <asset>
+    <!-- inertia="shell": the part is 0.1 mm thick, so MuJoCo's volume-based inertia rejects
+         it as degenerate. Shell inertia treats the mesh as a surface, which is what a painted
+         track is. It never matters dynamically here because the geom is static. -->
+    <mesh name="goomba_track" file="goomba_track.stl" inertia="shell"/>
+  </asset>
+  <worldbody>
+    <!-- Visual only (contype/conaffinity 0): paint on the floor, not something to drive into.
+         Group 2 so every renderer draws it by default; see scripts/gen_track.py's LINE_GROUP. -->
+    <geom name="line_goomba_track" type="mesh" mesh="goomba_track" pos="0 0 0.001"
+          contype="0" conaffinity="0" group="2" rgba="0.05 0.05 0.05 1"/>
+  </worldbody>
+</mujoco>
