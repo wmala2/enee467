@@ -1,10 +1,9 @@
-"""DC motor model for the rover's JGA25-371 drive wheels, built on BAM's friction model
-(https://github.com/Rhoban/bam) plus a hand-derived electrical model from the motor's
-datasheet. See docs/rl-line-follower.md for the full derivation, why BAM's own Actuator/
-MujocoController classes aren't used directly (they assume a position-controlled servo;
-these are continuously-driven wheels under velocity control), and the caveats on the numbers
-below (rough datasheet specs, not bench-measured, and BAM's friction parameters are its
-un-fit defaults — real identification needs recorded trajectories we don't have yet).
+"""DC motor model for the rover's JGA25-371 drive wheels: BAM's friction model
+(https://github.com/Rhoban/bam) plus an electrical model derived from the datasheet.
+
+Every parameter here comes from a datasheet rather than a bench, and BAM's friction values
+are its un-fit defaults, so treat this as the right shape rather than the right numbers.
+tests/test_motor_model.py pins what is actually verified.
 
 Datasheet: https://www.openimpulse.com/blog/products-page/25d-gearmotors/jga25-371-dc-gearmotor-encoder-463-rpm-12-v-2/
 """
@@ -19,46 +18,30 @@ NO_LOAD_RPM_OUTPUT = 463.0  # free-run speed at the wheel (output) shaft
 NO_LOAD_CURRENT = 0.046  # A
 STALL_CURRENT = 1.0  # A
 STALL_TORQUE_OUTPUT_NM = 1.1 * 0.0980665  # 1.1 kgf*cm -> N*m, at the wheel (output) shaft
-GEAR_RATIO = 9.28  # for reference; not used below, see note
+GEAR_RATIO = 9.28  # reference only; kt/R below are output-shaft referred
 
-# kt/R are derived and used entirely at the *output* (wheel) shaft, treating motor+gearbox
-# as one black box rather than modeling the gearbox's torque/speed conversion explicitly.
-# This sidesteps having to also convert BAM's friction terms across the gearbox (Coulomb
-# friction scales by the gear ratio referred output-to-motor, viscous/damping terms scale
-# by its *square* — extra complexity not worth it for numbers this rough to begin with) and
-# matches how the datasheet itself specifies stall torque/current: at the shaft you can
-# actually measure from outside, i.e. the wheel.
+# kt/R are referred to the output (wheel) shaft, treating motor+gearbox as one black box.
+# That matches how the datasheet quotes stall torque and current, and avoids converting
+# BAM's friction terms across the gear ratio.
 KT = STALL_TORQUE_OUTPUT_NM / STALL_CURRENT  # N*m/A, output-shaft-referred
 R = VIN / STALL_CURRENT  # ohm, derived from the stall condition (back-EMF = 0 there)
 
-# Caveat, worth knowing before trusting this model too far: plugging KT/R back into the
-# free-run speed equation (zero torque, so omega = VIN/KT) predicts ~1062 RPM at the output
-# shaft, but the datasheet states 463 RPM directly, a factor of 2.3. Cheap gearmotor
-# datasheets are commonly rounded/approximate rather than
-# bench-measured, so a ~2x mismatch between two independently-quoted numbers is plausible,
-# not obviously a bug here — but it means this model should not be trusted at the level of
-# "matches the datasheet's free-run speed," only "roughly the right order of magnitude."
-# Closing that gap for real is exactly what BAM's identification pipeline (fitting from
-# recorded trajectories) exists for.
+# KT/R put the free-run speed (omega = VIN/KT) at ~1062 RPM against the datasheet's stated
+# 463, a factor of 2.3. Two independently quoted datasheet numbers disagreeing is plausible
+# for a cheap gearmotor, so trust the order of magnitude, not the value.
 
-# Simple internal velocity-tracking control law standing in for the rover's real motor
-# driver loop (voltage proportional to speed error, saturated at the supply rail). This is
-# what turns our action space (target wheel velocity) into a voltage command; BAM's own
-# VoltageControlledActuator instead assumes a *position* target, which doesn't fit a wheel.
+# Stands in for the rover's motor driver: voltage proportional to speed error, saturated at
+# the rail. BAM's own VoltageControlledActuator assumes a position target, which a
+# continuously-driven wheel does not have.
 VELOCITY_KP = 6.0  # V per (rad/s) of speed error
 
 
 def make_friction_model():
     """BAM Stribeck friction model for one wheel.
 
-    BAM's own default Parameter values (~0.05-0.1 Nm) are calibrated for the much larger
-    reference actuators it ships fitted models for (Dynamixel MX-series etc.) — applied
-    as-is, they'd exceed this motor's entire ~0.108 Nm stall torque and the wheel could
-    never move at all. Scaled down here to a small fraction of our own computed stall
-    torque so the numbers are at least dimensionally sane; this is still a guess, not a
-    real fit (that needs recorded trajectories from the actual motor, per BAM's
-    identification pipeline), so treat it as a starting point to replace once that data
-    exists, not a calibrated model."""
+    BAM's defaults (~0.05-0.1 Nm) are fitted to much larger actuators and would exceed this
+    motor's ~0.108 Nm stall torque, leaving the wheel unable to move, so they are scaled to a
+    fraction of our own stall torque. Dimensionally sane, still a guess, not a fit."""
     model = Model(stribeck=True)
     model.set_actuator(DCMotorActuator(testbench_class=None, vin=VIN, kp=0.0))
     model.kt.value = KT
@@ -70,9 +53,10 @@ def make_friction_model():
 
 
 def motor_torque(target_omega, measured_omega):
-    """DC motor torque [Nm, at the wheel] for a commanded wheel speed, using the same
-    tau = kt*V/R - kt^2*omega/R equation BAM's VoltageControlledActuator uses internally,
-    with our own velocity (not position) control law feeding it."""
+    """DC motor torque [Nm, at the wheel] for a commanded wheel speed.
+
+    Uses tau = kt*V/R - kt^2*omega/R, the same relation as BAM's VoltageControlledActuator,
+    fed by our velocity control law instead of its position one."""
     error = np.asarray(target_omega) - np.asarray(measured_omega)
     voltage = np.clip(VELOCITY_KP * error, -VIN, VIN)
     torque = KT * voltage / R - (KT**2) * np.asarray(measured_omega) / R
@@ -80,21 +64,12 @@ def motor_torque(target_omega, measured_omega):
 
 
 def motor_drive_and_damping(target_omega, measured_omega):
-    """The same torque as motor_torque, split into a constant drive and a damping coefficient.
+    """motor_torque split into a constant drive and a damping coefficient, so the
+    speed-dependent half can go to `dof_damping` where the integrator solves it implicitly.
 
-    `motor_torque` is exactly linear in speed: tau = drive - k*omega, where in the linear
-    region k = kt*kp/R + kt^2/R (control gain plus back-EMF) and in saturation only the
-    back-EMF kt^2/R survives, because the voltage no longer tracks the error. Splitting it
-    that way lets the speed-dependent half be handed to MuJoCo as `dof_damping`, which the
-    integrator solves implicitly, instead of being applied as a torque computed from the
-    previous step's velocity.
-
-    That distinction is not cosmetic. Evaluated explicitly, this loop settles about 5.6% slow
-    at the 2 ms timestep the scenes use, because k/I gives a time constant shorter than the
-    step: a free wheel's 2.0e-5 kg m^2 puts the explicit stability bound near 0.72 ms, and
-    unloaded with friction disabled it diverges outright and spins backwards. Handing the
-    same term to the integrator instead reproduces the model's own fixed point to within
-    rounding, at no extra cost. Returns (drive torque [Nm], damping [Nm/(rad/s)])."""
+    Applied explicitly instead, this loop settles backwards at a free wheel's 2.0e-5 kg m^2;
+    ground contact hides that by dragging the chassis, so it surfaces only when a wheel
+    leaves the ground. Returns (drive [Nm], damping [Nm/(rad/s)])."""
     target = np.asarray(target_omega, dtype=float)
     measured = np.asarray(measured_omega, dtype=float)
     raw_voltage = VELOCITY_KP * (target - measured)
@@ -105,26 +80,19 @@ def motor_drive_and_damping(target_omega, measured_omega):
 
 
 def apply_friction(friction_model, model, dof_adr, dtheta, extra_damping=0.0):
-    """Write this step's Stribeck frictionloss/damping onto the given dof (see
-    bam.model.Model.compute_frictions — motor_torque/external_torque are unused for a
-    non-load-dependent model, so 0.0 is a legitimate simplification, not a placeholder).
+    """Write this step's Stribeck frictionloss and damping onto the given dof.
 
-    `extra_damping` is added to BAM's viscous term rather than replacing it, and carries the
-    motor's own speed-dependent torque from motor_drive_and_damping so the integrator can
-    take it implicitly. Both end up in the same `dof_damping` slot, so they have to be summed
-    here; writing either one alone silently discards the other."""
+    `extra_damping` carries the motor's speed-dependent torque from motor_drive_and_damping.
+    Both land in the same `dof_damping` slot, so they must be summed; writing either alone
+    discards the other."""
     frictionloss, damping = friction_model.compute_frictions(0.0, 0.0, dtheta)
     model.dof_frictionloss[dof_adr] = frictionloss
     model.dof_damping[dof_adr] = damping + extra_damping
 
 
-# --- The real rover's actuator envelope, from rover_control/rover.py -----------------------
-# MAX_VELOCITY 0.25 m/s and MIN_VELOCITY 0.075 m/s at this wheel radius. The dead zone is not
-# a safety margin: below it the wheels cannot overcome friction and simply do not turn, so a
-# command inside it produces no motion at all. Any env whose policy is meant to run on the
-# physical rover should train inside this envelope rather than let rl_rover.py clamp at
-# inference -- its own docstring warns that causes "jerky behavior right at the clamp
-# boundaries".
+# The real rover's envelope, from rover_control/rover.py. MIN is a dead zone, not a safety
+# margin: below it the wheels cannot overcome friction at all, so policies meant for hardware
+# should train inside this range rather than be clamped at inference.
 WHEEL_RADIUS = 0.0335
 MAX_WHEEL_SPEED = 0.25 / WHEEL_RADIUS  # ~7.46 rad/s
 MIN_WHEEL_SPEED = 0.075 / WHEEL_RADIUS  # ~2.24 rad/s

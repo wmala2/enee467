@@ -28,9 +28,8 @@ def s_curve_waypoints(length=1.6, amplitude=0.3, n=144):
 
 
 def circle_waypoints(r=0.45, n=144):
-    """Closed loop of constant curvature. The oval's curvature swings between 0.27 m and
-    1.5 m of radius, so a policy can learn a steering schedule keyed to where it is around
-    the lap; a circle removes that cue without being any tighter than the oval's ends."""
+    """Closed loop of constant curvature, removing the positional steering cue the oval's
+    varying curvature offers."""
     return [(r * math.cos(t), r * math.sin(t)) for t in [2 * math.pi * i / n for i in range(n + 1)]]
 
 
@@ -41,46 +40,11 @@ def figure8_waypoints(a=0.8, b=0.45, n=160):
     return [(a * math.sin(t), b * math.sin(2 * t)) for t in angles]
 
 
-def wave_waypoints(length=1.8, amplitude=0.20, cycles=1.5, n=144):
-    """Open path at three times the training s-curve's spatial frequency, so bends arrive
-    far more often than anything seen in training and the far-band curvature preview has to
-    actually be used rather than smoothed over.
-
-    Amplitude and frequency are set together to land the tightest bend near 0.18 m of radius:
-    harder than the oval's 0.27 m, but clear of the 0.081 m the rover physically cannot turn
-    inside (MAX_LINEAR_VEL / MAX_ANGULAR_VEL). A first pass at 2 cycles and 0.25 m amplitude
-    gave 0.085 m, which would have measured the drivetrain's limits, not the policy's."""
-    return [
-        (x, amplitude * math.sin(2 * math.pi * cycles * (x + length / 2) / length))
-        for x in [length * i / n - length / 2 for i in range(n + 1)]
-    ]
-
-
-def hairpin_waypoints(straight=0.5, r=0.25, n=144):
-    """Open path: straight out, 180 degrees around a tight bend, straight back. At r=0.25 m
-    the bend is tighter than any curvature in training (the oval's tightest is 0.27 m), and
-    is the case most likely to swing the line out of the camera's field of view."""
-    pts = [(x, -r) for x in [-straight + straight * i / (n // 4) for i in range(n // 4)]]
-    pts += [
-        (r * math.sin(t), -r * math.cos(t))
-        for t in [math.pi * i / (n // 2) for i in range(n // 2 + 1)]
-    ]
-    pts += [(-straight * i / (n // 4), r) for i in range(1, n // 4 + 1)]
-    return pts
-
-
 def goomba_waypoints():
-    """Three-lobed clover track, traced from the CAD part rather than a formula.
+    """Three-lobed clover, traced from the CAD part by scripts/extract_centerline.py.
 
-    Unlike every other track here this one has no closed form: it comes from an OnShape part
-    studio, exported as a surface mesh with no notion of a path along it. Its centerline was
-    extracted once by scripts/extract_centerline.py and stored beside the mesh, so runtime
-    needs neither the STL nor the rasterizer.
-
-    Two things happened during that extraction and are baked into the stored file. The part is
-    17.8 cm across, smaller than the rover, so it is scaled 7x. And the three points where its
-    lobes meet are cusps, 3 mm of radius at source scale, which no differential-drive rover
-    takes at speed; they are rounded until the tightest radius is 0.190 m, between the
+    The stored centerline is scaled 7x (the part is 17.8 cm across, smaller than the rover)
+    and its three lobe-junction cusps are rounded from 3 mm to a 0.190 m radius, between the
     figure-eight's 0.155 m and the oval's 0.267 m."""
     path = os.path.join(os.path.dirname(__file__), "../assets/objects/tracks/goomba_centerline.csv")
     points = np.loadtxt(path, delimiter=",")

@@ -1,7 +1,7 @@
 # RL goal navigation: drive to a coordinate, avoid what's in the way
 
 `GoalNav-v0` is the second RL task in this repo, and it is deliberately built on the same
-footing as `docs/rl-line-follower.md`'s `LineFollowerReal-v0`: same rover, same action space,
+footing as the removed `LineFollowerReal-v0`: same rover, same action space,
 same sim-to-real constraints, same domain-randomization ranges. What changes is the job.
 Instead of "keep a line centered in the camera", the command is a coordinate:
 

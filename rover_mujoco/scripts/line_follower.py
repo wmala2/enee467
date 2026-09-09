@@ -10,10 +10,12 @@ import csv
 import json
 import math
 from pathlib import Path
-import re
 import time
-import xml.etree.ElementTree as ET
 
+from envs.line_scene import build_model
+from envs.line_scene import CAM_RES
+from envs.line_scene import CONTROL_HZ
+from envs.line_scene import LINE_WIDTH
 from envs.pid import centroid_error
 from envs.pid import LinePID
 from envs.tracks import circle_waypoints
@@ -22,7 +24,6 @@ from envs.tracks import oval_waypoints
 from envs.tracks import path_length_table
 from envs.tracks import project_arc_length
 from envs.tracks import s_curve_waypoints
-from gen_track import build_track_xml
 import mujoco
 import mujoco.viewer
 import numpy as np
@@ -33,33 +34,6 @@ TRACKS = {
     "oval": oval_waypoints,
     "s_curve": s_curve_waypoints,
 }
-ROVER_DIR = Path(__file__).resolve().parents[1] / "assets/robots/rover"
-LINE_WIDTH = 0.0508
-CAM_RES = 64
-CONTROL_HZ = 10
-
-
-def build_model(waypoints, tilt):
-    """Reuse the CAD rover and velocity-servo scene, replacing only the baseline track."""
-    # Expand the two local includes in memory so existing RL scene assets stay reproducible.
-    scene = ET.parse(ROVER_DIR / "rover_line_oval.xml").getroot()
-    for include in list(scene.findall("include")):
-        scene.remove(include)
-    # MuJoCo accepts double hyphens in legacy comments, but ElementTree rejects them.
-    rover_xml = (ROVER_DIR / "rover.xml").read_text(encoding="utf-8")
-    rover = ET.fromstring(re.sub(r"<!--.*?-->", "", rover_xml, flags=re.DOTALL))
-    for mesh in rover.findall(".//mesh"):
-        mesh.set("file", str(ROVER_DIR / mesh.attrib["file"]))
-    scene.extend(rover)
-    scene.extend(ET.fromstring(build_track_xml("pid_track", waypoints, LINE_WIDTH)))
-    # MuJoCo exports compiled bindings without type stubs; exercise them in simulation tests.
-    model = mujoco.MjModel.from_xml_string(ET.tostring(scene, encoding="unicode"))  # ty: ignore[unresolved-attribute]
-    # Match the measured 45-degree mount height above the CAD plate; forward offset is provisional.
-    camera = model.camera("top_cam")
-    camera.pos[:] = [0, -0.108, -0.0243587 + 0.05]
-    angle = math.radians(tilt) / 2
-    camera.quat[:] = [0, 0, math.sin(angle), math.cos(angle)]
-    return model
 
 
 def camera_overlay(image, error, mask):

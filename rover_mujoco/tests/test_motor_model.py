@@ -154,39 +154,51 @@ def test_production_timestep_reproduces_the_model():
     )
 
 
-def test_loaded_wheel_in_the_real_scene_is_stable():
-    """The production env must not oscillate, which is what the bias above could become.
+def test_split_form_is_stable_across_the_inertias_the_rover_spans():
+    """The implicit split must hold from a bare wheel up to a wheel dragging the chassis.
 
-    A free wheel carrying only its own 2e-5 kg m^2 is close enough to the explicit stability
-    limit at 2 ms to matter; in the real scene ground contact couples the chassis mass and the
-    friction terms damp the loop, and the wheel settles flat. This test is the guard on that:
-    if a future change lightens the wheel, shortens the contact, or raises VELOCITY_KP, the
-    speed trace starts alternating and this catches it before a policy trains against it.
+    A free wheel carries about 2.0e-5 kg m^2 and in contact it also drags the rover, which
+    raises the effective inertia by orders of magnitude. The old explicit form settled
+    backwards at -1.79 rad/s at the free-wheel figure and only became correct above roughly
+    2.8e-5; it looked fine in the loaded scene purely because contact hid the light end. That
+    is the case this covers, since a wheel leaving the ground reaches it for real.
+
+    The sweep starts at 1.1e-5 because below that both forms diverge: that is the timestep
+    against the electrical time constant, which moving the term into the integrator does not
+    claim to fix. Within the covered range every case must land on the model's own fixed
+    point and settle rather than alternate.
     """
-    import envs as _envs  # noqa: F401  (registers the environments)
-    import gymnasium as gym
-
-    environment = gym.make(
-        "LineFollowerReal-v0", track="rover_line_oval_real.xml", domain_randomize=False
-    )
-    unwrapped = environment.unwrapped
-    try:
-        environment.reset(seed=0)
-        speeds = []
-        for _ in range(60):
-            _, _, terminated, truncated, _ = environment.step(np.zeros(2, dtype=np.float32))
-            speeds.append(float(unwrapped.data.qvel[unwrapped._wheel_dof_adr][1]))
-            if terminated or truncated:
-                break
-        # Guard against a vacuous pass: a two-sample trace has a tiny std for free.
-        assert len(speeds) >= 20, f"episode ended after {len(speeds)} steps; nothing was measured"
-        trace = np.asarray(speeds[len(speeds) // 2 :])
-        assert trace.std() < 0.05, f"wheel speed is not settling: std {trace.std():.4f}"
-        steps = np.diff(trace)
-        reversals = int(np.sum(np.sign(steps[:-1]) * np.sign(steps[1:]) < 0))
-        assert reversals <= len(steps) // 3, f"speed alternates every step: {reversals} reversals"
-    finally:
-        environment.close()
+    predicted = _predicted_speed()
+    for mass in (0.02, 0.035, 0.05, 0.5, 5.0):
+        xml = f"""
+        <mujoco>
+          <option timestep="0.002"/>
+          <worldbody>
+            <body name="wheel">
+              <joint name="axle" type="hinge" axis="0 0 1"/>
+              <geom type="cylinder" size="0.0335 0.01" mass="{mass}"/>
+            </body>
+          </worldbody>
+          <actuator><motor name="drive" joint="axle" gear="1"/></actuator>
+        </mujoco>
+        """
+        model = mujoco.MjModel.from_xml_string(xml)
+        data = mujoco.MjData(model)
+        dof = model.jnt_dofadr[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "axle")]
+        friction = motor.make_friction_model()
+        trace = []
+        for _ in range(6000):
+            speed = float(data.qvel[dof])
+            drive, electrical = motor.motor_drive_and_damping(5.0, speed)
+            motor.apply_friction(friction, model, dof, speed, extra_damping=float(electrical))
+            data.ctrl[0] = float(drive)
+            mujoco.mj_step(model, data)
+            trace.append(float(data.qvel[dof]))
+        tail = np.asarray(trace[-500:])
+        assert tail.mean() == pytest.approx(predicted, rel=0.01), (
+            f"mass {mass}: settled {tail.mean():.4f} vs predicted {predicted:.4f}"
+        )
+        assert tail.std() < 0.01, f"mass {mass}: not settling, std {tail.std():.5f}"
 
 
 def test_free_run_speed_matches_the_stall_derived_parameters():

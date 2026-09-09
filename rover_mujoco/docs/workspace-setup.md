@@ -8,7 +8,7 @@ the dependency set with whatever else you end up needing.
 - **Python 3.12.** Check with `python3 --version`. If you're outside that range, install
   a matching version: `uv python install 3.12` will fetch one for you without touching your
   system Python. (This floor was 3.10-3.12 before the sim-to-real work in
-  `docs/rl-line-follower.md` — `better-actuator-models` requires 3.12, so the range narrowed
+  `better-actuator-models` requires 3.12, so the range narrowed
   to keep the whole project on one Python version.)
 - **[uv](https://docs.astral.sh/uv/getting-started/installation/)**, which manages the
   virtual environment and every dependency below it:

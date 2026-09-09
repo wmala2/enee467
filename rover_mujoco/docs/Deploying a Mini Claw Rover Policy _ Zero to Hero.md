@@ -266,7 +266,8 @@ truncated = self._lost_steps >= MAX_LINE_LOST_STEPS or self._episode_steps >= MA
 
 ```python
 self._line_geom_ids = [
-    i for i in range(self.model.ngeom)
+    i
+    for i in range(self.model.ngeom)
     if (mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_GEOM, i) or "").startswith("line_")
 ]
 ```

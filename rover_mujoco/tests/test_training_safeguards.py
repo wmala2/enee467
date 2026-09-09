@@ -8,7 +8,6 @@ enough that there is never a reason to skip them before a long run.
 import subprocess
 import sys
 
-from envs.tasks.line_follower_env import LineFollowerEnv
 from envs.tasks.line_follower_ppo_env import LineFollowerPPOEnv
 from envs.tasks.line_follower_ppo_env import TRACKS
 import numpy as np
@@ -34,38 +33,6 @@ def test_penalty_terms_are_never_positive():
             )
             if terminated or truncated:
                 environment.reset(seed=3)
-    finally:
-        environment.close()
-
-
-def test_domain_randomization_does_not_accumulate():
-    """Randomized quantities must be re-derived from stored defaults, never compounded.
-
-    Randomization that applies each episode's jitter on top of the previous episode's value
-    walks away from the nominal model a little further every reset, so a long run spends most
-    of its samples on a scene that no longer resembles the robot. The failure is silent for
-    hours, since early episodes look right and the only symptom is a policy that will not
-    transfer. Returning to a seed after many intervening resets has to reproduce the same
-    scene exactly; under an accumulating randomizer it cannot.
-    """
-    environment = LineFollowerEnv(domain_randomize=True)
-    try:
-        environment.reset(seed=11)
-        first_camera = environment.model.cam_pos[environment._cam_id].copy()
-        first_light = environment.model.light_diffuse.copy()
-        for seed in range(40):
-            environment.reset(seed=seed)
-        environment.reset(seed=11)
-        np.testing.assert_allclose(
-            environment.model.cam_pos[environment._cam_id],
-            first_camera,
-            err_msg="camera pose drifted across resets; randomization is accumulating",
-        )
-        np.testing.assert_allclose(
-            environment.model.light_diffuse,
-            first_light,
-            err_msg="light intensity drifted across resets; randomization is accumulating",
-        )
     finally:
         environment.close()
 
