@@ -10,9 +10,9 @@ current baseline is 20/20 completions on the oval and 19/20 on the s-curve, so a
 reports one blended number cannot tell you whether a variant fixed the s-curve or just drew
 the oval more often.
 
-Every run writes TensorBoard, and --wandb adds Weights & Biases. W&B is left in offline mode by
-default (WANDB_MODE=offline) so it needs no account and uploads nothing; `wandb sync wandb/`
-pushes the runs later if you want the cross-run comparison and sweep plots.
+Every run writes TensorBoard, and --wandb adds Weights & Biases. With a `wandb login` on the
+machine the runs stream live; without one they fall back to offline mode, which needs no account
+and uploads nothing, and `wandb sync wandb/` pushes them later if you change your mind.
 """
 
 import argparse
@@ -95,6 +95,18 @@ def evaluate_per_track(model_path, episodes=20):
     return results
 
 
+def _wandb_has_credentials():
+    return bool(os.environ.get("WANDB_API_KEY")) or "api.wandb.ai" in _netrc_text()
+
+
+def _netrc_text():
+    try:
+        with open(os.path.expanduser("~/.netrc"), encoding="utf-8") as handle:
+            return handle.read()
+    except OSError:
+        return ""
+
+
 def run_variant(name, use_wandb, timesteps=None, episodes=20):
     config = {**DEFAULTS, **VARIANTS[name]}
     if timesteps is not None:
@@ -134,7 +146,7 @@ def run_variant(name, use_wandb, timesteps=None, episodes=20):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--variant", help="run only this variant")
+    parser.add_argument("--variant", help="comma-separated variants to run (default: all)")
     parser.add_argument("--list", action="store_true", help="list variants and exit")
     parser.add_argument("--wandb", action="store_true", help="also log to Weights & Biases")
     parser.add_argument(
@@ -148,12 +160,16 @@ def main():
             print(f"  {name:12s} {overrides or 'defaults'}")
         return
 
-    if args.wandb:
-        # Offline unless the caller has explicitly chosen otherwise: no account needed and
-        # nothing leaves the machine. `wandb sync wandb/` uploads afterwards.
+    if args.wandb and not _wandb_has_credentials():
+        # No login, so log locally rather than failing the run: nothing leaves the machine, and
+        # `wandb sync wandb/` uploads it afterwards if wanted.
         os.environ.setdefault("WANDB_MODE", "offline")
+        print("wandb: no credentials found, logging offline to ./wandb/")
 
-    names = [args.variant] if args.variant else list(VARIANTS)
+    names = args.variant.split(",") if args.variant else list(VARIANTS)
+    unknown = [n for n in names if n not in VARIANTS]
+    if unknown:
+        parser.error(f"unknown variant(s) {unknown}; choose from {list(VARIANTS)}")
     summary = {}
     for name in names:
         summary[name] = run_variant(name, args.wandb, args.timesteps, args.episodes)
