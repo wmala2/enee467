@@ -126,7 +126,10 @@ def main():
     ):
         parser.error("step, worker, and episode counts must be positive")
     if args.n_envs < len(TRACKS):
-        parser.error("use at least three workers so every track participates in training")
+        parser.error(
+            f"use at least {len(TRACKS)} workers so every track participates in training; "
+            f"tracks are {list(TRACKS)}"
+        )
     args.output.mkdir(parents=True, exist_ok=False)
     torch.set_num_threads(1)
     hyperparameters: dict[str, Any] = {
