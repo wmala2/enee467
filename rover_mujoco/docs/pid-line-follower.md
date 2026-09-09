@@ -1,67 +1,147 @@
-# Classical line following: PID and bang-bang
+# PID line-following bring-up
 
-`scripts/line_follower.py` drives the rover around one of the black line tracks
-(`assets/objects/tracks/`) using nothing but its onboard camera: find where the line is in the
-image, steer to keep it centered. This is the classical-control counterpart to
-`docs/rl-line-follower.md`'s RL version, and a good place to build intuition before jumping to
-RL — same sensor, same steering problem, much simpler controller.
+The baseline runs the CAD rover with MuJoCo velocity servos, camera-only steering,
+and a 10 Hz command loop; physics advances at the scene's 2 ms timestep.
+`envs/pid.py` contains the controller and centroid extraction, while
+`scripts/line_follower.py` handles simulation and evaluation.
 
-## Two controllers, same error signal
+## Run
 
-Both controllers steer off `line_error()`: the black line's centroid, projected to a single
-number in `[-1, 1]` (0 = centered, negative = line is to the camera's left, positive = right).
+From `rover_mujoco`, with the workspace environment installed:
 
-- **PID** (`CONTROLLER = "pid"`, the default): proportional-integral-derivative control on
-  that error, same as most real line followers. Tune `KP`/`KI`/`KD` at the top of the file.
-- **Bang-bang** (`CONTROLLER = "bang_bang"`): the simplest controller that can work at all —
-  turn hard one way or the other with no proportional response, plus a small deadband
-  (`BANG_DEADBAND`) around zero so it doesn't chatter when already centered. Worth trying
-  first: it makes obvious why PID's proportional term (a *gentler* turn for a *smaller* error)
-  produces smoother tracking than bang-bang's always-hard turns.
+```sh
+# Watch the rover and the exact camera pixels used for steering.
+uv run scripts/line_follower.py --track figure8 --camera
 
-Switch between them by editing `CONTROLLER` and re-running; both share the same camera,
-tracks, and starting logic.
-
-## Camera angle
-
-The real rover's camera mount can tilt, and the sim models that with the `top_cam` quaternion
-in `assets/robots/rover/rover.xml` — the single place the angle is set. It runs from 0
-(straight down) to 90 (forward-facing, perpendicular to the rover), written as
-`quat="0 0 sin(t/2) cos(t/2)"`; the 60° default is `quat="0 0 0.5 0.866"`.
-
-This used to be applied at runtime by an `envs/camera.py` helper that overwrote `cam_quat`
-after compile, so a script could pick its own angle. Every caller passed the same 60°, so the
-indirection only obscured where the angle really came from. When the mount is CADed in with a
-rotational joint, the tilt becomes that joint's position and the quat becomes its rest pose.
-
-Worth knowing before you start changing it:
-
-- The default is **60°**. The camera sits directly above the caster, so a shallow tilt points
-  it at the rover's own chassis rather than the track — 13.2% of the frame is its own body.
-  Measured with `line_error()` over 12 poses on each track: 45° finds the line 0/12 times,
-  55° finds it 9/12 and 7/12, and 60° finds it 12/12 on both, well centred.
-- This replaced a `~15.2°` default that belonged to an older mount, where the camera sat on
-  the opposite end of the chassis from the caster and the drive convention was inverted to
-  match. See the note in `rover.xml`.
-
-## Tracks
-
-The two tracks (`track_oval`, `track_s_curve`) are generated procedurally by
-`scripts/gen_track.py` from simple parametric waypoints, not exported from OnShape. If you'd
-rather design a track visually and export it the same way the rover itself gets exported, see
-`docs/onshape-to-robot-mjcf.md` for the CAD-to-MJCF workflow; a track is just flat geometry, so
-the same pipeline applies. Either way, a new track needs a waypoint function (see
-`envs/tracks.py`) so `line_follower.py` knows where to spawn the rover facing the right
-direction — that's the only piece tied to *how* the track's shape was authored.
-
-## Running it
-
-```shell
-uv run python scripts/line_follower.py
+# Evaluate fresh initial offsets without opening a viewer.
+MUJOCO_GL=egl uv run scripts/line_follower.py --headless --track all --episodes 20 --seed 100
 ```
 
-Picks a track at random each run and drives it with whichever `CONTROLLER` is set. Verified
-end-to-end headlessly on both tracks with both controllers before shipping this: PID completes
-the oval with zero line-loss frames, and briefly loses/reacquires the line a handful of times
-on the tighter S-curve (its gains are tuned loosely, not to be optimal — a good first thing to
-improve); bang-bang completes both tracks with zero line-loss, just less smoothly.
+`MUJOCO_GL=egl` selects offscreen rendering on supported Linux systems; headless
+execution still renders the onboard camera.
+Available tracks are `circle`, `figure8`, `oval`, and `s_curve`.
+The runner builds continuous black lines from the shared waypoint functions, with
+width **0.0508 m (2 inches)**; the figure eight is a generated path with a crossing,
+replacing the old mesh-based baseline track selection.
+The runner constructs its scene in memory without writing the shared RL asset files.
+
+The default output folder is `artifacts/pid/<timestamp>` and contains the exact
+controller configuration, JSON episode outcomes, CSV trajectories, initial camera
+overlays, and a trajectory comparison plot.
+Use a fresh `--output` directory for each experiment to preserve previous results.
+
+## Controller and measurements
+
+The controller samples the bottom 15% of a 64×64 RGB image, thresholds dark pixels,
+and normalizes the horizontal centroid around the true pixel center.
+A missing line is represented by `None`, distinct from a centered line with zero error.
+Detections require at least six dark pixels, rejecting an isolated caster pixel that
+otherwise made a blank floor appear to contain a centered line.
+Red pixels in the diagnostic view are the detections; green marks the centroid.
+
+Defaults are `--kp 2 --ki 0 --kd 0.1 --speed 3`, where speed is the forward
+wheel-speed command in rad/s (about 0.10 m/s from the wheel radius).
+The PID uses elapsed seconds for both integral and derivative, suppresses derivative
+kick on initialization/reacquisition, and freezes integration when error drives further
+into saturation.
+With zero integral gain the default is a **PD setting of the PID controller**;
+a nonzero integral term is available for investigating measured persistent bias.
+Steering is limited so both wheel commands remain within ±10 rad/s.
+For the CAD joint signs, forward motion is `[-speed, +speed]` and the same steering
+correction is added to both commands.
+
+The last steering command is held through brief camera dropouts; 0.5 seconds of
+consecutive missing detections stops the command and fails the episode.
+`--controller bang_bang` retains a simple comparison controller.
+
+## Camera assumptions
+
+The existing XML camera settles approximately 15.4 cm above the ground.
+For this PID experiment, the runner sets a **45-degree tilt from straight down**
+and places the lens **5 cm above the CAD baseplate top**, at local
+`[0, -0.108, 0.0256413]` m; it settles approximately 11.0 cm above the ground.
+The extra 1 cm forward shift from the old mount is provisional because the physical
+forward displacement was described qualitatively rather than measured.
+The model's travel direction is local **−Y**, so moving the camera forward decreases Y.
+
+The existing 60-degree vertical field of view and square image are retained as
+assumptions; the reported 2.75-inch viewing distance has not yet been matched to a
+particular image row or image edge.
+The CAD plate settles near 6 cm above ground, slightly different from the height
+inferred from the approximate physical measurements.
+`--camera-tilt` changes orientation for diagnostics while holding lens position fixed;
+it does not model the physical mount's movement when tilted.
+These runs establish a simulation baseline, not a calibrated hardware camera model.
+
+## Evaluation contract
+
+Each seed adds an initial lateral offset uniformly within ±1 cm and heading offset
+within ±5 degrees, then lets the chassis settle for one simulated second.
+All episodes begin at the same end/start of each track and traverse the same direction;
+these are small spawn perturbations, not domain randomization or arbitrary recovery tests.
+
+Success requires all of the following:
+
+- Advance to within 3 cm of a full ordered lap or open-path traversal.
+- Keep the base origin within **6 cm** of the corresponding track segment throughout.
+- Avoid losing the line for 0.5 seconds consecutively.
+- Finish within 120 simulated seconds.
+
+The 6 cm criterion is a bring-up tolerance, not a claim that the base origin always
+stays inside the tape's 2.54 cm half-width.
+The evaluator projects onto a small neighborhood of the previous segment and unwraps
+closed-loop arc length, preventing the figure-eight crossing from being mistaken for
+a shortcut to the other branch.
+Ground-truth position is used only for scoring, never as controller input.
+Failures and their deviations are retained in the results, and timeouts are failures.
+
+A zero-steering negative control (`--track figure8 --kp 0 --ki 0 --kd 0`)
+failed from line loss at 5.6% progress, showing that completion requires
+steering rather than a permissive progress score.
+
+The open S-curve currently stops from line loss near its endpoint: the forward camera
+runs out of tape before the base reaches the evaluator's 3 cm finish tolerance.
+This is recorded as a failure; reaching most of the path does not count as completion.
+The circle, figure eight, and oval provide the three closed tracks for the initial
+line-following baseline; endpoint recognition is a separate behavior to resolve before
+using open paths as a success benchmark.
+
+## Measured baseline (2026-09-09)
+
+Validation used seeds 100–119, the defaults above, and 6 cm maximum base deviation.
+Results and raw trajectories are in `artifacts/pid/validation`; the no-steering control
+is in `artifacts/pid/no-steering`.
+
+| Track | Completed | Mean base error | Worst base error |
+|---|---:|---:|---:|
+| circle | 20/20 | 2.23 cm | 2.69 cm |
+| figure8 | 20/20 | 1.84 cm | 5.01 cm |
+| oval | 20/20 | 1.97 cm | 4.07 cm |
+| s_curve | 0/20 | 1.88 cm | 4.17 cm |
+
+Errors include all episodes, including incomplete S-curve trials.
+The three closed tracks had zero line-loss frames across all 60 trials.
+These empirical results cover small initial perturbations under fixed simulation dynamics.
+Seven regression tests, Ruff lint/format, and ty passed; the viewer and camera windows
+also passed a short smoke run under Xvfb.
+
+## Verification
+
+```sh
+# Check control timing math, saturation, missing detections, crossing projection, and scene geometry.
+MUJOCO_GL=egl uv run python -m pytest tests/test_pid_baseline.py -q
+
+# Check only the files changed for this baseline.
+uv run ruff check envs/pid.py envs/tracks.py scripts/gen_track.py scripts/line_follower.py tests/test_pid_baseline.py
+uv run ruff format --check envs/pid.py envs/tracks.py scripts/gen_track.py scripts/line_follower.py tests/test_pid_baseline.py
+uv run ty check --python ../.venv/bin/python envs/pid.py envs/tracks.py scripts/gen_track.py scripts/line_follower.py tests/test_pid_baseline.py
+```
+
+MuJoCo's compiled exports lack type stubs in this installation, so the runner uses
+narrow `ty` suppressions on those binding calls, which are exercised by scene compilation
+and the headless runs.
+The rendering and stepping API follows the [MuJoCo Python documentation](https://mujoco.readthedocs.io/en/stable/python.html).
+
+Before RL integration, compare simulated and physical camera frames, measure the
+mount's forward offset and actual camera field of view, and decide whether to tighten
+centering tolerance or require multiple consecutive laps.

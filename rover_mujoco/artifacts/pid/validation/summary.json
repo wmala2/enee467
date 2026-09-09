@@ -1,0 +1,1382 @@
+{
+  "circle": {
+    "success_rate": 1.0,
+    "episodes": [
+      {
+        "seed": 100,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9900434380345543,
+        "duration_s": 25.1,
+        "mean_deviation_cm": 2.2691086040761324,
+        "max_deviation_cm": 2.6884614656336714,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.006699632610040177,
+        "spawn_yaw_deg": 0.9655402696788726,
+        "camera_world_m": [
+          0.4391109793615855,
+          0.10796861161158822,
+          0.10984879530455081
+        ]
+      },
+      {
+        "seed": 101,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9901414982556088,
+        "duration_s": 25.1,
+        "mean_deviation_cm": 2.2568296868003253,
+        "max_deviation_cm": 2.5791872128397406,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.00887065011221108,
+        "spawn_yaw_deg": -1.4057896665842684,
+        "camera_world_m": [
+          0.4414173914713245,
+          0.10800207284553572,
+          0.10984879530455158
+        ]
+      },
+      {
+        "seed": 102,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9905177921328258,
+        "duration_s": 25.200000000000003,
+        "mean_deviation_cm": 2.210979859639917,
+        "max_deviation_cm": 2.6538964040158244,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": -0.006800177099913927,
+        "spawn_yaw_deg": 0.8594351484022731,
+        "camera_world_m": [
+          0.45280779952443434,
+          0.10827068422766901,
+          0.10984879530455084
+        ]
+      },
+      {
+        "seed": 103,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9921040694103774,
+        "duration_s": 25.200000000000003,
+        "mean_deviation_cm": 2.1831023305306885,
+        "max_deviation_cm": 2.6094691105134986,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": -0.0037463353455410497,
+        "spawn_yaw_deg": -2.756817773739524,
+        "camera_world_m": [
+          0.45658229838816705,
+          0.10824049176321875,
+          0.1098487953045513
+        ]
+      },
+      {
+        "seed": 104,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9923367155693469,
+        "duration_s": 25.200000000000003,
+        "mean_deviation_cm": 2.215323638535292,
+        "max_deviation_cm": 2.5994499325002383,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.006771296247390713,
+        "spawn_yaw_deg": 1.921481486273471,
+        "camera_world_m": [
+          0.43723617827530503,
+          0.1078820804038085,
+          0.10984879530455212
+        ]
+      },
+      {
+        "seed": 105,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9895280624542395,
+        "duration_s": 25.1,
+        "mean_deviation_cm": 2.236814359929285,
+        "max_deviation_cm": 2.6494499016648487,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.002763906672030891,
+        "spawn_yaw_deg": 4.914597754812582,
+        "camera_world_m": [
+          0.43560991002318533,
+          0.10750913885096201,
+          0.1098487953045509
+        ]
+      },
+      {
+        "seed": 106,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.989659552621974,
+        "duration_s": 25.1,
+        "mean_deviation_cm": 2.2437052467611633,
+        "max_deviation_cm": 2.5455011761910105,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.009648157109266713,
+        "spawn_yaw_deg": -4.595998471063428,
+        "camera_world_m": [
+          0.44666080613079584,
+          0.10780152742594788,
+          0.10984879530455158
+        ]
+      },
+      {
+        "seed": 107,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9933041874604521,
+        "duration_s": 25.200000000000003,
+        "mean_deviation_cm": 2.251057302975557,
+        "max_deviation_cm": 2.5948556546469117,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.0029707183880051564,
+        "spawn_yaw_deg": -0.22311430678135902,
+        "camera_world_m": [
+          0.4450826891329387,
+          0.10811363193108636,
+          0.10984879530455183
+        ]
+      },
+      {
+        "seed": 108,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9898483678761265,
+        "duration_s": 25.1,
+        "mean_deviation_cm": 2.2422633022977596,
+        "max_deviation_cm": 2.58774117410123,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.007119876346571899,
+        "spawn_yaw_deg": 1.3227515526956615,
+        "camera_world_m": [
+          0.43801687854900184,
+          0.10793121432019154,
+          0.10984879530455152
+        ]
+      },
+      {
+        "seed": 109,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9924709469311024,
+        "duration_s": 25.200000000000003,
+        "mean_deviation_cm": 2.181545152440821,
+        "max_deviation_cm": 2.4915724011287255,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.0008748449783555837,
+        "spawn_yaw_deg": 3.414088455797479,
+        "camera_world_m": [
+          0.44031930444746553,
+          0.10781792065420946,
+          0.10984879530455133
+        ]
+      },
+      {
+        "seed": 110,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9927330985517708,
+        "duration_s": 25.200000000000003,
+        "mean_deviation_cm": 2.238727237340793,
+        "max_deviation_cm": 2.5702401001169517,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.008609856230206001,
+        "spawn_yaw_deg": 0.12437781234062659,
+        "camera_world_m": [
+          0.4387888436710365,
+          0.10797681517305623,
+          0.10984879530455129
+        ]
+      },
+      {
+        "seed": 111,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9900814029384137,
+        "duration_s": 25.200000000000003,
+        "mean_deviation_cm": 2.168349094717046,
+        "max_deviation_cm": 2.5862079901444233,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": -0.006926772880953343,
+        "spawn_yaw_deg": -3.3069669904103236,
+        "camera_world_m": [
+          0.4608003636331028,
+          0.10827764791751396,
+          0.10984879530455145
+        ]
+      },
+      {
+        "seed": 112,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9915975495012038,
+        "duration_s": 25.200000000000003,
+        "mean_deviation_cm": 2.166040571828792,
+        "max_deviation_cm": 2.6030356156484573,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": -0.007670819739846893,
+        "spawn_yaw_deg": 3.441535729857376,
+        "camera_world_m": [
+          0.4488112777304019,
+          0.10800011247319946,
+          0.1098487953045516
+        ]
+      },
+      {
+        "seed": 113,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9903449016993416,
+        "duration_s": 25.200000000000003,
+        "mean_deviation_cm": 2.2001247917754245,
+        "max_deviation_cm": 2.626283087685164,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": -0.008588437874388833,
+        "spawn_yaw_deg": -3.4913105011024523,
+        "camera_world_m": [
+          0.46280949900253404,
+          0.10830086912602603,
+          0.10984879530455134
+        ]
+      },
+      {
+        "seed": 114,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9935968661565315,
+        "duration_s": 25.200000000000003,
+        "mean_deviation_cm": 2.269471765934713,
+        "max_deviation_cm": 2.5974360411440642,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.004557765490193705,
+        "spawn_yaw_deg": -3.578408828717726,
+        "camera_world_m": [
+          0.44983076817285333,
+          0.1080075415317603,
+          0.10984879530455167
+        ]
+      },
+      {
+        "seed": 115,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9921486127221102,
+        "duration_s": 25.200000000000003,
+        "mean_deviation_cm": 2.24741617871908,
+        "max_deviation_cm": 2.5681494298641248,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.004046760483775605,
+        "spawn_yaw_deg": 1.0370907146534907,
+        "camera_world_m": [
+          0.4416282107523223,
+          0.1080211657516733,
+          0.10984879530455134
+        ]
+      },
+      {
+        "seed": 116,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9922033272232939,
+        "duration_s": 25.200000000000003,
+        "mean_deviation_cm": 2.189281795882105,
+        "max_deviation_cm": 2.6241814316976244,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": -0.0065526046825727935,
+        "spawn_yaw_deg": 3.769221146366509,
+        "camera_world_m": [
+          0.44707676094020027,
+          0.10792329650433402,
+          0.10984879530455145
+        ]
+      },
+      {
+        "seed": 117,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9894642631960906,
+        "duration_s": 25.1,
+        "mean_deviation_cm": 2.23840887325091,
+        "max_deviation_cm": 2.508396872723748,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.007500235201477202,
+        "spawn_yaw_deg": -3.4211901429326677,
+        "camera_world_m": [
+          0.44659233878318816,
+          0.10795498397431248,
+          0.10984879530455123
+        ]
+      },
+      {
+        "seed": 118,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9910837662212755,
+        "duration_s": 25.1,
+        "mean_deviation_cm": 2.2780404362120668,
+        "max_deviation_cm": 2.6649625231226364,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.008613792892503377,
+        "spawn_yaw_deg": 4.3756191680193215,
+        "camera_world_m": [
+          0.4307738158033894,
+          0.10748613635221972,
+          0.10984879530455098
+        ]
+      },
+      {
+        "seed": 119,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9910963950144764,
+        "duration_s": 25.1,
+        "mean_deviation_cm": 2.274150456668607,
+        "max_deviation_cm": 2.5700955101131955,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.009124807987492196,
+        "spawn_yaw_deg": 2.321122124777531,
+        "camera_world_m": [
+          0.43412986584665436,
+          0.1077863018988661,
+          0.10984879530455167
+        ]
+      }
+    ]
+  },
+  "figure8": {
+    "success_rate": 1.0,
+    "episodes": [
+      {
+        "seed": 100,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9952130667295305,
+        "duration_s": 46.2,
+        "mean_deviation_cm": 1.8245254586592405,
+        "max_deviation_cm": 5.014866667084377,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.006699632610040177,
+        "spawn_yaw_deg": 0.9655402696788726,
+        "camera_world_m": [
+          0.8066402885025494,
+          -0.10831296520916064,
+          0.10984879530455083
+        ]
+      },
+      {
+        "seed": 101,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9960994700613361,
+        "duration_s": 46.300000000000004,
+        "mean_deviation_cm": 1.8327940652213734,
+        "max_deviation_cm": 4.976285610965896,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.00887065011221108,
+        "spawn_yaw_deg": -1.4057896665842684,
+        "camera_world_m": [
+          0.8043343416671636,
+          -0.10825581919879088,
+          0.1098487953045517
+        ]
+      },
+      {
+        "seed": 102,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9947880159830816,
+        "duration_s": 46.1,
+        "mean_deviation_cm": 1.8530925839198866,
+        "max_deviation_cm": 5.002780209314064,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": -0.006800177099913927,
+        "spawn_yaw_deg": 0.8594351484022731,
+        "camera_world_m": [
+          0.7929421720648351,
+          -0.1080768794244895,
+          0.10984879530455166
+        ]
+      },
+      {
+        "seed": 103,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9947130690449134,
+        "duration_s": 46.1,
+        "mean_deviation_cm": 1.8650711286046002,
+        "max_deviation_cm": 4.931126975239774,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": -0.0037463353455410497,
+        "spawn_yaw_deg": -2.756817773739524,
+        "camera_world_m": [
+          0.7891717710392051,
+          -0.10789847156835514,
+          0.1098487953045515
+        ]
+      },
+      {
+        "seed": 104,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9962584565393723,
+        "duration_s": 46.300000000000004,
+        "mean_deviation_cm": 1.8228889668707817,
+        "max_deviation_cm": 4.972655823183089,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.006771296247390713,
+        "spawn_yaw_deg": 1.921481486273471,
+        "camera_world_m": [
+          0.8085170415634341,
+          -0.10830013121081423,
+          0.10984879530455147
+        ]
+      },
+      {
+        "seed": 105,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9955036188957298,
+        "duration_s": 46.2,
+        "mean_deviation_cm": 1.8286778037860842,
+        "max_deviation_cm": 4.98568515903376,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.002763906672030891,
+        "spawn_yaw_deg": 4.914597754812582,
+        "camera_world_m": [
+          0.8101567019412579,
+          -0.10799134702231067,
+          0.10984879530455123
+        ]
+      },
+      {
+        "seed": 106,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9952458821034508,
+        "duration_s": 46.2,
+        "mean_deviation_cm": 1.830778926899667,
+        "max_deviation_cm": 4.982263652613953,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.009648157109266713,
+        "spawn_yaw_deg": -4.595998471063428,
+        "camera_world_m": [
+          0.7991028485279746,
+          -0.10784950000023245,
+          0.10984879530455197
+        ]
+      },
+      {
+        "seed": 107,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9962033239328406,
+        "duration_s": 46.300000000000004,
+        "mean_deviation_cm": 1.822153892037608,
+        "max_deviation_cm": 4.97378430355409,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.0029707183880051564,
+        "spawn_yaw_deg": -0.22311430678135902,
+        "camera_world_m": [
+          0.8006674904802668,
+          -0.10822334226936434,
+          0.10984879530455144
+        ]
+      },
+      {
+        "seed": 108,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9947284371723843,
+        "duration_s": 46.2,
+        "mean_deviation_cm": 1.8316756538638508,
+        "max_deviation_cm": 4.9682043549234205,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.007119876346571899,
+        "spawn_yaw_deg": 1.3227515526956615,
+        "camera_world_m": [
+          0.8077350139358928,
+          -0.10831856620058798,
+          0.1098487953045506
+        ]
+      },
+      {
+        "seed": 109,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9945409435820259,
+        "duration_s": 46.2,
+        "mean_deviation_cm": 1.824004512343215,
+        "max_deviation_cm": 4.989883597150597,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.0008748449783555837,
+        "spawn_yaw_deg": 3.414088455797479,
+        "camera_world_m": [
+          0.8054388138500983,
+          -0.10811493506672332,
+          0.10984879530455097
+        ]
+      },
+      {
+        "seed": 110,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9945650485163121,
+        "duration_s": 46.2,
+        "mean_deviation_cm": 1.82509775200295,
+        "max_deviation_cm": 5.005377709445473,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.008609856230206001,
+        "spawn_yaw_deg": 0.12437781234062659,
+        "camera_world_m": [
+          0.8069618534773576,
+          -0.10833381391471868,
+          0.10984879530455162
+        ]
+      },
+      {
+        "seed": 111,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.996098000365168,
+        "duration_s": 46.2,
+        "mean_deviation_cm": 1.8584424993452642,
+        "max_deviation_cm": 4.9831222349418125,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": -0.006926772880953343,
+        "spawn_yaw_deg": -3.3069669904103236,
+        "camera_world_m": [
+          0.7849555008165655,
+          -0.10776993986021997,
+          0.10984879530455086
+        ]
+      },
+      {
+        "seed": 112,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9961247740333715,
+        "duration_s": 46.2,
+        "mean_deviation_cm": 1.8700027345733585,
+        "max_deviation_cm": 5.004129762193624,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": -0.007670819739846893,
+        "spawn_yaw_deg": 3.441535729857376,
+        "camera_world_m": [
+          0.7969462368632745,
+          -0.10796347477532438,
+          0.10984879530455106
+        ]
+      },
+      {
+        "seed": 113,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9942452031487623,
+        "duration_s": 46.1,
+        "mean_deviation_cm": 1.8642793873179437,
+        "max_deviation_cm": 4.936238855938935,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": -0.008588437874388833,
+        "spawn_yaw_deg": -3.4913105011024523,
+        "camera_world_m": [
+          0.7829470035333245,
+          -0.10771423689399756,
+          0.1098487953045515
+        ]
+      },
+      {
+        "seed": 114,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9953160050366787,
+        "duration_s": 46.2,
+        "mean_deviation_cm": 1.8286333233476564,
+        "max_deviation_cm": 4.940798886884951,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.004557765490193705,
+        "spawn_yaw_deg": -3.578408828717726,
+        "camera_world_m": [
+          0.7959272412019249,
+          -0.107930858900126,
+          0.10984879530455169
+        ]
+      },
+      {
+        "seed": 115,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9960613717249779,
+        "duration_s": 46.300000000000004,
+        "mean_deviation_cm": 1.8246979037710263,
+        "max_deviation_cm": 4.970330111149631,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.004046760483775605,
+        "spawn_yaw_deg": 1.0370907146534907,
+        "camera_world_m": [
+          0.8041229351857215,
+          -0.10826661771299838,
+          0.10984879530455158
+        ]
+      },
+      {
+        "seed": 116,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9949536339804902,
+        "duration_s": 46.1,
+        "mean_deviation_cm": 1.8567920744825817,
+        "max_deviation_cm": 4.938774814557376,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": -0.0065526046825727935,
+        "spawn_yaw_deg": 3.769221146366509,
+        "camera_world_m": [
+          0.7986824323051744,
+          -0.10795483903157516,
+          0.10984879530455194
+        ]
+      },
+      {
+        "seed": 117,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9955323754272017,
+        "duration_s": 46.300000000000004,
+        "mean_deviation_cm": 1.830138388589657,
+        "max_deviation_cm": 4.970409967000763,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.007500235201477202,
+        "spawn_yaw_deg": -3.4211901429326677,
+        "camera_world_m": [
+          0.7991652362397581,
+          -0.10800552712397266,
+          0.10984879530455127
+        ]
+      },
+      {
+        "seed": 118,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9958467709932006,
+        "duration_s": 46.2,
+        "mean_deviation_cm": 1.8453591529044422,
+        "max_deviation_cm": 5.012049671637097,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.008613792892503377,
+        "spawn_yaw_deg": 4.3756191680193215,
+        "camera_world_m": [
+          0.8149899684556704,
+          -0.1081582937753203,
+          0.10984879530455129
+        ]
+      },
+      {
+        "seed": 119,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9944560526479729,
+        "duration_s": 46.2,
+        "mean_deviation_cm": 1.826443277443459,
+        "max_deviation_cm": 4.981736184587224,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.009124807987492196,
+        "spawn_yaw_deg": 2.321122124777531,
+        "camera_world_m": [
+          0.8116247190181665,
+          -0.10832642310548017,
+          0.10984879530455184
+        ]
+      }
+    ]
+  },
+  "oval": {
+    "success_rate": 1.0,
+    "episodes": [
+      {
+        "seed": 100,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9928653363605868,
+        "duration_s": 28.700000000000003,
+        "mean_deviation_cm": 1.9758488140746482,
+        "max_deviation_cm": 4.015771176649984,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.006699632610040177,
+        "spawn_yaw_deg": 0.9655402696788726,
+        "camera_world_m": [
+          0.5879345952934963,
+          0.10784348785655215,
+          0.10984879530455102
+        ]
+      },
+      {
+        "seed": 101,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9916189238696975,
+        "duration_s": 28.6,
+        "mean_deviation_cm": 1.989324674806556,
+        "max_deviation_cm": 4.024943259338365,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.00887065011221108,
+        "spawn_yaw_deg": -1.4057896665842684,
+        "camera_world_m": [
+          0.5902405055652529,
+          0.10790209069553429,
+          0.1098487953045518
+        ]
+      },
+      {
+        "seed": 102,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9936398837628754,
+        "duration_s": 28.700000000000003,
+        "mean_deviation_cm": 1.9638356706454763,
+        "max_deviation_cm": 4.024944498330081,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": -0.006800177099913927,
+        "spawn_yaw_deg": 0.8594351484022731,
+        "camera_world_m": [
+          0.6016273084566558,
+          0.10829485984332927,
+          0.10984879530455272
+        ]
+      },
+      {
+        "seed": 103,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9935855611951099,
+        "duration_s": 28.700000000000003,
+        "mean_deviation_cm": 1.9290605347522403,
+        "max_deviation_cm": 4.041541598313553,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": -0.0037463353455410497,
+        "spawn_yaw_deg": -2.756817773739524,
+        "camera_world_m": [
+          0.605401912169897,
+          0.10830581726815659,
+          0.10984879530455156
+        ]
+      },
+      {
+        "seed": 104,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.993813507246439,
+        "duration_s": 28.6,
+        "mean_deviation_cm": 1.9817165471539309,
+        "max_deviation_cm": 4.071039069309146,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.006771296247390713,
+        "spawn_yaw_deg": 1.921481486273471,
+        "camera_world_m": [
+          0.5860608489449117,
+          0.10773652345020311,
+          0.1098487953045513
+        ]
+      },
+      {
+        "seed": 105,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9925963055509766,
+        "duration_s": 28.6,
+        "mean_deviation_cm": 1.9182974850417236,
+        "max_deviation_cm": 4.030768476557034,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.002763906672030891,
+        "spawn_yaw_deg": 4.914597754812582,
+        "camera_world_m": [
+          0.5844387429940275,
+          0.10734587512527416,
+          0.10984879530455136
+        ]
+      },
+      {
+        "seed": 106,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9935492100926745,
+        "duration_s": 28.6,
+        "mean_deviation_cm": 1.9900986530882139,
+        "max_deviation_cm": 4.040463287198475,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.009648157109266713,
+        "spawn_yaw_deg": -4.595998471063428,
+        "camera_world_m": [
+          0.5954857949056055,
+          0.10775871882789126,
+          0.10984879530455084
+        ]
+      },
+      {
+        "seed": 107,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.993715346204957,
+        "duration_s": 28.700000000000003,
+        "mean_deviation_cm": 1.9796284341427561,
+        "max_deviation_cm": 4.048156528136259,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.0029707183880051564,
+        "spawn_yaw_deg": -0.22311430678135902,
+        "camera_world_m": [
+          0.5939043692461954,
+          0.10805360077853168,
+          0.10984879530455122
+        ]
+      },
+      {
+        "seed": 108,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9925408540553238,
+        "duration_s": 28.6,
+        "mean_deviation_cm": 2.00010018674381,
+        "max_deviation_cm": 4.047604767059652,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.007119876346571899,
+        "spawn_yaw_deg": 1.3227515526956615,
+        "camera_world_m": [
+          0.5868409671875349,
+          0.10779416533273418,
+          0.10984879530455141
+        ]
+      },
+      {
+        "seed": 109,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9931432843649423,
+        "duration_s": 28.700000000000003,
+        "mean_deviation_cm": 1.9849040174500854,
+        "max_deviation_cm": 4.035113730633942,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.0008748449783555837,
+        "spawn_yaw_deg": 3.414088455797479,
+        "camera_world_m": [
+          0.5891444913488206,
+          0.10770597853648596,
+          0.10984879530455094
+        ]
+      },
+      {
+        "seed": 110,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9937276968516402,
+        "duration_s": 28.6,
+        "mean_deviation_cm": 2.014866308577733,
+        "max_deviation_cm": 4.0412315601606315,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.008609856230206001,
+        "spawn_yaw_deg": 0.12437781234062659,
+        "camera_world_m": [
+          0.5876123893136352,
+          0.10784817913452115,
+          0.10984879530455126
+        ]
+      },
+      {
+        "seed": 111,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9912188809199625,
+        "duration_s": 28.700000000000003,
+        "mean_deviation_cm": 1.970350878357603,
+        "max_deviation_cm": 4.038298267606393,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": -0.006926772880953343,
+        "spawn_yaw_deg": -3.3069669904103236,
+        "camera_world_m": [
+          0.6096193216977139,
+          0.1083889548950085,
+          0.10984879530455138
+        ]
+      },
+      {
+        "seed": 112,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.99368875919732,
+        "duration_s": 28.700000000000003,
+        "mean_deviation_cm": 1.929404687012036,
+        "max_deviation_cm": 4.025868592317643,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": -0.007670819739846893,
+        "spawn_yaw_deg": 3.441535729857376,
+        "camera_world_m": [
+          0.5976339738193133,
+          0.10798073566599618,
+          0.10984879530455116
+        ]
+      },
+      {
+        "seed": 113,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9928058998521564,
+        "duration_s": 28.8,
+        "mean_deviation_cm": 1.945464038775914,
+        "max_deviation_cm": 4.055846375199988,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": -0.008588437874388833,
+        "spawn_yaw_deg": -3.4913105011024523,
+        "camera_world_m": [
+          0.6116280845273275,
+          0.10843407752350871,
+          0.10984879530455166
+        ]
+      },
+      {
+        "seed": 114,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9907818937395906,
+        "duration_s": 28.6,
+        "mean_deviation_cm": 1.9764877513853079,
+        "max_deviation_cm": 4.034363740951433,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.004557765490193705,
+        "spawn_yaw_deg": -3.578408828717726,
+        "camera_world_m": [
+          0.5986533226906409,
+          0.10799927836504546,
+          0.10984879530455159
+        ]
+      },
+      {
+        "seed": 115,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9926988881779444,
+        "duration_s": 28.6,
+        "mean_deviation_cm": 1.9839199563966878,
+        "max_deviation_cm": 4.048228748899258,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.004046760483775605,
+        "spawn_yaw_deg": 1.0370907146534907,
+        "camera_world_m": [
+          0.590451104175156,
+          0.10792348073559017,
+          0.10984879530455229
+        ]
+      },
+      {
+        "seed": 116,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9923669953891447,
+        "duration_s": 28.700000000000003,
+        "mean_deviation_cm": 1.9170684744134092,
+        "max_deviation_cm": 4.039337079730733,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": -0.0065526046825727935,
+        "spawn_yaw_deg": 3.769221146366509,
+        "camera_world_m": [
+          0.595900397518828,
+          0.10788501524520944,
+          0.10984879530455112
+        ]
+      },
+      {
+        "seed": 117,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9919546577701683,
+        "duration_s": 28.6,
+        "mean_deviation_cm": 2.003344905631349,
+        "max_deviation_cm": 4.028854476342814,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.007500235201477202,
+        "spawn_yaw_deg": -3.4211901429326677,
+        "camera_world_m": [
+          0.5954156587039674,
+          0.1079114198532477,
+          0.10984879530455105
+        ]
+      },
+      {
+        "seed": 118,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.99246591942982,
+        "duration_s": 28.6,
+        "mean_deviation_cm": 2.0038999692402784,
+        "max_deviation_cm": 4.037921523629463,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.008613792892503377,
+        "spawn_yaw_deg": 4.3756191680193215,
+        "camera_world_m": [
+          0.5796031869197026,
+          0.1072701528052332,
+          0.10984879530455162
+        ]
+      },
+      {
+        "seed": 119,
+        "reason": "completed",
+        "success": true,
+        "progress_fraction": 0.9927914631399355,
+        "duration_s": 28.6,
+        "mean_deviation_cm": 2.04021017692417,
+        "max_deviation_cm": 4.056022190348836,
+        "line_loss_frames": 0,
+        "spawn_lateral_m": 0.009124807987492196,
+        "spawn_yaw_deg": 2.321122124777531,
+        "camera_world_m": [
+          0.5829557652459944,
+          0.10760688684619019,
+          0.10984879530455148
+        ]
+      }
+    ]
+  },
+  "s_curve": {
+    "success_rate": 0.0,
+    "episodes": [
+      {
+        "seed": 100,
+        "reason": "line_lost",
+        "success": false,
+        "progress_fraction": 0.9673209723058251,
+        "duration_s": 18.1,
+        "mean_deviation_cm": 1.9108689540865365,
+        "max_deviation_cm": 4.109512695523633,
+        "line_loss_frames": 5,
+        "spawn_lateral_m": 0.006699632610040177,
+        "spawn_yaw_deg": 0.9655402696788726,
+        "camera_world_m": [
+          -0.7234773086552422,
+          -0.07694198836235916,
+          0.1098487953045514
+        ]
+      },
+      {
+        "seed": 101,
+        "reason": "line_lost",
+        "success": false,
+        "progress_fraction": 0.9669332234300513,
+        "duration_s": 18.1,
+        "mean_deviation_cm": 1.9428281619029115,
+        "max_deviation_cm": 4.115909754278624,
+        "line_loss_frames": 5,
+        "spawn_lateral_m": 0.00887065011221108,
+        "spawn_yaw_deg": -1.4057896665842684,
+        "camera_world_m": [
+          -0.7252464901726166,
+          -0.07842207391146944,
+          0.10984879530455136
+        ]
+      },
+      {
+        "seed": 102,
+        "reason": "line_lost",
+        "success": false,
+        "progress_fraction": 0.9705568335939831,
+        "duration_s": 18.2,
+        "mean_deviation_cm": 1.8202033822920596,
+        "max_deviation_cm": 4.102148668484222,
+        "line_loss_frames": 5,
+        "spawn_lateral_m": -0.006800177099913927,
+        "spawn_yaw_deg": 0.8594351484022731,
+        "camera_world_m": [
+          -0.7339185751989715,
+          -0.08581182958988146,
+          0.10984879530455058
+        ]
+      },
+      {
+        "seed": 103,
+        "reason": "line_lost",
+        "success": false,
+        "progress_fraction": 0.9682919631945024,
+        "duration_s": 18.1,
+        "mean_deviation_cm": 1.8349959730469996,
+        "max_deviation_cm": 4.080932517276805,
+        "line_loss_frames": 5,
+        "spawn_lateral_m": -0.0037463353455410497,
+        "spawn_yaw_deg": -2.756817773739524,
+        "camera_world_m": [
+          -0.7368674429193384,
+          -0.08816808348644507,
+          0.10984879530455251
+        ]
+      },
+      {
+        "seed": 104,
+        "reason": "line_lost",
+        "success": false,
+        "progress_fraction": 0.968011020729979,
+        "duration_s": 18.1,
+        "mean_deviation_cm": 1.91848737374576,
+        "max_deviation_cm": 4.105750448021876,
+        "line_loss_frames": 5,
+        "spawn_lateral_m": 0.006771296247390713,
+        "spawn_yaw_deg": 1.921481486273471,
+        "camera_world_m": [
+          -0.7220766099744491,
+          -0.07569282465464901,
+          0.10984879530455223
+        ]
+      },
+      {
+        "seed": 105,
+        "reason": "line_lost",
+        "success": false,
+        "progress_fraction": 0.9681100016975895,
+        "duration_s": 18.1,
+        "mean_deviation_cm": 1.8806815764123745,
+        "max_deviation_cm": 4.108526390830031,
+        "line_loss_frames": 5,
+        "spawn_lateral_m": 0.002763906672030891,
+        "spawn_yaw_deg": 4.914597754812582,
+        "camera_world_m": [
+          -0.7210493985801074,
+          -0.07437803547724187,
+          0.10984879530455118
+        ]
+      },
+      {
+        "seed": 106,
+        "reason": "line_lost",
+        "success": false,
+        "progress_fraction": 0.9699483868105264,
+        "duration_s": 18.2,
+        "mean_deviation_cm": 1.8966690705000555,
+        "max_deviation_cm": 4.137969770903926,
+        "line_loss_frames": 5,
+        "spawn_lateral_m": 0.009648157109266713,
+        "spawn_yaw_deg": -4.595998471063428,
+        "camera_world_m": [
+          -0.7294429577707584,
+          -0.08157219699704696,
+          0.10984879530455198
+        ]
+      },
+      {
+        "seed": 107,
+        "reason": "line_lost",
+        "success": false,
+        "progress_fraction": 0.9692405103450725,
+        "duration_s": 18.2,
+        "mean_deviation_cm": 1.878113494574522,
+        "max_deviation_cm": 4.124247083225896,
+        "line_loss_frames": 5,
+        "spawn_lateral_m": 0.0029707183880051564,
+        "spawn_yaw_deg": -0.22311430678135902,
+        "camera_world_m": [
+          -0.7280212245929422,
+          -0.08081951030779914,
+          0.10984879530455047
+        ]
+      },
+      {
+        "seed": 108,
+        "reason": "line_lost",
+        "success": false,
+        "progress_fraction": 0.969548350991339,
+        "duration_s": 18.2,
+        "mean_deviation_cm": 1.8875689216933649,
+        "max_deviation_cm": 4.102916399091226,
+        "line_loss_frames": 5,
+        "spawn_lateral_m": 0.007119876346571899,
+        "spawn_yaw_deg": 1.3227515526956615,
+        "camera_world_m": [
+          -0.7226516260425319,
+          -0.07622316754423289,
+          0.10984879530455163
+        ]
+      },
+      {
+        "seed": 109,
+        "reason": "line_lost",
+        "success": false,
+        "progress_fraction": 0.9705391486304834,
+        "duration_s": 18.2,
+        "mean_deviation_cm": 1.8376012625192986,
+        "max_deviation_cm": 4.126432207575742,
+        "line_loss_frames": 5,
+        "spawn_lateral_m": 0.0008748449783555837,
+        "spawn_yaw_deg": 3.414088455797479,
+        "camera_world_m": [
+          -0.7245102372358294,
+          -0.07758682619096634,
+          0.10984879530455112
+        ]
+      },
+      {
+        "seed": 110,
+        "reason": "line_lost",
+        "success": false,
+        "progress_fraction": 0.9698406907969457,
+        "duration_s": 18.2,
+        "mean_deviation_cm": 1.9185692099048068,
+        "max_deviation_cm": 4.170287549274007,
+        "line_loss_frames": 5,
+        "spawn_lateral_m": 0.008609856230206001,
+        "spawn_yaw_deg": 0.12437781234062659,
+        "camera_world_m": [
+          -0.7232220892054714,
+          -0.07674526079945096,
+          0.10984879530455088
+        ]
+      },
+      {
+        "seed": 111,
+        "reason": "line_lost",
+        "success": false,
+        "progress_fraction": 0.9681262656055568,
+        "duration_s": 18.1,
+        "mean_deviation_cm": 1.846528831013673,
+        "max_deviation_cm": 4.0837816472013095,
+        "line_loss_frames": 5,
+        "spawn_lateral_m": -0.006926772880953343,
+        "spawn_yaw_deg": -3.3069669904103236,
+        "camera_world_m": [
+          -0.7401181537148104,
+          -0.09085626769041953,
+          0.10984879530455138
+        ]
+      },
+      {
+        "seed": 112,
+        "reason": "line_lost",
+        "success": false,
+        "progress_fraction": 0.968574744741369,
+        "duration_s": 18.2,
+        "mean_deviation_cm": 1.8105819474270453,
+        "max_deviation_cm": 4.078168355634308,
+        "line_loss_frames": 5,
+        "spawn_lateral_m": -0.007670819739846893,
+        "spawn_yaw_deg": 3.441535729857376,
+        "camera_world_m": [
+          -0.7309869907184832,
+          -0.08308213950523242,
+          0.1098487953045513
+        ]
+      },
+      {
+        "seed": 113,
+        "reason": "line_lost",
+        "success": false,
+        "progress_fraction": 0.9671459128707041,
+        "duration_s": 18.1,
+        "mean_deviation_cm": 1.850606755382923,
+        "max_deviation_cm": 4.075426156386455,
+        "line_loss_frames": 5,
+        "spawn_lateral_m": -0.008588437874388833,
+        "spawn_yaw_deg": -3.4913105011024523,
+        "camera_world_m": [
+          -0.7416630397748865,
+          -0.09214098214064681,
+          0.10984879530455212
+        ]
+      },
+      {
+        "seed": 114,
+        "reason": "line_lost",
+        "success": false,
+        "progress_fraction": 0.9695532521846694,
+        "duration_s": 18.2,
+        "mean_deviation_cm": 1.881472600067347,
+        "max_deviation_cm": 4.133011263360409,
+        "line_loss_frames": 5,
+        "spawn_lateral_m": 0.004557765490193705,
+        "spawn_yaw_deg": -3.578408828717726,
+        "camera_world_m": [
+          -0.7317736533742623,
+          -0.08373065921901576,
+          0.10984879530455169
+        ]
+      },
+      {
+        "seed": 115,
+        "reason": "line_lost",
+        "success": false,
+        "progress_fraction": 0.968750834201196,
+        "duration_s": 18.2,
+        "mean_deviation_cm": 1.8936224410828557,
+        "max_deviation_cm": 4.138971064232449,
+        "line_loss_frames": 5,
+        "spawn_lateral_m": 0.004046760483775605,
+        "spawn_yaw_deg": 1.0370907146534907,
+        "camera_world_m": [
+          -0.7253980943965481,
+          -0.07856980836104605,
+          0.1098487953045512
+        ]
+      },
+      {
+        "seed": 116,
+        "reason": "line_lost",
+        "success": false,
+        "progress_fraction": 0.9700869796383582,
+        "duration_s": 18.2,
+        "mean_deviation_cm": 1.8047774787230384,
+        "max_deviation_cm": 4.071528921529927,
+        "line_loss_frames": 5,
+        "spawn_lateral_m": -0.0065526046825727935,
+        "spawn_yaw_deg": 3.769221146366509,
+        "camera_world_m": [
+          -0.7296890580572987,
+          -0.08192896129021864,
+          0.10984879530455208
+        ]
+      },
+      {
+        "seed": 117,
+        "reason": "line_lost",
+        "success": false,
+        "progress_fraction": 0.9678093432993888,
+        "duration_s": 18.1,
+        "mean_deviation_cm": 1.9124731569925033,
+        "max_deviation_cm": 4.109895899619291,
+        "line_loss_frames": 5,
+        "spawn_lateral_m": 0.007500235201477202,
+        "spawn_yaw_deg": -3.4211901429326677,
+        "camera_world_m": [
+          -0.7292930632122331,
+          -0.08164814639630544,
+          0.10984879530455056
+        ]
+      },
+      {
+        "seed": 118,
+        "reason": "line_lost",
+        "success": false,
+        "progress_fraction": 0.9689052109912795,
+        "duration_s": 18.1,
+        "mean_deviation_cm": 1.912007351544615,
+        "max_deviation_cm": 4.1282248070757905,
+        "line_loss_frames": 5,
+        "spawn_lateral_m": 0.008613792892503377,
+        "spawn_yaw_deg": 4.3756191680193215,
+        "camera_world_m": [
+          -0.7173100394350621,
+          -0.07131119188780102,
+          0.10984879530455086
+        ]
+      },
+      {
+        "seed": 119,
+        "reason": "line_lost",
+        "success": false,
+        "progress_fraction": 0.9676695129057159,
+        "duration_s": 18.1,
+        "mean_deviation_cm": 1.926309627108838,
+        "max_deviation_cm": 4.128266318277536,
+        "line_loss_frames": 5,
+        "spawn_lateral_m": 0.009124807987492196,
+        "spawn_yaw_deg": 2.321122124777531,
+        "camera_world_m": [
+          -0.7197258206211292,
+          -0.0736600581056466,
+          0.10984879530455133
+        ]
+      }
+    ]
+  }
+}

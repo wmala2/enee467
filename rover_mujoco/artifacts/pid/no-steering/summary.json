@@ -1,0 +1,24 @@
+{
+  "figure8": {
+    "success_rate": 0.0,
+    "episodes": [
+      {
+        "seed": 0,
+        "reason": "line_lost",
+        "success": false,
+        "progress_fraction": 0.05620867992937113,
+        "duration_s": 2.8000000000000003,
+        "mean_deviation_cm": 1.2380435041104083,
+        "max_deviation_cm": 3.673795272848665,
+        "line_loss_frames": 5,
+        "spawn_lateral_m": 0.002739233746429086,
+        "spawn_yaw_deg": -2.302132862361297,
+        "camera_world_m": [
+          0.7965133392249878,
+          -0.10806455523441254,
+          0.10984879530455104
+        ]
+      }
+    ]
+  }
+}
