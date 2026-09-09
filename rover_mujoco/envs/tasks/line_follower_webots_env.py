@@ -58,7 +58,6 @@ from gymnasium import spaces
 import mujoco
 import numpy as np
 
-from envs.camera import onboard_scene_option
 from envs.tasks.line_follower_env import CONTROL_HZ
 from envs.tasks.line_follower_env import FALL_HEIGHT
 from envs.tracks import oval_waypoints
@@ -207,7 +206,7 @@ class LineFollowerWebotsEnv(gym.Env):
         return linear, angular
 
     def _get_obs(self):
-        self.renderer.update_scene(self.data, camera="top_cam", scene_option=onboard_scene_option())
+        self.renderer.update_scene(self.data, camera="top_cam")
         centroid, angle, seen = self.process_image(self.renderer.render())
         self._seen = seen
         self._centroid = normalize_to_range(centroid, -CAM_RES / 2, CAM_RES / 2, -1.0, 1.0)

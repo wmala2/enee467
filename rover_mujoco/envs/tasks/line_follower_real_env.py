@@ -8,7 +8,6 @@ import numpy as np
 
 from envs import arena
 from envs import motor
-from envs.camera import onboard_scene_option
 from envs.tasks.line_follower_env import CAM_RES
 from envs.tasks.line_follower_env import CONTROL_HZ
 from envs.tasks.line_follower_env import FALL_HEIGHT
@@ -385,7 +384,7 @@ class LineFollowerRealEnv(LineFollowerEnv):
         (a stand-in for JPEG-quality artifacts — real compression noise is structured
         block artifacts, not i.i.d. Gaussian, but this is far simpler and still forces
         the policy not to trust exact pixel values), and effective resolution."""
-        self.renderer.update_scene(self.data, camera="top_cam", scene_option=onboard_scene_option())
+        self.renderer.update_scene(self.data, camera="top_cam")
         rgb = self.renderer.render().astype(np.float32) * self._white_balance
         gray = rgb.mean(axis=-1, keepdims=True) * self._brightness
         gray += self.np_random.normal(0.0, self._pixel_noise_std, size=gray.shape)

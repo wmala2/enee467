@@ -23,7 +23,7 @@ import numpy as np
 TRACK_Z = 0.002
 # Group 3, matching the generated tracks: LineFollowerEnv finds the line geoms by this group
 # to randomize their shade, and the viewers enable it explicitly.
-TRACK_GROUP = 3
+TRACK_GROUP = 2  # visible by default; see gen_track.py's LINE_GROUP
 
 
 def parse_proto(proto_dir):
@@ -104,8 +104,8 @@ def convert(proto_dir, out_dir):
        scripts/import_webots_track.py. Real-world size {planar[1]:.2f} x {planar[0]:.2f} m
        (the PROTO applies scale {scale[0]:g} {scale[1]:g} {scale[2]:g} to the raw mesh).
        Visual only -- contype/conaffinity 0 -- because a track is paint on the floor, not
-       something to drive into. Group {TRACK_GROUP} so LineFollowerEnv's appearance
-       randomization finds it and the viewers show it. -->
+       something to drive into. Named line_* so LineFollowerEnv's appearance
+       randomization finds it, and group {TRACK_GROUP} so every renderer shows it. -->
   <asset>
     <!-- inertia="shell": these meshes are perfectly flat, so MuJoCo's default volume-based
          inertia computation rejects them ("mesh volume is too small"). Shell inertia treats
@@ -115,7 +115,7 @@ def convert(proto_dir, out_dir):
           scale="{scale[0]:g} {scale[1]:g} {scale[2]:g}"/>
   </asset>
   <worldbody>
-    <geom name="{name}" type="mesh" mesh="{name}" quat="{quat}"
+    <geom name="line_{name}" type="mesh" mesh="{name}" quat="{quat}"
           pos="{-centre[0]:.4f} {-centre[1]:.4f} {TRACK_Z}"
           contype="0" conaffinity="0" group="{TRACK_GROUP}" rgba="0.05 0.05 0.05 1"/>
   </worldbody>

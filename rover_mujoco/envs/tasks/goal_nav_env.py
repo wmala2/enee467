@@ -23,7 +23,6 @@ import numpy as np
 
 from envs import arena
 from envs import motor
-from envs.camera import onboard_scene_option
 from envs.tasks.line_follower_env import CAM_RES
 from envs.tasks.line_follower_env import CONTROL_HZ
 from envs.tasks.line_follower_env import FALL_HEIGHT
@@ -230,8 +229,13 @@ class GoalNavEnv(gym.Env):
         ]
         self._friction_models = [motor.make_friction_model() for _ in self._wheel_dof_adr]
 
+        # By name rather than geom group -- see LineFollowerEnv._line_geom_ids for why.
         self._obstacle_gids = [
-            gi for gi in range(self.model.ngeom) if self.model.geom_group[gi] == 4
+            gi
+            for gi in range(self.model.ngeom)
+            if (mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_GEOM, gi) or "").startswith(
+                "obstacle_"
+            )
         ]
         self._obstacle_default_size = self.model.geom_size[self._obstacle_gids].copy()
         # Each obstacle geom hangs off its own mocap body (see scripts/gen_arena.py): moving
@@ -645,7 +649,7 @@ class GoalNavEnv(gym.Env):
         """Same camera-realism pipeline as LineFollowerRealEnv._capture_processed_image()."""
         if not self.include_image:
             return None
-        self.renderer.update_scene(self.data, camera="top_cam", scene_option=onboard_scene_option())
+        self.renderer.update_scene(self.data, camera="top_cam")
         rgb = self.renderer.render().astype(np.float32) * self._white_balance
         gray = rgb.mean(axis=-1, keepdims=True) * self._brightness
         gray += self.np_random.normal(0.0, self._pixel_noise_std, size=gray.shape)

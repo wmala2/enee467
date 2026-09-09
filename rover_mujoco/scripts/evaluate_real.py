@@ -104,12 +104,6 @@ def run_viewer(model, env):
     obs, _ = env.reset()
     episode_reward = 0.0
     with mujoco.viewer.launch_passive(mj_model, mj_data) as viewer:
-        # MuJoCo's viewer shows geom groups 0-2 by default and the track geoms are group 3, so
-        # without this the rover appears to drive on bare floor, following a line only it can
-        # see. The policy's own offscreen renderer has always drawn every group, which is why
-        # headless evaluation scores fine while the viewer looks broken.
-        for group in (3, 4):
-            viewer.opt.geomgroup[group] = 1
         while viewer.is_running():
             step_start = time.time()
             action, _ = model.predict(obs, deterministic=True)

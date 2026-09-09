@@ -16,7 +16,7 @@ from envs import arena
 
 # Obstacle geoms carry this group so the env can find them by group rather than by name,
 # the same way LineFollowerEnv picks out the line geoms.
-OBSTACLE_GROUP = 4
+OBSTACLE_GROUP = 2  # visible by default; see gen_track.py's LINE_GROUP
 
 # Bit 1 keeps these colliding with the wheels (default contype/conaffinity 1); bit 2 is what
 # rover.xml's chassis_collision proxy uses, so the rover's body can't pass through them.

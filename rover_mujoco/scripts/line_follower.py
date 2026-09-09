@@ -20,7 +20,6 @@ import os
 import random
 import time
 
-from envs.camera import onboard_scene_option
 from gen_track import oval_waypoints
 from gen_track import s_curve_waypoints
 import mujoco
@@ -170,7 +169,7 @@ def line_error(cam_renderer, data):
 
     The centroid is weighted by how many dark pixels each column holds, not by which columns
     happen to contain one, so a thick near stripe outvotes a thin far one."""
-    cam_renderer.update_scene(data, camera="top_cam", scene_option=onboard_scene_option())
+    cam_renderer.update_scene(data, camera="top_cam")
     img = cam_renderer.render()
     band = img[int(CAM_RES * (1.0 - GROUND_BAND)) :, :, :]
     dark = np.all(band < DARK_THRESHOLD, axis=-1)
@@ -339,7 +338,6 @@ def main():
 
     with mujoco.viewer.launch_passive(model, data) as viewer:
         # Track geoms are group 3; the viewer shows only 0-2 by default.
-        viewer.opt.geomgroup[3] = 1
         while viewer.is_running():
             step_start = time.time()
 
@@ -347,9 +345,7 @@ def main():
             speed, left_rad_s, right_rad_s = read_telemetry(model, data)
             show_telemetry(viewer, data, speed, error)
             if show_camera:
-                cam_renderer.update_scene(
-                    data, camera="top_cam", scene_option=onboard_scene_option()
-                )
+                cam_renderer.update_scene(data, camera="top_cam")
                 frame = camera_overlay(cam_renderer.render(), error)
                 readout = f"{speed:+.2f} m/s   L {left_rad_s:+5.2f}  R {right_rad_s:+5.2f}   " + (
                     "line lost" if error is None else f"err {error:+.3f}"

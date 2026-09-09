@@ -14,7 +14,13 @@ from envs.tracks import oval_waypoints
 from envs.tracks import s_curve_waypoints
 from envs.tracks import wave_waypoints
 
-# Visual/collision-free line appearance
+# Visual/collision-free line appearance. Group 2 is deliberate: MjvOption's default
+# geomgroup mask is [1, 1, 1, 0, 0, 0], so anything in group 3+ is invisible to every
+# renderer unless each call site remembers to switch it back on. The track used to be
+# group 3, and the omission was silent -- the onboard camera rendered bare floor and the
+# dark-pixel test locked onto the sky instead, which invalidated a "finds the line 12/12"
+# check and a "100% completion" policy that was really driving blind.
+LINE_GROUP = 2
 LINE_WIDTH = 0.03
 LINE_THICKNESS = 0.001
 LINE_RGBA = "0.05 0.05 0.05 1"
@@ -22,7 +28,7 @@ LINE_RGBA = "0.05 0.05 0.05 1"
 
 def build_track_xml(name, waypoints):
     lines = [f'<mujoco model="{name}">', "  <worldbody>"]
-    for (x0, y0), (x1, y1) in itertools.pairwise(waypoints):
+    for i, ((x0, y0), (x1, y1)) in enumerate(itertools.pairwise(waypoints)):
         mx, my = (x0 + x1) / 2, (y0 + y1) / 2
         seg_len = math.hypot(x1 - x0, y1 - y0)
         heading = math.atan2(y1 - y0, x1 - x0)
@@ -36,9 +42,10 @@ def build_track_xml(name, waypoints):
         # merely touching; without it every bend leaves a visible wedge on its outside.
         half_len = seg_len / 2 + LINE_WIDTH / 2
         lines.append(
-            f'    <geom type="box" size="{half_len:.4f} {LINE_WIDTH / 2} {LINE_THICKNESS}" '
+            f'    <geom name="line_{i}" type="box" '
+            f'size="{half_len:.4f} {LINE_WIDTH / 2} {LINE_THICKNESS}" '
             f'pos="{mx:.4f} {my:.4f} {LINE_THICKNESS}" quat="{qw:.6f} 0 0 {qz:.6f}" '
-            f'contype="0" conaffinity="0" group="3" rgba="{LINE_RGBA}"/>'
+            f'contype="0" conaffinity="0" group="{LINE_GROUP}" rgba="{LINE_RGBA}"/>'
         )
     lines += ["  </worldbody>", "</mujoco>", ""]
     return "\n".join(lines)

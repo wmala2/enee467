@@ -13,28 +13,28 @@
          are program-movable and go through the dynamic broadphase, so contacts
          follow them. -->
     <body name="obstacle_0" mocap="true" pos="7.5 7.5 0.06">
-      <geom name="obstacle_0" type="box" group="4" size="0.11499999999999999 0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
+      <geom name="obstacle_0" type="box" group="2" size="0.11499999999999999 0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
     </body>
     <body name="obstacle_1" mocap="true" pos="8.0 7.5 0.06">
-      <geom name="obstacle_1" type="cylinder" group="4" size="0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
+      <geom name="obstacle_1" type="cylinder" group="2" size="0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
     </body>
     <body name="obstacle_2" mocap="true" pos="8.5 7.5 0.06">
-      <geom name="obstacle_2" type="box" group="4" size="0.11499999999999999 0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
+      <geom name="obstacle_2" type="box" group="2" size="0.11499999999999999 0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
     </body>
     <body name="obstacle_3" mocap="true" pos="9.0 7.5 0.06">
-      <geom name="obstacle_3" type="cylinder" group="4" size="0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
+      <geom name="obstacle_3" type="cylinder" group="2" size="0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
     </body>
     <body name="obstacle_4" mocap="true" pos="9.5 7.5 0.06">
-      <geom name="obstacle_4" type="box" group="4" size="0.11499999999999999 0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
+      <geom name="obstacle_4" type="box" group="2" size="0.11499999999999999 0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
     </body>
     <body name="obstacle_5" mocap="true" pos="10.0 7.5 0.06">
-      <geom name="obstacle_5" type="cylinder" group="4" size="0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
+      <geom name="obstacle_5" type="cylinder" group="2" size="0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
     </body>
     <body name="obstacle_6" mocap="true" pos="10.5 7.5 0.06">
-      <geom name="obstacle_6" type="box" group="4" size="0.11499999999999999 0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
+      <geom name="obstacle_6" type="box" group="2" size="0.11499999999999999 0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
     </body>
     <body name="obstacle_7" mocap="true" pos="11.0 7.5 0.06">
-      <geom name="obstacle_7" type="cylinder" group="4" size="0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
+      <geom name="obstacle_7" type="cylinder" group="2" size="0.11499999999999999 0.06" contype="3" conaffinity="3" rgba="0.35 0.35 0.4 1"/>
     </body>
   </worldbody>
 </mujoco>

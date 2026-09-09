@@ -9,7 +9,6 @@ import mujoco
 import numpy as np
 
 from envs import tracks
-from envs.camera import onboard_scene_option
 from envs.tracks import oval_waypoints
 from envs.tracks import s_curve_waypoints
 
@@ -117,7 +116,16 @@ class LineFollowerEnv(gym.Env):
         # Baseline appearance to randomize around, and the ids of the geoms/light/camera
         # domain randomization is allowed to touch each reset
         self._floor_geom_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, "floor")
-        self._line_geom_ids = [i for i in range(self.model.ngeom) if self.model.geom_group[i] == 3]
+        # By name, not by geom group. The group is a rendering filter and nothing more;
+        # keying domain randomization off it meant the track's group could not be changed
+        # without silently disabling the line-colour jitter as well.
+        self._line_geom_ids = [
+            i
+            for i in range(self.model.ngeom)
+            if (mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_GEOM, i) or "").startswith(
+                "line_"
+            )
+        ]
         self._cam_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_CAMERA, "top_cam")
         self._default_cam_pos = self.model.cam_pos[self._cam_id].copy()
         self._default_cam_quat = self.model.cam_quat[self._cam_id].copy()
@@ -277,7 +285,7 @@ class LineFollowerEnv(gym.Env):
         mujoco.mju_mulQuat(self.model.cam_quat[self._cam_id], self._default_cam_quat, jitter_quat)
 
     def _get_obs(self):
-        self.renderer.update_scene(self.data, camera="top_cam", scene_option=onboard_scene_option())
+        self.renderer.update_scene(self.data, camera="top_cam")
         rgb = self.renderer.render()
         gray = rgb.mean(axis=-1, keepdims=True).astype(np.uint8)
         return gray
