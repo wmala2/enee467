@@ -43,21 +43,26 @@ For this project, we mainly care about the `rover_mujoco` directory which will h
 ```
 rover_mujoco/
   - assets/
-    - objects/  # All additional assets that will interact w/the scene are here
+    - objects/  # All additional assets that interact with the scene are here
     - robots/   # All robot assets are here
-  - docs/ # Explanation of setting up environments, additional info, are here
+  - docs/       # Environment setup, design notes, and measured results
   - envs/
     - tasks/
-      - __init__.py  	   # A file to make this directory visivble
-      - line_follower_env.py  # A file to create a RL environment
-    - __init__.py # Registration of all envs for Gymnasium is here
-    - camera.py   # A file to handle the camera sensor
-    - motor.py    # A file to handle higher fidelity motor information
-    - tracks.py   # A file to handle a variety of line following tracks
-  - scripts/  	# Directory to handle python scripts that run our environments
-  - wandb/    	# Weights & Biases info/runs is stored here
-  - README.md 	# Upper level information file to detail the project
-  - pyproject.toml  # Additional packages are stored here
+      - __init__.py                 # Makes this directory a package
+      - line_follower_ppo_env.py    # The RL environment
+    - __init__.py       # Registration of all envs for Gymnasium is here
+    - contract.py       # The observation/action layout shared with the real rover
+    - camera.py         # Extracts the three line centroids from an image
+    - pid.py            # The classical controller the RL policy is measured against
+    - line_scene.py     # Builds the rover + track scene in memory
+    - line_dynamics.py  # BAM motor model and domain randomization
+    - motor.py          # Higher fidelity motor information
+    - tracks.py         # A variety of line following tracks
+  - scripts/          # Python scripts that run our environments
+  - tests/            # Regression tests, all CPU, no GPU needed
+  - wandb/            # Weights & Biases info/runs is stored here
+  - README.md         # Upper level information file to detail the project
+  - pyproject.toml    # Additional packages are stored here
 ```
 
 ## **Flashing Firmware**
@@ -202,85 +207,132 @@ We’ll have to have some tolerances within the simulation, one tolerance is act
 
 ### Writing the Environment
 
-Everything above turns into `envs/tasks/line_follower_env.py`, a Gymnasium environment registered in `envs/__init__.py` under the id `LineFollower-v0`. Registration is what lets a training script call `gym.make("LineFollower-v0")` instead of importing the class, and it's also where a second variant of the same task gets its own id.
+Everything above turns into `envs/tasks/line_follower_ppo_env.py`, registered in
+`envs/__init__.py` as `LineFollowerPPO-v0`. Registration is what lets a training script call
+`gym.make("LineFollowerPPO-v0")` instead of importing the class.
 
-The constructor picks a track, compiles the scene once, and builds an offscreen renderer for the onboard camera:
-
-```python
-self.model = mujoco.MjModel.from_xml_path(model_path)
-self.data = mujoco.MjData(self.model)
-self.renderer = mujoco.Renderer(self.model, height=CAM_RES, width=CAM_RES)
-```
-
-MuJoCo compiles a model once and the tracks are separate scene files, so the track is fixed for the lifetime of the env instance rather than resampled on every reset. Pass `track=` to pin it. That argument matters more than it looks: without it an evaluation silently measures whichever track the constructor happened to draw, and the tracks aren't equally hard. The same policy scored 100% on one and 86.7% on another purely from that draw.
-
-**Observation space.** The policy sees a 64×64 grayscale frame from the rover's own camera and nothing else:
+There are no per-track scene files. `envs/line_scene.py` builds the rover, camera and tape in
+memory from a list of waypoints, so adding a track means adding a function to `envs/tracks.py`
+and naming it in `TRACKS`:
 
 ```python
-self.observation_space = spaces.Box(low=0, high=255, shape=(CAM_RES, CAM_RES, 1), dtype=np.uint8)
+TRACKS = {
+    "circle": circle_waypoints,
+    "figure8": figure8_waypoints,
+    "goomba": goomba_waypoints,
+    "oval": oval_waypoints,
+}
 ```
 
-This is the part that decides whether the policy can leave simulation. The env knows the rover's exact position, because `self.data.qpos` is right there, and feeding it to the policy would make training much easier and the result worthless: nothing on the physical rover produces that number. The resolution is small on purpose, since rendering a camera every control step is what makes these rollouts far slower than a vector-observation task.
+Each environment instance is pinned to one track for its lifetime, because MuJoCo compiles a
+model once. Training runs one worker per track in parallel rather than one track after
+another, so every gradient update sees all of them.
 
-**Action space.** Two wheel velocity commands, written straight into MuJoCo's actuator controls:
+**Observation space.** Eleven floats, all in `[-1, 1]`:
 
 ```python
-self.action_space = spaces.Box(low=-10.0, high=10.0, shape=(2,), dtype=np.float32)
+self.observation_space = spaces.Box(-1, 1, shape=(11,), dtype=np.float32)
 ```
 
-One caution from training a later variant of this env. If you express the action in physical units, the policy has to explore in those units too, and SB3's Gaussian policy starts with a standard deviation of about 1 around zero. With a real motor dead zone in the mix, almost every sampled command lands somewhere that produces no motion at all, and the episode length pins itself to whatever your stuck detector allows. Normalizing the action to [-1, 1] and scaling inside `step()` avoids that.
+Indices 0-2, 3-5 and 6-8 are the near, middle and far camera bands, each as (centroid x,
+centroid y, visible). Indices 9-10 are the two wheel speeds divided by 10 rad/s. That is the
+whole input: no position, no yaw, no track identity, nothing the real rover cannot measure.
 
-**Control rate.** The environment steps physics at the scene's 2 ms timestep but only makes a decision at `CONTROL_HZ`, decimating the rest:
+The important part is where it is built. Both the simulator and
+`rover_control/rl_rover.py` call the same `observation_from_sensors` in `envs/contract.py`,
+one from a rendered frame and one from the ESP32 camera. Writing that twice is how sim and
+hardware quietly drift apart until the policy behaves differently on the robot for reasons
+nobody can find.
+
+**Action space.** Two normalized commands, decoded by the same shared module:
 
 ```python
-CONTROL_HZ = 10.0
-self._decimation = max(1, round(1.0 / (CONTROL_HZ * self._physics_dt)))
+self.action_space = spaces.Box(-1, 1, shape=(2,), dtype=np.float32)
+forward, steering = np.clip(action, -1, 1) * [3.0, 4.0] + [3.0, 0.0]
 ```
 
-10 Hz is the real command rate from the Physical Constraints above, so this is one of those places where a hardware limit has to be modeled rather than approximated. It is also worth doing for a reason that only shows up in training. An earlier version let PPO pick a new wheel velocity every 2 ms, and it found a policy that whipsawed the command fast enough to vibrate in place. Net displacement stayed near zero, so image error stayed near zero, so reward was already about 97% of maximum in the first rollout and there was never any pressure to learn to drive.
+So `[0, 0]` is the PID's cruise speed, `[-1, 0]` is a stop, and steering is a differential
+added to both wheels. Keep actions normalized rather than in rad/s: SB3's Gaussian policy
+starts with a standard deviation near 1 around zero, so an action space in physical units
+means almost every sampled command lands somewhere useless, and with a motor dead zone in the
+mix the policy never discovers that moving is possible.
 
-**Reward.** Three terms, weighted so that finishing the track dominates:
+**Control rate.** Physics runs at the scene timestep, but a decision is made only at
+`CONTROL_HZ`:
 
 ```python
-PROGRESS_WEIGHT = 100.0
-CENTER_WEIGHT = 0.3
-COMPLETION_BONUS = 50.0
+self.substeps = round(1 / CONTROL_HZ / self.model.opt.timestep)
 ```
 
-Progress is forward arc length along the track's waypoints, divided by the track's own length so a full lap is worth about `PROGRESS_WEIGHT` whether the track is 2 m or 3 m long. Centering is the smaller shaping term that keeps the rover from cutting corners while chasing progress, and losing the line costs a flat `-1.0` per step.
+10 Hz is the rover's real command rate, so this is a hardware limit that has to be modelled
+rather than approximated. It also prevents a specific failure: given a decision every 2 ms,
+PPO once found a policy that whipsawed the command fast enough to vibrate in place, which
+kept image error near zero and paid almost full reward from the first rollout.
 
-Progress uses ground truth position, which contradicts the observation rule above until you notice the asymmetry: reward is a training-time construct that doesn't exist at deployment, while the observation has to work on the real rover. Privileged reward is fine. Privileged observation is not.
-
-**Termination and truncation.** Gymnasium splits these, and the split is the End Conditions discussion in code:
+**Reward.** Progress along the track, scaled by how well centred the rover is:
 
 ```python
-terminated = tipped_over or finished
-truncated = self._lost_steps >= MAX_LINE_LOST_STEPS or self._episode_steps >= MAX_EPISODE_STEPS
+progress_reward = float(np.clip(delta / (CRUISE_RAD_S * WHEEL_RADIUS * self.dt), -2, 1))
+motion_reward = progress_reward * (0.25 + 0.75 * alignment) if visible else -1.0
+reward = motion_reward - smoothness_penalty - 0.01
 ```
 
-`terminated` means the episode reached a real outcome, good or bad, and the value function should treat it as the end of the world. `truncated` means you cut it off, so the value function should still bootstrap from the final state. Getting these backwards quietly teaches the policy that running out of time is a catastrophe worth avoiding.
+Progress is normalized so cruise speed earns 1.0 and saturates there, which stops the policy
+buying reward with speed it cannot control. Multiplying rather than adding the alignment term
+means neither progress nor centring can be traded away for the other. Losing the line costs a
+flat -1.0, the small smoothness penalty charges for jerky steering, and the -0.01 per step
+discourages dawdling. Completion adds +10, any failure -5.
 
-`MAX_EPISODE_STEPS = 300` is 300 control decisions, which at 10 Hz is 30 simulated seconds. Count in control steps, not physics steps. An earlier version capped at 500 physics steps, which is one simulated second, nowhere near enough to drive anything, and standing still genuinely was the best available policy.
+Progress uses ground truth position, which looks like it contradicts the observation rule
+above. It does not: reward exists only during training, while the observation has to work on
+the real rover. Privileged reward is fine, privileged observation is not.
 
-**Reset and domain randomization.** Each reset re-randomizes floor shade, line shade, light intensity, and a few millimeters of camera mount slop, then spawns the rover at the track's first waypoint facing the second. The line geoms are selected by name:
+**Termination and truncation.** Gymnasium separates these, and the split is the End Conditions
+discussion in code:
 
 ```python
-self._line_geom_ids = [
-    i
-    for i in range(self.model.ngeom)
-    if (mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_GEOM, i) or "").startswith("line_")
-]
+terminated = reason in ("tipped", "off_track", "line_lost", "completed")
+truncated = reason == "timeout"
 ```
 
-That used to select on geom group instead, which coupled a rendering concern to a semantic one and meant the track's group couldn't be changed without silently disabling the color jitter.
+An episode terminates on tipping, leaving a 6 cm corridor, losing the line for half a second,
+or finishing the lap. Running out of steps is a truncation. The difference matters to the
+value function: `terminated` means no future reward exists, `truncated` means the episode was
+cut short and it should still bootstrap. Getting these backwards teaches the policy that time
+running out is a catastrophe to avoid.
 
-**Extracting the error.** `_line_error` thresholds against the frame's own mean brightness rather than a fixed value, so it survives the randomized shades above, and it weights the centroid by how many dark pixels each column holds over the bottom `GROUND_BAND` of the frame. Both details earn their place: averaging column indices over the whole frame counts a column the same whether it holds one stray pixel or fifty, and it mixes the line far ahead in with the line underfoot, so a curve drags the centroid back toward center.
+**Reset.** Each episode starts at a waypoint with up to 1 cm of lateral offset and 5 degrees of
+heading error, then settles for one simulated second before the first observation. `random_start`
+picks the waypoint at random, which is what stops a policy learning only the first corner.
 
-**One MuJoCo gotcha.** `close()` releases the renderer's GL context, and skipping it leaves that context broken for the next `Renderer` built in the same process. A single training worker never notices, because it only ever makes one. Any script that constructs several environments in one process, such as an evaluation loop over multiple tracks, will render solid black from the second environment onward and look exactly like a domain randomization bug.
+**Swappable dynamics.** The `dynamics` argument selects `"nominal"` velocity servos, `"bam"`
+for the measured motor model, or `"dr"` to add domain randomization on top. Keeping these as
+one switch means the sim2real ladder is a flag rather than a fork of the environment.
 
 ## Training
 
-Before beginning, assert that W\&B is enabled through SB3 so that we can quantitatively and qualitatively study features by extracting images of those graphs and compariing/contrasting to other research.
+W\&B is already wired in, and it is on by default. `scripts/train_ppo.py` opens a run in the
+project `rover-line-follower` under whatever account `wandb login` authenticated, mirrors every
+TensorBoard scalar into it with `sync_tensorboard=True`, and at the end uploads the trajectory
+plot and the selected checkpoint as an artifact. An authentication failure stops startup rather
+than silently training without logs, which is deliberate: a long run you cannot compare
+afterwards is close to worthless.
+
+```shell
+# Train on every track, logging to W&B.
+MUJOCO_GL=egl OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 uv run scripts/train_ppo.py
+
+# No account, or a quick local check.
+uv run scripts/train_ppo.py --no-wandb --timesteps 128 --output runs/smoke
+
+# Group related runs so W&B shows them on one axis.
+uv run scripts/train_ppo.py --wandb-group camera-vs-chassis
+```
+
+Run the short `--no-wandb` version first, every time. It reaches the argument parsing, the
+vector environment, the logger and the checkpoint writer in about thirty seconds, which is
+where configuration mistakes actually live, and it costs nothing compared to discovering them
+an hour into a real run.
 
 [image1]: images/Resources/plugged_in_esp32.jpg
 
