@@ -341,11 +341,15 @@ class LineFollowerRealEnv(LineFollowerEnv):
         # wheel's own BAM Stribeck friction — replaces MuJoCo's built-in velocity servo.
         for _ in range(self._decimation):
             measured_omega = self.data.qvel[self._wheel_dof_adr]
-            torque = motor.motor_torque(target_omega, measured_omega)
-            self.data.ctrl[:] = torque
+            drive, electrical_damping = motor.motor_drive_and_damping(target_omega, measured_omega)
+            self.data.ctrl[:] = drive
             for i, dof_adr in enumerate(self._wheel_dof_adr):
                 motor.apply_friction(
-                    self._friction_models[i], self.model, dof_adr, measured_omega[i]
+                    self._friction_models[i],
+                    self.model,
+                    dof_adr,
+                    measured_omega[i],
+                    extra_damping=float(electrical_damping[i]),
                 )
             mujoco.mj_step(self.model, self.data)
         self._episode_steps += 1

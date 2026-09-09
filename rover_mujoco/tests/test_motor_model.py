@@ -82,8 +82,9 @@ def _settle(timestep, target=5.0, seconds=8.0):
     friction = motor.make_friction_model()
     for _ in range(int(seconds / timestep)):
         speed = float(data.qvel[dof])
-        motor.apply_friction(friction, model, dof, speed)
-        data.ctrl[0] = float(motor.motor_torque(target, speed))
+        drive, electrical_damping = motor.motor_drive_and_damping(target, speed)
+        motor.apply_friction(friction, model, dof, speed, extra_damping=float(electrical_damping))
+        data.ctrl[0] = float(drive)
         mujoco.mj_step(model, data)
     return float(data.qvel[dof])
 
@@ -121,20 +122,36 @@ def test_mujoco_reproduces_the_model_when_the_timestep_resolves_it():
     assert _settle(0.0002) == pytest.approx(_predicted_speed(), rel=0.005)
 
 
-def test_production_timestep_bias_stays_within_its_documented_band():
-    """At the 2 ms timestep the scenes actually use, the wheel settles a few percent slow.
+def test_split_form_is_exactly_the_torque_law():
+    """drive - damping * speed must reproduce motor_torque, in both regions.
 
-    Our control law is evaluated in Python from the previous step's velocity, so it is
-    integrated explicitly no matter which integrator MuJoCo is configured with; implicitfast
-    cannot see it. With this motor's electrical time constant that leaves a small systematic
-    bias rather than instability, because the friction terms damp it. The bias is real and
-    one-sided, so it is pinned here: the simulated rover runs slightly slower than its own
-    motor model says it should, and if that gap grows the sim2real story changes.
+    The split exists only to move the speed-dependent half of the torque into the integrator;
+    it must not change the physics. Saturation is the interesting case, since there the
+    voltage stops tracking the error and only back-EMF remains speed-dependent.
+    """
+    for target in (-10.0, 0.0, 2.0, 5.0, 7.46, 20.0):
+        for speed in (-8.0, 0.0, 2.24, 5.0, 12.0):
+            drive, damping = motor.motor_drive_and_damping(target, speed)
+            assert float(drive - damping * speed) == pytest.approx(
+                float(motor.motor_torque(target, speed)), abs=1e-15
+            ), f"target={target} speed={speed}"
+
+
+def test_production_timestep_reproduces_the_model():
+    """At the 2 ms the scenes use, the settled speed matches the model's own fixed point.
+
+    Applying the whole torque as ctrl left this about 5.6% slow, because the speed-dependent
+    part was evaluated from the previous step's velocity and the resulting time constant is
+    shorter than the step. Handing that part to dof_damping lets the integrator take it
+    implicitly, which removes the bias rather than shrinking it. If this regresses, the
+    simulated rover is quietly driving slower than its own motor model says.
     """
     settled = _settle(0.002)
     predicted = _predicted_speed()
-    bias = (settled - predicted) / predicted
-    assert -0.08 < bias < 0.0, f"settled {settled:.4f} vs predicted {predicted:.4f} ({bias:+.2%})"
+    assert settled == pytest.approx(predicted, rel=0.005), (
+        f"settled {settled:.4f} vs predicted {predicted:.4f} "
+        f"({(settled - predicted) / predicted:+.2%})"
+    )
 
 
 def test_loaded_wheel_in_the_real_scene_is_stable():

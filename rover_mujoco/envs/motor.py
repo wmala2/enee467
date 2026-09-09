@@ -79,13 +79,43 @@ def motor_torque(target_omega, measured_omega):
     return torque
 
 
-def apply_friction(friction_model, model, dof_adr, dtheta):
+def motor_drive_and_damping(target_omega, measured_omega):
+    """The same torque as motor_torque, split into a constant drive and a damping coefficient.
+
+    `motor_torque` is exactly linear in speed: tau = drive - k*omega, where in the linear
+    region k = kt*kp/R + kt^2/R (control gain plus back-EMF) and in saturation only the
+    back-EMF kt^2/R survives, because the voltage no longer tracks the error. Splitting it
+    that way lets the speed-dependent half be handed to MuJoCo as `dof_damping`, which the
+    integrator solves implicitly, instead of being applied as a torque computed from the
+    previous step's velocity.
+
+    That distinction is not cosmetic. Evaluated explicitly, this loop settles about 5.6% slow
+    at the 2 ms timestep the scenes use, because k/I gives a time constant shorter than the
+    step: a free wheel's 2.0e-5 kg m^2 puts the explicit stability bound near 0.72 ms, and
+    unloaded with friction disabled it diverges outright and spins backwards. Handing the
+    same term to the integrator instead reproduces the model's own fixed point to within
+    rounding, at no extra cost. Returns (drive torque [Nm], damping [Nm/(rad/s)])."""
+    target = np.asarray(target_omega, dtype=float)
+    measured = np.asarray(measured_omega, dtype=float)
+    raw_voltage = VELOCITY_KP * (target - measured)
+    saturated = np.abs(raw_voltage) >= VIN
+    drive = np.where(saturated, KT * np.sign(raw_voltage) * VIN / R, KT * VELOCITY_KP * target / R)
+    damping = np.where(saturated, KT**2 / R, KT * VELOCITY_KP / R + KT**2 / R)
+    return drive, damping
+
+
+def apply_friction(friction_model, model, dof_adr, dtheta, extra_damping=0.0):
     """Write this step's Stribeck frictionloss/damping onto the given dof (see
     bam.model.Model.compute_frictions — motor_torque/external_torque are unused for a
-    non-load-dependent model, so 0.0 is a legitimate simplification, not a placeholder)."""
+    non-load-dependent model, so 0.0 is a legitimate simplification, not a placeholder).
+
+    `extra_damping` is added to BAM's viscous term rather than replacing it, and carries the
+    motor's own speed-dependent torque from motor_drive_and_damping so the integrator can
+    take it implicitly. Both end up in the same `dof_damping` slot, so they have to be summed
+    here; writing either one alone silently discards the other."""
     frictionloss, damping = friction_model.compute_frictions(0.0, 0.0, dtheta)
     model.dof_frictionloss[dof_adr] = frictionloss
-    model.dof_damping[dof_adr] = damping
+    model.dof_damping[dof_adr] = damping + extra_damping
 
 
 # --- The real rover's actuator envelope, from rover_control/rover.py -----------------------
