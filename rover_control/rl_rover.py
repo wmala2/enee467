@@ -1,48 +1,27 @@
-"""RL-based line follower: drives the rover with a PPO policy trained in MuJoCo
-(rover_mujoco, https://huggingface.co/CursedRock17/rover-line-follower-ppo) instead of the
-classical ArUco/YOLO navigation the rest of this package provides.
-
-Deployed as-is (no retraining around real motor limits) with clamping applied here instead
--- watch for jerky behavior right at the clamp boundaries; that's the known, accepted
-trade-off of this choice. Sim<->real translation points this module handles, all found by
-reconciling rover_mujoco's env against this package's already-working hardware interface:
-
-- **Sign convention**: the policy was trained where equal-sign wheel commands spin the rover
-  in place; Rover.write_real_velocities() sends left/right straight through, i.e. equal sign
-  really is forward on this real interface. NEGATE_RIGHT undoes the sim's convention.
-- **Units**: the policy outputs rad/s; write_real_velocities() converts to the firmware's
-  m/s itself, so clamping happens in rad/s before calling it, not after.
-- **Real velocity floor/ceiling**: the policy never saw Rover.MIN_VELOCITY/MAX_VELOCITY
-  (the real motors' dead zone and top speed) during training -- clamped here at inference
-  time instead.
-- **Encoder ticks**: EncoderPoller alternates encoder/lidar queries, halving its effective
-  encoder rate to 5Hz. The policy expects a fresh tick-delta every 10Hz control step
-  (matching training), so this module polls encoders only, at the full rate.
-"""
+"""Run the current eleven-input PPO policy after offline simulation qualification."""
 
 import json
 import socket
 import threading
 import time
 
-from huggingface_hub import hf_hub_download
+from envs.contract import observation_from_sensors
+from envs.contract import wheel_targets
 import numpy as np
 from stable_baselines3 import PPO
 
 from ArUco_detector.camera_stream import CameraStream
 from rover_control import network_interface
+from rover_control.ppo_deployment import check_manifest
+from rover_control.ppo_deployment import encoder_speeds
 from rover_control.rover import Rover
 
-HF_REPO_ID = "CursedRock17/rover-line-follower-ppo"
 CAM_RES = 64  # must match the trained policy's observation size
 CONTROL_HZ = 10.0  # matches Rover.COMMAND_RATE_HZ and the policy's training rate
 
 
 class _EncoderOnlyPoller:
-    """Polls {"command": "e"} every tick at the full control rate and returns ticks *since
-    the last poll* -- exactly the observation the policy was trained on. Deliberately
-    separate from encoder_poller.EncoderPoller (which alternates with a lidar query, halving
-    the effective encoder rate) rather than modifying that shared, already-working class."""
+    """Poll encoder counts at 10 Hz and retain their actual measurement interval."""
 
     def __init__(self, poll_hz=CONTROL_HZ):
         self._interval = 1.0 / poll_hz
@@ -54,6 +33,8 @@ class _EncoderOnlyPoller:
         self._lock = threading.Lock()
         self._prev_left = self._prev_right = None
         self._delta = np.zeros(2, dtype=np.float32)
+        self._stamp = 0.0
+        self._elapsed = 0.0
         self._running = False
         self._thread = None
 
@@ -76,67 +57,108 @@ class _EncoderOnlyPoller:
             try:
                 data, _ = self._sock.recvfrom(512)
                 parsed = json.loads(data.decode("utf-8"))
-                left, right = parsed["left_encoder"], parsed["right_encoder"]
+                left, right = float(parsed["left_encoder"]), float(parsed["right_encoder"])
+                if not np.isfinite([left, right]).all():
+                    continue
+                stamp = time.perf_counter()
                 with self._lock:
-                    if self._prev_left is not None:
+                    if self._prev_left is not None and self._prev_right is not None:
                         self._delta = np.array(
                             [left - self._prev_left, right - self._prev_right], dtype=np.float32
                         )
+                        self._elapsed = stamp - self._stamp
                     self._prev_left, self._prev_right = left, right
-            except (TimeoutError, ValueError, KeyError):
-                pass  # missed packet: keep the last delta rather than stall the control loop
+                    self._stamp = stamp
+            except (TimeoutError, ValueError, KeyError, TypeError):
+                pass  # The unchanged timestamp lets the control loop detect stale readings.
 
             elapsed = time.perf_counter() - t0
             remaining = self._interval - elapsed
             if remaining > 0:
                 time.sleep(remaining)
 
-    def latest_delta(self):
+    def latest(self):
         with self._lock:
-            return self._delta.copy()
+            return self._delta.copy(), self._elapsed, self._stamp
 
 
 class RLLineFollowerRover(Rover):
-    """Drives using the PPO line-following policy in place of a hand-written
-    compute_wheel_speeds(). See this module's docstring for the sim<->real translation."""
+    """Use calibrated encoder units and the exact normalized action mapping seen in training."""
 
-    NEGATE_RIGHT = True  # undoes the sim's opposite-sign-for-forward convention
+    # Control steps of continuous line loss before the rover stops. Simulation terminates at
+    # half that; see compute_wheel_speeds for why hardware is given longer.
+    LINE_LOST_STOP_STEPS = 10
 
-    def __init__(self, camera_addr=Rover.DEFAULT_CAMERA_ADDR, **kwargs):
-        super().__init__(camera_addr=camera_addr, **kwargs)
-
-        model_path = hf_hub_download(repo_id=HF_REPO_ID, filename="model.zip")
-        # CPU, not "auto": one observation at 10Hz never needs a GPU, and "auto" has already
-        # crashed here once on a GPU/CUDA-build mismatch (compute capability newer than this
-        # machine's PyTorch build supports) -- sidestep that class of failure entirely.
+    def __init__(
+        self,
+        model_path,
+        manifest_path,
+        *,
+        counts_per_revolution,
+        encoder_signs,
+        camera_addr=Rover.DEFAULT_CAMERA_ADDR,
+        **kwargs,
+    ):
+        # Validate local evidence and calibration before opening camera or encoder connections.
+        check_manifest(model_path, manifest_path)
+        encoder_speeds([0, 0], 0.1, counts_per_revolution, encoder_signs)
         self.model = PPO.load(model_path, device="cpu")
-
-        self._camera = CameraStream(camera_addr, target_hz=CONTROL_HZ).start()
-        self._encoders = _EncoderOnlyPoller(poll_hz=CONTROL_HZ).start()
-
-        # rad/s equivalents of the real motors' dead zone/top speed (MIN/MAX_VELOCITY are m/s)
-        wheel_radius = self.wheel_diameter / 2.0
-        self._min_omega = self.MIN_VELOCITY / wheel_radius
-        self._max_omega = self.MAX_VELOCITY / wheel_radius
+        if self.model.observation_space.shape != (11,) or self.model.action_space.shape != (2,):
+            raise ValueError("This runner requires the eleven-input, two-action PPO policy")
+        kwargs.setdefault("wheel_diameter_m", 2 * 0.03435)
+        super().__init__(camera_addr=camera_addr, **kwargs)
+        self._counts_per_revolution = counts_per_revolution
+        self._encoder_signs = encoder_signs
+        self._camera = CameraStream(camera_addr, target_hz=CONTROL_HZ)
+        self._encoders = _EncoderOnlyPoller(poll_hz=CONTROL_HZ)
+        self._started = time.perf_counter()
+        self._lost_steps = 0
+        try:
+            self._camera.start()
+            self._encoders.start()
+        except Exception:
+            self.close()
+            raise
 
     def _get_obs(self):
-        frame, _ = self._camera.latest()
-        self._maybe_show(frame)
-        if frame is None:
-            image = np.zeros((CAM_RES, CAM_RES, 1), dtype=np.uint8)
-        else:
-            import cv2
+        import cv2
 
-            resized = cv2.resize(frame, (CAM_RES, CAM_RES))
-            image = resized.mean(axis=-1, keepdims=True).astype(np.uint8)
-        return {"image": image, "encoders": self._encoders.latest_delta()}
+        frame, stamp = self._camera.latest()
+        counts, elapsed, encoder_stamp = self._encoders.latest()
+        now = time.perf_counter()
+        # Hold zero during sensor startup and stop on stale data once the startup period ends.
+        if frame is None or elapsed <= 0 or now - min(stamp, encoder_stamp) > 0.25:
+            if now - self._started < 3:
+                return None
+            raise RuntimeError("Camera or encoder measurements are missing or stale")
+        self._maybe_show(frame)
+        image = cv2.resize(frame, (CAM_RES, CAM_RES))[:, :, ::-1]
+        speeds = encoder_speeds(counts, elapsed, self._counts_per_revolution, self._encoder_signs)
+        return observation_from_sensors(image, speeds)
 
     def compute_wheel_speeds(self):
-        action, _ = self.model.predict(self._get_obs(), deterministic=True)
-        left, right = float(action[0]), float(action[1])
-        if self.NEGATE_RIGHT:
-            right = -right
-        return self.clamp([left, right], self._min_omega, self._max_omega)
+        observation = self._get_obs()
+        if observation is None:
+            return np.zeros(2)
+        # Deliberately looser than simulation's half second, which the policy was trained
+        # against: a real camera drops frames in ways the renderer never did, and stopping on
+        # a transient is its own failure. The cost is blind distance, MAX_VELOCITY * this, so
+        # about 25 cm. Tighten it back toward simulation once the logs show how often it fires.
+        self._lost_steps = 0 if observation[2] else self._lost_steps + 1
+        if self._lost_steps >= self.LINE_LOST_STOP_STEPS:
+            raise RuntimeError(f"Line lost for {self.LINE_LOST_STOP_STEPS / CONTROL_HZ:.1f} s")
+        action, _ = self.model.predict(observation, deterministic=True)
+        targets = wheel_targets(action)
+        radius = self.wheel_diameter / 2
+        targets = np.clip(targets, -self.MAX_VELOCITY / radius, self.MAX_VELOCITY / radius)
+        return np.where(np.abs(targets) < self.MIN_VELOCITY / radius, 0.0, targets)
+
+    def update(self):
+        # Stop on sensor failure, inference error, or keyboard interruption.
+        try:
+            super().update()
+        finally:
+            self.stop()
 
     def close(self):
         self._encoders.stop()
