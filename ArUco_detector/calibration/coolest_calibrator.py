@@ -5,13 +5,14 @@ Camera Calibration Program using a chessboard
 This program performs camera calibration using a set of chessboard images.
 """
 
+import glob
+
 import cv2
 import numpy as np
-import glob
 
 # Chessboard dimensions
 squares_X = 10  # Number of squares along X
-squares_Y = 7   # Number of squares along Y
+squares_Y = 7  # Number of squares along Y
 nX = squares_X - 1  # Number of inner corners along X
 nY = squares_Y - 1  # Number of inner corners along Y
 square_size = 0.025  # Size of square in meters
@@ -26,7 +27,7 @@ objp *= square_size
 
 # Arrays to store points
 object_points = []  # 3D points in real world
-image_points = []   # 2D points in image plane
+image_points = []  # 2D points in image plane
 
 
 def main():
@@ -60,7 +61,9 @@ def main():
         return
 
     # Calibration
-    ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(object_points, image_points, gray.shape[::-1], None, None)
+    ret, mtx, dist, _, _ = cv2.calibrateCamera(
+        object_points, image_points, gray.shape[::-1], None, None
+    )
 
     # Save calibration
     fs = cv2.FileStorage("calibration_chessboard.yaml", cv2.FILE_STORAGE_WRITE)

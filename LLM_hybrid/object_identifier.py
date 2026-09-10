@@ -1,7 +1,9 @@
 # External Libraries
-import os
 import json
+import os
 import time
+from typing import ClassVar
+
 import cv2
 import numpy as np
 import ollama
@@ -9,7 +11,7 @@ import ollama
 
 class ObjectIdentifier:
     # The exact JSON shape we force the model to reply with
-    RESPONSE_SCHEMA = {
+    RESPONSE_SCHEMA: ClassVar[dict] = {
         "type": "object",
         "properties": {"object": {"type": "string"}},
         "required": ["object"],
@@ -45,9 +47,12 @@ class ObjectIdentifier:
 
     def warm_up(self):
         # Load the model into memory now, so the first real identify() isn't minutes slow
-        ollama.chat(model=self.model, messages=[{"role": "user", "content": "hi"}],
-                    options={"num_predict": 1, "num_thread": self.num_threads},
-                    keep_alive=self.keep_alive)
+        ollama.chat(
+            model=self.model,
+            messages=[{"role": "user", "content": "hi"}],
+            options={"num_predict": 1, "num_thread": self.num_threads},
+            keep_alive=self.keep_alive,
+        )
 
     def identify(self, image):
         """
@@ -57,11 +62,13 @@ class ObjectIdentifier:
         # Ask the vision model one short question, forcing a JSON answer
         response = ollama.chat(
             model=self.model,
-            messages=[{
-                "role": "user",
-                "content": "What object is in the middle of this image? Answer in 1-3 words.",
-                "images": [self._encode_image(image)],
-            }],
+            messages=[
+                {
+                    "role": "user",
+                    "content": "What object is in the middle of this image? Answer in 1-3 words.",
+                    "images": [self._encode_image(image)],
+                }
+            ],
             format=self.RESPONSE_SCHEMA,
             # Capping the output tokens stops the model from rambling for minutes
             options={"num_predict": 50, "num_thread": self.num_threads},

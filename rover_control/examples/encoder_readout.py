@@ -7,6 +7,7 @@ from rover_control.encoder_poller import EncoderPoller
 # How often to print the encoder counts
 POLL_HZ = 5.0
 
+
 def main():
     print("Polling encoder counts - press Ctrl-C to quit\n")
     poller = EncoderPoller(poll_hz=POLL_HZ).start()
@@ -25,6 +26,7 @@ def main():
         print("\nStopping.")
     finally:
         poller.stop()
+
 
 if __name__ == "__main__":
     main()

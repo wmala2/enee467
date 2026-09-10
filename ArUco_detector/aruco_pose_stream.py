@@ -1,40 +1,32 @@
+import time
+import urllib.request
+
 import cv2
 import numpy as np
-import urllib.request
-import time
 
 ### Camera Calibration ###
 # Replace these with your actual calibration results
-camera_matrix = np.array([
-    [468.21508393,   0.0,         400.85688995],
-    [  0.0,         468.23693575, 294.55662856],
-    [  0.0,           0.0,           1.0        ]
-], dtype=np.float32)
+camera_matrix = np.array(
+    [[468.21508393, 0.0, 400.85688995], [0.0, 468.23693575, 294.55662856], [0.0, 0.0, 1.0]],
+    dtype=np.float32,
+)
 
 # Replace with actual distortion coefficients if available
-dist_coeffs = np.array([
-   -1.09482798e-01,
-    1.22416369e-01,
-    -7.01025426e-05,
-    1.05030430e-03,
-    -2.63142037e-02
-], dtype=np.float32)
+dist_coeffs = np.array(
+    [-1.09482798e-01, 1.22416369e-01, -7.01025426e-05, 1.05030430e-03, -2.63142037e-02],
+    dtype=np.float32,
+)
 
 ### ArUco Configuration ###
 # Define the physical marker size in meters
 marker_length_m = 0.10
 
 # Create the ArUco dictionary and detector
-aruco_dict = cv2.aruco.getPredefinedDictionary(
-    cv2.aruco.DICT_4X4_250
-)
+aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_250)
 
 detector_params = cv2.aruco.DetectorParameters()
 
-detector = cv2.aruco.ArucoDetector(
-    aruco_dict,
-    detector_params
-)
+detector = cv2.aruco.ArucoDetector(aruco_dict, detector_params)
 
 ### Camera Stream Configuration ###
 # HTTP endpoint serving JPEG snapshots
@@ -77,17 +69,13 @@ def rotation_matrix_to_yaw_deg(R):
         yaw_deg
     """
 
-    yaw_rad = np.arctan2(
-        R[1, 0],
-        R[0, 0]
-    )
+    yaw_rad = np.arctan2(R[1, 0], R[0, 0])
 
     return np.degrees(yaw_rad)
 
 
 ### Main Processing Loop ###
 while True:
-
     # Start timing before image acquisition so network latency is included
     start_time = time.perf_counter()
 
@@ -95,7 +83,7 @@ while True:
     try:
         frame = get_frame(HTTP_ADDR)
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 -- any camera/network failure should skip the frame, not stop the stream
         print(f"Camera error: {e}")
         continue
 
@@ -105,37 +93,33 @@ while True:
         continue
 
     # Convert image to grayscale for marker detection
-    gray = cv2.cvtColor(
-        frame,
-        cv2.COLOR_BGR2GRAY
-    )
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
     # Detect ArUco markers
     corners, ids, rejected = detector.detectMarkers(gray)
 
     # Process all detected markers
     if ids is not None and len(ids) > 0:
-
         # Draw marker outlines
-        cv2.aruco.drawDetectedMarkers(
-            frame,
-            corners,
-            ids
-        )
+        cv2.aruco.drawDetectedMarkers(frame, corners, ids)
 
-        # Where the marker's four corners sit in its own frame (top-left, top-right, bottom-right, bottom-left)
+        # Where the marker's four corners sit in its own frame (top-left, top-right, bottom-right,
+        # bottom-left)
         half = marker_length_m / 2.0
-        marker_points = np.array([
-            [-half,  half, 0.0],
-            [ half,  half, 0.0],
-            [ half, -half, 0.0],
-            [-half, -half, 0.0],
-        ], dtype=np.float32)
+        marker_points = np.array(
+            [
+                [-half, half, 0.0],
+                [half, half, 0.0],
+                [half, -half, 0.0],
+                [-half, -half, 0.0],
+            ],
+            dtype=np.float32,
+        )
 
         # Iterate through each detected marker
         for i, marker_id in enumerate(ids.flatten()):
-
-            # Estimate this marker's pose (cv2.aruco.estimatePoseSingleMarkers was removed in OpenCV 4.7+)
+            # Estimate this marker's pose (cv2.aruco.estimatePoseSingleMarkers was removed in OpenCV
+            # 4.7+)
             ok, rvec, tvec = cv2.solvePnP(
                 marker_points,
                 corners[i].reshape((-1, 1, 2)),
@@ -159,12 +143,7 @@ while True:
             distance_m = np.linalg.norm(tvec)
 
             # Compute bearing angle relative to camera centerline
-            bearing_deg = np.degrees(
-                np.arctan2(
-                    tvec[0][0],
-                    tvec[0][2]
-                )
-            )
+            bearing_deg = np.degrees(np.arctan2(tvec[0][0], tvec[0][2]))
 
             # Initialize filter storage for newly observed markers
             if marker_id not in filtered_tvecs:
@@ -172,16 +151,10 @@ while True:
                 filtered_yaws[marker_id] = yaw_deg
 
             # Apply exponential moving average filter to translation
-            filtered_tvecs[marker_id] = (
-                alpha * tvec +
-                (1.0 - alpha) * filtered_tvecs[marker_id]
-            )
+            filtered_tvecs[marker_id] = alpha * tvec + (1.0 - alpha) * filtered_tvecs[marker_id]
 
             # Apply exponential moving average filter to yaw
-            filtered_yaws[marker_id] = (
-                alpha * yaw_deg +
-                (1.0 - alpha) * filtered_yaws[marker_id]
-            )
+            filtered_yaws[marker_id] = alpha * yaw_deg + (1.0 - alpha) * filtered_yaws[marker_id]
 
             # Use filtered values for display
             tvec_filtered = filtered_tvecs[marker_id]
@@ -190,22 +163,10 @@ while True:
             # Recompute filtered navigation quantities
             distance_filtered = np.linalg.norm(tvec_filtered)
 
-            bearing_filtered = np.degrees(
-                np.arctan2(
-                    tvec_filtered[0][0],
-                    tvec_filtered[0][2]
-                )
-            )
+            bearing_filtered = np.degrees(np.arctan2(tvec_filtered[0][0], tvec_filtered[0][2]))
 
             # Draw marker coordinate axes
-            cv2.drawFrameAxes(
-                frame,
-                camera_matrix,
-                dist_coeffs,
-                rvec,
-                tvec,
-                marker_length_m * 0.5
-            )
+            cv2.drawFrameAxes(frame, camera_matrix, dist_coeffs, rvec, tvec, marker_length_m * 0.5)
 
             # Build concise navigation display
             overlay_text = (
@@ -223,14 +184,13 @@ while True:
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.7,
                 (0, 255, 0),
-                2
+                2,
             )
 
             # Periodically print pose information
             current_time = time.time()
 
             if current_time - last_print_time > print_interval_sec:
-
                 print(
                     f"Marker {marker_id} | "
                     f"Range: {distance_filtered:.2f} m | "
@@ -241,27 +201,16 @@ while True:
                 last_print_time = current_time
 
     # Measure total loop execution time
-    processing_time = (
-        time.perf_counter() - start_time
-    )
+    processing_time = time.perf_counter() - start_time
 
     # Display frame rate
     fps_text = f"FPS: {1.0 / processing_time:.1f}" if processing_time > 0 else "FPS: --"
     cv2.putText(
-        frame,
-        fps_text,
-        (10, frame.shape[0] - 20),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.7,
-        (255, 255, 0),
-        2
+        frame, fps_text, (10, frame.shape[0] - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2
     )
 
     # Display processed image
-    cv2.imshow(
-        "ArUco Pose Tracking",
-        frame
-    )
+    cv2.imshow("ArUco Pose Tracking", frame)
 
     # Optional frame-rate limiting
     sleep_time = frame_interval - processing_time

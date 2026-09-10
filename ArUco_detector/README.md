@@ -58,7 +58,7 @@ estimator = ArucoPoseEstimator(
     dist_coeffs=dist_coeffs,
     marker_length_m=0.10,
     http_addr="http://192.168.50.123:80/capture",
-    verbose=True  # set False if you only want data
+    verbose=True,  # set False if you only want data
 )
 ```
 

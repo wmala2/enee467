@@ -7,17 +7,210 @@ name = "matrix_lab_rover_above"
 version = "0.1.0"
 description = "High-level AI agent code (ArUco tracking, YOLO detection, LLM hybrid, rover control) for the STEM Rovers"
 readme = "README.md"
-requires-python = ">=3.10"
+# Pinned to 3.12 by rover_mujoco (MuJoCo/onshape-to-robot); the whole workspace shares one interpreter.
+requires-python = ">=3.12,<3.13"
 dependencies = [
+    "huggingface_hub",
     "numpy",
     "ollama",
     "opencv-contrib-python",
     "pillow",
     "pynput",
     "requests",
+    "rover_mujoco",
+    "stable-baselines3",
     "transformers",
     "ultralytics",
+    "wandb>=0.29.0",
 ]
+
+# torch is not a plain dependency: pick exactly one of these extras at sync time.
+#   uv sync --extra cpu     (no NVIDIA GPU -- saves ~6 GB)
+#   uv sync --extra cu121   (NVIDIA GPU)
+[project.optional-dependencies]
+cpu = ["torch", "torchvision"]
+cu121 = ["torch", "torchvision"]
 
 [tool.setuptools]
 packages = ["ArUco_detector", "depth_anything_server", "LLM_hybrid", "YOLO_agent", "rover_control"]
+
+# Lint/test tooling for the whole workspace. uv installs this group by default, so a plain
+# `uv sync` gets it; use `uv sync --no-dev` to skip it.
+[dependency-groups]
+dev = [
+    "ruff>=0.3.0",
+    "pytest>=8.0.0",
+    "ty>=0.0.78",
+]
+
+[tool.uv.workspace]
+members = ["rover_mujoco"]
+
+[tool.uv]
+conflicts = [[{ extra = "cpu" }, { extra = "cu121" }]]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu121"
+url = "https://download.pytorch.org/whl/cu121"
+explicit = true
+
+[tool.uv.sources]
+rover_mujoco = { workspace = true }
+torch = [
+    { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-cu121", extra = "cu121" },
+]
+torchvision = [
+    { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-cu121", extra = "cu121" },
+]
+
+# Lint/format config, adapted from the Google Python Style Guide's pylintrc mapping
+# (https://google.github.io/styleguide/pyguide.html, via
+# https://gist.github.com/tonycoco/8c3690aec999c66d8cd07ac0321cbe44).
+# Three deliberate deviations from that source:
+#   * line-length is 100, not 80 -- this repo's explanatory comments and docstrings are
+#     written to ~100, and hard-wrapping them at 80 hurts more than it helps.
+#   * `fix = true` is dropped, so `ruff check` reports without rewriting files. Use
+#     `uv run scripts/check.py --fix` when you actually want the autofixes applied.
+#   * absl/tensorflow/enchant references and the `third_party` exclude are dropped; none
+#     of them exist in this repo.
+# Run everything with: uv run scripts/check.py
+[tool.ruff]
+line-length = 100
+preview = true
+target-version = "py312"
+
+[tool.ruff.format]
+preview = true
+docstring-code-format = true
+
+[tool.ruff.lint]
+preview = true
+dummy-variable-rgx = "^\\*{0,2}(_$|unused_|dummy_)"
+logger-objects = ["logging"]
+task-tags = ["TODO"]
+# See: https://github.com/astral-sh/ruff/issues/970
+extend-select = [
+  "D419",  # empty-docstring
+  "E501",  # line-too-long
+  "W291",  # trailing-whitespace
+  "PLC0414",  # useless-import-alias
+  "PLC2401",  # non-ascii-name
+  "PLC2801",  # unnecessary-dunder-call
+  "PLC3002",  # unnecessary-direct-lambda-call
+  "PLE0101",  # return-in-init
+  "F706",  # return-outside-function
+  "F704",  # yield-outside-function
+  "PLE0115",  # nonlocal-and-global
+  "PLE0117",  # nonlocal-without-binding
+  "PLE0241",  # duplicate-bases
+  "PLE0302",  # unexpected-special-method-signature
+  "PLE0604",  # invalid-all-object
+  "PLE0605",  # invalid-all-format
+  "PLE0643",  # potential-index-error
+  "PLE0704",  # misplaced-bare-raise
+  "PLE1141",  # dict-iter-missing-items
+  "PLE1142",  # await-outside-async
+  "PLE1205",  # logging-too-many-args
+  "PLE1206",  # logging-too-few-args
+  "PLE1307",  # bad-string-format-type
+  "PLE1310",  # bad-str-strip-call
+  "PLE1507",  # invalid-envvar-value
+  "PLE1519",  # singledispatch-method
+  "PLE1520",  # singledispatchmethod-function
+  "PLE2502",  # bidirectional-unicode
+  "PLE2510",  # invalid-character-backspace
+  "PLE2512",  # invalid-character-sub
+  "PLE2513",  # invalid-character-esc
+  "PLE2514",  # invalid-character-nul
+  "PLE2515",  # invalid-character-zero-width-space
+  "PLE4703",  # modified-iterating-set
+  "PLW0108",  # unnecessary-lambda
+  "PLW0127",  # self-assigning-variable
+  "PLW0128",  # redeclared-assigned-name
+  "PLW0129",  # assert-on-string-literal
+  "B033",  # duplicate-value
+  "PLW0131",  # named-expr-without-context
+  "PLE0116",  # continue-in-finally
+  "PLW0177",  # nan-comparison
+  "PLW0211",  # bad-staticmethod-argument
+  "PLW0244",  # redefined-slots-in-subclass
+  "PLW0245",  # super-without-brackets
+  "PLW0602",  # global-variable-not-assigned
+  "PLW0604",  # global-at-module-level
+  "F401",  # unused-import
+  "F841",  # unused-variable
+  "E722",  # bare-except
+  "PLW0711",  # binary-op-exception
+  "PLW1501",  # bad-open-mode
+  "PLW1507",  # shallow-copy-environ
+  "PLW1508",  # invalid-envvar-default
+  "PLW1509",  # subprocess-popen-preexec-fn
+  "PLW1514",  # unspecified-encoding
+  "PLW2101",  # useless-with-lock
+  "PLW3301",  # nested-min-max
+]
+ignore = [
+  "PLR0124",  # comparison-with-itself
+  "PLR0202",  # no-classmethod-decorator
+  "PLR0203",  # no-staticmethod-decorator
+  "UP004",  # useless-object-inheritance
+  "PLR0206",  # property-with-parameters
+  "PLR0904",  # too-many-public-methods
+  "PLR0911",  # too-many-return-statements
+  "PLR0912",  # too-many-branches
+  "PLR0913",  # too-many-arguments
+  "PLR0914",  # too-many-locals
+  "PLR0915",  # too-many-statements
+  "PLR0916",  # too-many-boolean-expressions
+  "PLR0917",  # too-many-positional-arguments
+  "PLR1702",  # too-many-nested-blocks
+  "PLR1704",  # redefined-argument-from-local
+  "PLR1708",  # stop-iteration-return
+  "PLR1711",  # useless-return
+  "C416",  # unnecessary-comprehension
+  "PLR1733",  # unnecessary-dict-index-lookup
+  "PLR1736",  # unnecessary-list-index-lookup
+  "PLW0120",  # useless-else-on-loop
+  "PLW0406",  # import-self
+  "PLW0603",  # global-statement
+  "E701",  # multiple-statements-on-one-line (to allow single-line-if-stmt)
+]
+
+[tool.ruff.lint.isort]
+# Reference: https://pycqa.github.io/isort/docs/configuration/options.html#profile
+# This follows the `isort` profile for `google`.
+# Ruff's implementation of isort does not include the following settings...
+# profile = "google"
+# lexicographical = true
+# line-length = 1000
+# group-by-package = true
+force-single-line = true
+force-sort-within-sections = true
+single-line-exclusions = [
+  "typing",
+]
+order-by-type = false
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.pylint]
+max-args = 5
+max-branches = 12
+max-returns = 6
+max-statements = 50
+
+# ArUco_detector/YOLO_agent/LLM_hybrid are not snake_case, but they are the public import
+# names used throughout the repo and in every student example, so N999 is muted rather than
+# renaming them.
+[tool.ruff.lint.per-file-ignores]
+"ArUco_detector/*" = ["N999"]
+"YOLO_agent/*" = ["N999"]
+"LLM_hybrid/*" = ["N999"]

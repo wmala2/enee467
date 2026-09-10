@@ -1,8 +1,9 @@
 # External Libraries
 import csv
-import time
 from datetime import datetime
 from pathlib import Path
+import time
+from typing import ClassVar
 
 
 class RunLogger:
@@ -16,15 +17,41 @@ class RunLogger:
     """
 
     # Fixed column order (superset of everything any runner logs)
-    COLUMNS = [
-        "t", "dt", "hz", "phase", "event", "target_id", "seen",
-        "bearing_raw", "bearing_smoothed", "X", "Y", "Z", "distance", "reproj_error",
-        "frame_stamp", "frame_age", "frame_is_new",
-        "distance_error", "heading_input", "pid_forward", "pid_turn",
-        "cmd_left", "cmd_right", "saturated", "commanded_deg",
-        "enc_left", "enc_right", "enc_left_delta", "enc_right_delta",
-        "frames_sampled", "frames_with_tag",
-        "lidar_left_mm", "lidar_center_mm", "lidar_right_mm",
+    COLUMNS: ClassVar[list[str]] = [
+        "t",
+        "dt",
+        "hz",
+        "phase",
+        "event",
+        "target_id",
+        "seen",
+        "bearing_raw",
+        "bearing_smoothed",
+        "X",
+        "Y",
+        "Z",
+        "distance",
+        "reproj_error",
+        "frame_stamp",
+        "frame_age",
+        "frame_is_new",
+        "distance_error",
+        "heading_input",
+        "pid_forward",
+        "pid_turn",
+        "cmd_left",
+        "cmd_right",
+        "saturated",
+        "commanded_deg",
+        "enc_left",
+        "enc_right",
+        "enc_left_delta",
+        "enc_right_delta",
+        "frames_sampled",
+        "frames_with_tag",
+        "lidar_left_mm",
+        "lidar_center_mm",
+        "lidar_right_mm",
     ]
 
     def __init__(self, name="run", enabled=True):
@@ -38,7 +65,9 @@ class RunLogger:
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.path = log_dir / f"{name}_{stamp}.csv"
 
-        self._file = open(self.path, "w", newline="")
+        # SIM115: the handle lives as long as the logger does (see close()), so a context
+        # manager here would close the file before the first row is written.
+        self._file = open(self.path, "w", newline="", encoding="utf-8")  # noqa: SIM115
         self._writer = csv.DictWriter(self._file, fieldnames=self.COLUMNS)
         self._writer.writeheader()
         self._file.flush()
@@ -58,7 +87,7 @@ class RunLogger:
             return
 
         now = time.perf_counter()
-        row = {column: "" for column in self.COLUMNS}
+        row = dict.fromkeys(self.COLUMNS, "")
         for key, value in fields.items():
             if key in row and value is not None:
                 row[key] = self._round(value)

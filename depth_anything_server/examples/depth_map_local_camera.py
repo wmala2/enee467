@@ -1,8 +1,9 @@
-import cv2
-import torch
 import os
-import numpy as np
+
+import cv2
 from depth_anything_3.api import DepthAnything3
+import numpy as np
+import torch
 
 # 1. Initialize optimized DA3 model on GPU
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True,garbage_collection_threshold:0.8"
@@ -32,12 +33,11 @@ with torch.inference_mode():
 
         # Apply PyTorch optimization: Run with Automatic Mixed Precision (FP16)
         with torch.autocast(device_type="cuda", dtype=torch.float16):
-            # 3. Model inference using the official DA3 API (handles resize internally via process_res)
+            # 3. Model inference using the official DA3 API (handles resize internally via
+            # process_res)
             # We pass the BGR frame directly; the API manages the array-to-tensor pipeline
             prediction = model.inference(
-                [frame], 
-                process_res=378, 
-                process_res_method="upper_bound_resize"
+                [frame], process_res=378, process_res_method="upper_bound_resize"
             )
 
         # Return the metric depth map
@@ -54,7 +54,9 @@ with torch.inference_mode():
             depth_output = depth_output.cpu().numpy()
 
         # 4. Post-processing: Normalize depth map to 0-255 range for visualization
-        depth_normalized = cv2.normalize(depth_output, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U) 
+        depth_normalized = cv2.normalize(
+            depth_output, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U
+        )
 
         # Colorize the depth map using an OpenCV colormap
         depth_colormap = cv2.applyColorMap(depth_normalized, cv2.COLORMAP_INFERNO)
@@ -67,7 +69,7 @@ with torch.inference_mode():
         distance_in_meters = np.median(depth_output[0, 0])
         print(f"Object is exactly {distance_in_meters:.2f} meters away!")
 
-        if cv2.waitKey(1) & 0xFF == ord('q'):
+        if cv2.waitKey(1) & 0xFF == ord("q"):
             break
 
 cap.release()

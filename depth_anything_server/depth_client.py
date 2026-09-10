@@ -1,9 +1,10 @@
 # Internal Imports
-import requests
+import cv2
 
 # External Imports
 import numpy as np
-import cv2
+import requests
+
 
 class RoverNavigationClient:
     def __init__(self, server_url: str, timeout: float = 5.0, verbose: bool = False):
@@ -19,11 +20,11 @@ class RoverNavigationClient:
         try:
             response = self.session.get(capture_url, timeout=3.0)
             response.raise_for_status()
-            
+
             img_arr = np.frombuffer(response.content, dtype=np.uint8)
             frame = cv2.imdecode(img_arr, cv2.IMREAD_COLOR)
             return frame
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 -- caller treats None as "no frame this tick"
             if self.verbose:
                 print(f"Error communicating with rover {rover_ip}: {e}")
             return None
@@ -40,7 +41,7 @@ class RoverNavigationClient:
                 self.depth_url,
                 data=jpeg_buf.tobytes(),
                 headers={"Content-Type": "image/jpeg"},
-                timeout=self.timeout
+                timeout=self.timeout,
             )
             resp.raise_for_status()
 
@@ -53,14 +54,16 @@ class RoverNavigationClient:
             frame_h, frame_w = frame.shape[:2]
             if (h, w) != (frame_h, frame_w):
                 # INTER_NEAREST preserves hard depth edges (no blending across object boundaries)
-                depth_meters = cv2.resize(depth_meters, (frame_w, frame_h), interpolation=cv2.INTER_NEAREST)
-                
+                depth_meters = cv2.resize(
+                    depth_meters, (frame_w, frame_h), interpolation=cv2.INTER_NEAREST
+                )
+
             # If verbose is active, show the live visual feedback window
             if self.verbose:
                 self._show_debug_window(frame, depth_meters)
-                
+
             return depth_meters
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 -- caller treats None as "no depth this tick"
             if self.verbose:
                 print(f"Server inference failed: {e}")
             return None
@@ -71,13 +74,13 @@ class RoverNavigationClient:
         max_dist = 10.0
         depth_clipped = np.clip(depth_map, 0, max_dist)
         depth_visual = ((1.0 - (depth_clipped / max_dist)) * 255).astype(np.uint8)
-        
+
         # Colorize it so it looks spectacular for the students
         depth_colormap = cv2.applyColorMap(depth_visual, cv2.COLORMAP_INFERNO)
-        
+
         # Stack original camera view and depth view side-by-side
         combined_view = cv2.hconcat([frame, depth_colormap])
-        
+
         cv2.imshow("Rover Telemetry (Left: RGB | Right: Depth)", combined_view)
         cv2.waitKey(1)  # Keeps the window responsive
 
@@ -87,14 +90,18 @@ class RoverNavigationClient:
         # Crop the depth map to just the pixels inside the YOLO bounding box
         box_depths = depth_map[y1:y2, x1:x2].flatten()
 
-        if len(box_depths) == 0: return 0.0
+        if len(box_depths) == 0:
+            return 0.0
         # Drop near-zero readings caused by lens glare or sensor noise
         box_depths = box_depths[box_depths > 0.1]
 
         # IQR filter: keep only the middle 50% of depth values to remove background outliers
         q25, q75 = np.percentile(box_depths, [25, 75])
         iqr = q75 - q25
-        filtered_pixels = box_depths[(box_depths >= q25 - 1.5*iqr) & (box_depths <= q75 + 1.5*iqr)]
+        filtered_pixels = box_depths[
+            (box_depths >= q25 - 1.5 * iqr) & (box_depths <= q75 + 1.5 * iqr)
+        ]
 
-        if len(filtered_pixels) == 0: return float(np.median(box_depths))
+        if len(filtered_pixels) == 0:
+            return float(np.median(box_depths))
         return float(np.mean(filtered_pixels))

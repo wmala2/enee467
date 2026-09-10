@@ -39,8 +39,8 @@ from depth_anything_server.depth_client import RoverNavigationClient
 client = RoverNavigationClient(server_url="http://192.168.50.155:5000")
 
 frame = client.fetch_rover_frame("192.168.50.123:80")  # grab a frame from the rover camera
-depth = client.get_metric_depth(frame)                 # float32 depth map in meters
-dist  = client.get_object_distance(yolo_box, depth)    # distance to a YOLO bounding box
+depth = client.get_metric_depth(frame)  # float32 depth map in meters
+dist = client.get_object_distance(yolo_box, depth)  # distance to a YOLO bounding box
 
 print(f"Object is {dist:.2f} m away")
 ```

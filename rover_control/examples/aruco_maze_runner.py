@@ -1,17 +1,20 @@
 # External Libraries
 import time
-import numpy as np
-import cv2
+from typing import ClassVar
 
-# Local Files to Import
-from rover_control import conversions
-from rover_control.rover import Rover
-from rover_control.pid import PID
-from rover_control.run_logger import RunLogger
-from rover_control.encoder_poller import EncoderPoller
+import cv2
+import numpy as np
 
 # Local Libraries to Import
 from ArUco_detector.aruco_pose_estimator import ArucoPoseEstimator
+
+# Local Files to Import
+from rover_control import conversions
+from rover_control.encoder_poller import EncoderPoller
+from rover_control.pid import PID
+from rover_control.rover import Rover
+from rover_control.run_logger import RunLogger
+
 
 class ArucoRunner(Rover):
     """
@@ -26,20 +29,27 @@ class ArucoRunner(Rover):
          a guard stops and re-centers if the tag drifts off-center or drops out of view.
     """
 
-    MARKER_ID_LIST = [0, 1]      # the order of ArUco tag IDs we drive toward
-    CENTER_TOLERANCE_DEG = 7.0   # "semi-centered" enough to drive; also keeps each turn above a tiny-burst size
-    DRIVE_RECENTER_DEG = 20.0    # only bail to re-center on big drift (tag nearing the frame edge), not small errors
-    SEARCH_STEP_DEG = 45.0       # how far we turn to sweep for a tag we can't see
-    SETTLE_S = 0.25              # pause after a turn so the chassis stops moving before we look
-    CONFIRM_FRAMES = 7           # fresh frames (captured after we stopped) sampled per look
-    CONFIRM_MIN = 2              # tag must appear in at least this many fresh frames to trust the reading
-    BEARING_AGREE_DEG = 5.0      # fresh frames must agree within this bearing spread, or we sample again
-    MAX_LOOK_TRIES = 5           # sampling rounds before we give up and treat the tag as unsteady
-    LOG = True                   # write a per-tick diagnostic CSV to logs/ (set False to disable)
+    MARKER_ID_LIST: ClassVar[list[int]] = [0, 1]  # the order of ArUco tag IDs we drive toward
+    CENTER_TOLERANCE_DEG = (
+        7.0  # "semi-centered" enough to drive; also keeps each turn above a tiny-burst size
+    )
+    DRIVE_RECENTER_DEG = (
+        20.0  # only bail to re-center on big drift (tag nearing the frame edge), not small errors
+    )
+    SEARCH_STEP_DEG = 45.0  # how far we turn to sweep for a tag we can't see
+    SETTLE_S = 0.25  # pause after a turn so the chassis stops moving before we look
+    CONFIRM_FRAMES = 7  # fresh frames (captured after we stopped) sampled per look
+    CONFIRM_MIN = 2  # tag must appear in at least this many fresh frames to trust the reading
+    BEARING_AGREE_DEG = (
+        5.0  # fresh frames must agree within this bearing spread, or we sample again
+    )
+    MAX_LOOK_TRIES = 5  # sampling rounds before we give up and treat the tag as unsteady
+    LOG = True  # write a per-tick diagnostic CSV to logs/ (set False to disable)
 
     # Cap forward speed well below the base class limit: at full throttle the chassis vibrates
     # enough to lose the ArUco tag every 2-5 frames. The logs show reliable lock only when
-    # saturated=False (distance_error < ~0.3 m). 0.12 m/s keeps us in that regime the whole approach.
+    # saturated=False (distance_error < ~0.3 m). 0.12 m/s keeps us in that regime the whole
+    # approach.
     MAX_VELOCITY = 0.12  # m/s (overrides Rover.MAX_VELOCITY = 0.25)
 
     def __init__(self, stop_tolerance_m=0.25):
@@ -54,7 +64,7 @@ class ArucoRunner(Rover):
         # Create our ArUco Marker Pose Estimator
         self.estimator = ArucoPoseEstimator(
             http_addr=img_addr,
-            verbose=True  # set False if you only want data
+            verbose=True,  # set False if you only want data
         )
 
         # PID on the forward distance to the tag (+Z is forward), output is forward speed in m/s
@@ -66,7 +76,8 @@ class ArucoRunner(Rover):
         # Remember when we last ran the controller so the PIDs get a real time step
         self._last_pid_time = time.perf_counter()
 
-        # Diagnostic logging (one CSV row per tick/decision) + per-tick scratch from compute_wheel_speeds
+        # Diagnostic logging (one CSV row per tick/decision) + per-tick scratch from
+        # compute_wheel_speeds
         self.logger = RunLogger("maze_pid", enabled=self.LOG)
         self._last_frame_stamp = 0.0
         self._dbg = {}
@@ -101,11 +112,14 @@ class ArucoRunner(Rover):
             raise KeyboardInterrupt
 
     def turn_in_place(self, direction, degrees, target_id=None):
-        # Spin the rover on the spot by a number of degrees (open-loop, timed at the stall-floor speed)
+        # Spin the rover on the spot by a number of degrees (open-loop, timed at the stall-floor
+        # speed)
         # direction: +1 turns toward the tag's right (+X), -1 turns left
         omega = 2.0 * self.MIN_VELOCITY / self.wheel_separation
         spin_time = np.radians(degrees * self.TURN_SCALE) / omega
-        spin = conversions.convert_linear_vel_to_angular_vel(self.MIN_VELOCITY, self.wheel_diameter / 2.0)
+        spin = conversions.convert_linear_vel_to_angular_vel(
+            self.MIN_VELOCITY, self.wheel_diameter / 2.0
+        )
 
         # Snapshot encoder counts before the turn so we can measure actual rotation afterward
         enc_before = self.poller.latest()
@@ -126,13 +140,18 @@ class ArucoRunner(Rover):
         # Log the turn outcome: commanded angle vs total encoder delta (actual rotation proxy)
         enc_after = self.poller.latest()
         if enc_before is not None and enc_after is not None:
-            self.logger.log(phase="turn", event="completed", target_id=target_id,
-                            commanded_deg=direction * degrees,
-                            enc_left_delta=enc_after[0] - enc_before[0],
-                            enc_right_delta=enc_after[1] - enc_before[1])
+            self.logger.log(
+                phase="turn",
+                event="completed",
+                target_id=target_id,
+                commanded_deg=direction * degrees,
+                enc_left_delta=enc_after[0] - enc_before[0],
+                enc_right_delta=enc_after[1] - enc_before[1],
+            )
 
     def look(self, target_id):
-        # Stop-and-stare measurement, hardened: trust a reading only when several fresh frames AGREE.
+        # Stop-and-stare measurement, hardened: trust a reading only when several fresh frames
+        # AGREE.
         # next_frame() only returns frames captured AFTER `since`, so the stale, laggy frames from
         # while we were moving are skipped deterministically - no frame-count guessing.
         total_sampled = total_with_tag = 0
@@ -150,12 +169,20 @@ class ArucoRunner(Rover):
                 if target_id in poses:
                     total_with_tag += 1
                     x, z = poses[target_id]["position"][0], poses[target_id]["position"][2]
-                    bearings.append(np.degrees(np.arctan2(x, z)))  # bearing off straight-ahead (+ = right)
-                    distances.append(z)                            # Z = forward distance (meters)
+                    bearings.append(
+                        np.degrees(np.arctan2(x, z))
+                    )  # bearing off straight-ahead (+ = right)
+                    distances.append(z)  # Z = forward distance (meters)
 
             # Trust it only if enough fresh frames saw the tag AND they agree on the bearing
-            if len(bearings) >= self.CONFIRM_MIN and (max(bearings) - min(bearings)) <= self.BEARING_AGREE_DEG:
-                self._look_stats = {"frames_sampled": total_sampled, "frames_with_tag": total_with_tag}
+            if (
+                len(bearings) >= self.CONFIRM_MIN
+                and (max(bearings) - min(bearings)) <= self.BEARING_AGREE_DEG
+            ):
+                self._look_stats = {
+                    "frames_sampled": total_sampled,
+                    "frames_with_tag": total_with_tag,
+                }
                 return float(np.mean(bearings)), float(np.mean(distances))
             # Frames disagreed or too few sightings -> sample another fresh batch
 
@@ -171,9 +198,15 @@ class ArucoRunner(Rover):
 
             # Tag not steadily in view: sweep one step and look again
             if reading is None:
-                self.logger.log(phase="search", event="tag not seen -> sweep", seen=False,
-                                target_id=target_id, commanded_deg=self.SEARCH_STEP_DEG,
-                                **self._look_stats, **self._enc())
+                self.logger.log(
+                    phase="search",
+                    event="tag not seen -> sweep",
+                    seen=False,
+                    target_id=target_id,
+                    commanded_deg=self.SEARCH_STEP_DEG,
+                    **self._look_stats,
+                    **self._enc(),
+                )
                 self.turn_in_place(+1, self.SEARCH_STEP_DEG, target_id=target_id)
                 continue
 
@@ -181,17 +214,34 @@ class ArucoRunner(Rover):
 
             # Off-center on a trustworthy reading: turn once by that bearing, then confirm again
             if abs(bearing_deg) > self.CENTER_TOLERANCE_DEG:
-                self.logger.log(phase="center", event="turn to center", seen=True,
-                                target_id=target_id, bearing_raw=bearing_deg, distance=distance_m,
-                                Z=distance_m, commanded_deg=bearing_deg,
-                                **self._look_stats, **self._enc())
+                self.logger.log(
+                    phase="center",
+                    event="turn to center",
+                    seen=True,
+                    target_id=target_id,
+                    bearing_raw=bearing_deg,
+                    distance=distance_m,
+                    Z=distance_m,
+                    commanded_deg=bearing_deg,
+                    **self._look_stats,
+                    **self._enc(),
+                )
                 self.turn_in_place(np.sign(bearing_deg), abs(bearing_deg), target_id=target_id)
                 continue
 
             # Centered and confirmed - include lidar as an independent distance cross-check
-            self.logger.log(phase="center", event="centered", seen=True,
-                            target_id=target_id, bearing_raw=bearing_deg, distance=distance_m,
-                            Z=distance_m, **self._look_stats, **self._enc(), **self._lidar())
+            self.logger.log(
+                phase="center",
+                event="centered",
+                seen=True,
+                target_id=target_id,
+                bearing_raw=bearing_deg,
+                distance=distance_m,
+                Z=distance_m,
+                **self._look_stats,
+                **self._enc(),
+                **self._lidar(),
+            )
             return
 
     def compute_wheel_speeds(self, position):
@@ -203,8 +253,13 @@ class ArucoRunner(Rover):
         # The error is how much farther than the stop tolerance the tag is (+Z: forward)
         distance_error = position[2] - self.stop_tolerance_m
         if distance_error <= 0:
-            self._dbg = {"distance_error": distance_error, "heading_input": position[0],
-                         "pid_forward": 0.0, "pid_turn": 0.0, "saturated": False}
+            self._dbg = {
+                "distance_error": distance_error,
+                "heading_input": position[0],
+                "pid_forward": 0.0,
+                "pid_turn": 0.0,
+                "saturated": False,
+            }
             return [0.0, 0.0]
 
         # Forward speed comes from the distance PID, turning comes from the sideways offset (X)
@@ -215,21 +270,35 @@ class ArucoRunner(Rover):
         speed = [forward + turn, forward - turn]
 
         # Correctly convert for our pseudo-twist message
-        max_pos = conversions.convert_linear_vel_to_angular_vel(self.MAX_VELOCITY, self.wheel_diameter / 2.0)
-        min_pos = conversions.convert_linear_vel_to_angular_vel(self.MIN_VELOCITY, self.wheel_diameter / 2.0)
-        speed[0] = conversions.convert_linear_vel_to_angular_vel(speed[0], self.wheel_diameter / 2.0)
-        speed[1] = conversions.convert_linear_vel_to_angular_vel(speed[1], self.wheel_diameter / 2.0)
+        max_pos = conversions.convert_linear_vel_to_angular_vel(
+            self.MAX_VELOCITY, self.wheel_diameter / 2.0
+        )
+        min_pos = conversions.convert_linear_vel_to_angular_vel(
+            self.MIN_VELOCITY, self.wheel_diameter / 2.0
+        )
+        speed[0] = conversions.convert_linear_vel_to_angular_vel(
+            speed[0], self.wheel_diameter / 2.0
+        )
+        speed[1] = conversions.convert_linear_vel_to_angular_vel(
+            speed[1], self.wheel_diameter / 2.0
+        )
 
         # Clamp the speed so it doesn't go insane (record whether the clamp actually fired)
         before = list(speed)
         speed = self.clamp(speed, min_pos, max_pos)
-        self._dbg = {"distance_error": distance_error, "heading_input": position[0],
-                     "pid_forward": forward, "pid_turn": turn, "saturated": speed != before}
+        self._dbg = {
+            "distance_error": distance_error,
+            "heading_input": position[0],
+            "pid_forward": forward,
+            "pid_turn": turn,
+            "saturated": speed != before,
+        }
         return speed
 
     def drive_to_tag(self, target_id):
         # Continuous PID approach toward an already-centered tag. Returns "arrived" once we're
-        # within the stop tolerance, or "recenter" if the tag drifts off-center or drops out of view.
+        # within the stop tolerance, or "recenter" if the tag drifts off-center or drops out of
+        # view.
 
         # Start the controllers clean so the first dt isn't a stale stop-and-stare gap
         self.distance_pid.reset()
@@ -238,56 +307,96 @@ class ArucoRunner(Rover):
         _last_known_distance = None  # used to detect "tag went below FOV when very close"
 
         while True:
-            # Pull the freshest frame + its capture time, detect (raw), then smooth (what we steer on)
+            # Pull the freshest frame + its capture time, detect (raw), then smooth (what we steer
+            # on)
             frame, stamp = self.estimator.camera.latest()
             annotated, poses = self.estimator.detect(frame)
             self._show(annotated if annotated is not None else frame)
 
             seen = target_id in poses
             raw = poses[target_id] if seen else None
-            bearing_raw = np.degrees(np.arctan2(raw["position"][0], raw["position"][2])) if seen else None
+            bearing_raw = (
+                np.degrees(np.arctan2(raw["position"][0], raw["position"][2])) if seen else None
+            )
 
             # Smooth the pose in place - this EMA pose is what the heading PID actually acts on
             self.estimator._smooth(poses)
             position = poses[target_id]["position"] if seen else None
             bearing_smoothed = np.degrees(np.arctan2(position[0], position[2])) if seen else None
 
-            # How old is this frame, and is it actually new since last tick? (camera-lag diagnostics)
+            # How old is this frame, and is it actually new since last tick? (camera-lag
+            # diagnostics)
             frame_age = (time.perf_counter() - stamp) if stamp else None
-            frame_is_new = (stamp != self._last_frame_stamp)
+            frame_is_new = stamp != self._last_frame_stamp
             self._last_frame_stamp = stamp
 
             # Lost the tag mid-approach: if we were already close, the tag likely slipped below the
             # camera's downward FOV - declare arrived. Otherwise back out and re-center.
             if not seen:
-                if _last_known_distance is not None and _last_known_distance < self.stop_tolerance_m + 0.15:
-                    self.logger.log(phase="drive", event="tag lost near goal -> assumed arrived",
-                                    seen=False, target_id=target_id, distance=_last_known_distance,
-                                    frame_stamp=stamp, frame_age=frame_age, frame_is_new=frame_is_new,
-                                    **self._enc(), **self._lidar())
+                if (
+                    _last_known_distance is not None
+                    and _last_known_distance < self.stop_tolerance_m + 0.15
+                ):
+                    self.logger.log(
+                        phase="drive",
+                        event="tag lost near goal -> assumed arrived",
+                        seen=False,
+                        target_id=target_id,
+                        distance=_last_known_distance,
+                        frame_stamp=stamp,
+                        frame_age=frame_age,
+                        frame_is_new=frame_is_new,
+                        **self._enc(),
+                        **self._lidar(),
+                    )
                     self.stop()
                     return "arrived"
-                self.logger.log(phase="drive", event="lost tag", seen=False, target_id=target_id,
-                                frame_stamp=stamp, frame_age=frame_age, frame_is_new=frame_is_new,
-                                **self._enc())
+                self.logger.log(
+                    phase="drive",
+                    event="lost tag",
+                    seen=False,
+                    target_id=target_id,
+                    frame_stamp=stamp,
+                    frame_age=frame_age,
+                    frame_is_new=frame_is_new,
+                    **self._enc(),
+                )
                 self.stop()
                 return "recenter"
 
             # Arrived: within the forward stop tolerance
             if position[2] - self.stop_tolerance_m <= 0:
-                self.logger.log(phase="drive", event="arrived", seen=True, target_id=target_id,
-                                Z=position[2], distance=raw["distance"],
-                                frame_stamp=stamp, frame_age=frame_age, frame_is_new=frame_is_new,
-                                **self._enc(), **self._lidar())
+                self.logger.log(
+                    phase="drive",
+                    event="arrived",
+                    seen=True,
+                    target_id=target_id,
+                    Z=position[2],
+                    distance=raw["distance"],
+                    frame_stamp=stamp,
+                    frame_age=frame_age,
+                    frame_is_new=frame_is_new,
+                    **self._enc(),
+                    **self._lidar(),
+                )
                 self.stop()
                 return "arrived"
 
             # Drifted too far off-center to trust a straight approach: stop and re-center
             if abs(bearing_smoothed) > self.DRIVE_RECENTER_DEG:
-                self.logger.log(phase="drive", event=f"recenter (bearing {bearing_smoothed:.1f})", seen=True,
-                                target_id=target_id, bearing_raw=bearing_raw, bearing_smoothed=bearing_smoothed,
-                                Z=position[2], frame_stamp=stamp, frame_age=frame_age,
-                                frame_is_new=frame_is_new, **self._enc())
+                self.logger.log(
+                    phase="drive",
+                    event=f"recenter (bearing {bearing_smoothed:.1f})",
+                    seen=True,
+                    target_id=target_id,
+                    bearing_raw=bearing_raw,
+                    bearing_smoothed=bearing_smoothed,
+                    Z=position[2],
+                    frame_stamp=stamp,
+                    frame_age=frame_age,
+                    frame_is_new=frame_is_new,
+                    **self._enc(),
+                )
                 self.stop()
                 return "recenter"
 
@@ -296,21 +405,36 @@ class ArucoRunner(Rover):
             # Otherwise keep driving toward it with the PID, logging the full tick
             wheel_speeds = self.compute_wheel_speeds(position)
             self.logger.log(
-                phase="drive", seen=True, target_id=target_id,
-                bearing_raw=bearing_raw, bearing_smoothed=bearing_smoothed,
-                X=position[0], Y=position[1], Z=position[2], distance=raw["distance"],
+                phase="drive",
+                seen=True,
+                target_id=target_id,
+                bearing_raw=bearing_raw,
+                bearing_smoothed=bearing_smoothed,
+                X=position[0],
+                Y=position[1],
+                Z=position[2],
+                distance=raw["distance"],
                 reproj_error=raw.get("reproj_error"),
-                frame_stamp=stamp, frame_age=frame_age, frame_is_new=frame_is_new,
-                distance_error=self._dbg.get("distance_error"), heading_input=self._dbg.get("heading_input"),
-                pid_forward=self._dbg.get("pid_forward"), pid_turn=self._dbg.get("pid_turn"),
-                cmd_left=wheel_speeds[0], cmd_right=wheel_speeds[1], saturated=self._dbg.get("saturated"),
+                frame_stamp=stamp,
+                frame_age=frame_age,
+                frame_is_new=frame_is_new,
+                distance_error=self._dbg.get("distance_error"),
+                heading_input=self._dbg.get("heading_input"),
+                pid_forward=self._dbg.get("pid_forward"),
+                pid_turn=self._dbg.get("pid_turn"),
+                cmd_left=wheel_speeds[0],
+                cmd_right=wheel_speeds[1],
+                saturated=self._dbg.get("saturated"),
                 **self._enc(),
             )
             self.write_real_velocities(wheel_speeds)
             self.sleep_to_command_rate()
 
     def update(self):
-        print(f"Driving ArUco tags {self.MARKER_ID_LIST}, stopping {self.stop_tolerance_m} m away - press Q in the window or Ctrl-C to quit")
+        print(
+            f"Driving ArUco tags {self.MARKER_ID_LIST}, stopping {self.stop_tolerance_m} m away - "
+            f"press Q in the window or Ctrl-C to quit"
+        )
 
         try:
             # Visit each tag in order
@@ -319,9 +443,9 @@ class ArucoRunner(Rover):
 
                 # Keep (re)centering and driving until we actually arrive
                 while True:
-                    self.center(target_id)                       # stop-stare until confirmed centered
+                    self.center(target_id)  # stop-stare until confirmed centered
                     if self.drive_to_tag(target_id) == "arrived":
-                        break                                    # otherwise we drifted/lost it -> re-center
+                        break  # otherwise we drifted/lost it -> re-center
                 print(f"Reached tag {target_id}!")
 
             print("Maze complete - every tag in the list visited!")
@@ -334,6 +458,7 @@ class ArucoRunner(Rover):
             self.poller.stop()
             self.logger.close()
             cv2.destroyAllWindows()
+
 
 # Create our rover class and start running the maze
 if __name__ == "__main__":

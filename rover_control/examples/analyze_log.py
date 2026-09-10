@@ -1,17 +1,19 @@
 # External Libraries
-import csv
-import sys
 from collections import Counter
+import csv
 from pathlib import Path
+import sys
 
 import numpy as np
 
 # Where the runners write their logs
 LOG_DIR = Path(__file__).resolve().parents[2] / "logs"
 
+
 def load(path):
-    with open(path, newline="") as f:
+    with open(path, newline="", encoding="utf-8") as f:
         return list(csv.DictReader(f))
+
 
 def nums(rows, name, where=None):
     # Pull a numeric column, optionally filtered by a predicate on the row
@@ -27,10 +29,15 @@ def nums(rows, name, where=None):
                 pass
     return np.array(out)
 
+
 def describe(values):
     if len(values) == 0:
         return "n/a"
-    return f"n={len(values)}  min={values.min():.3f}  median={np.median(values):.3f}  max={values.max():.3f}  mean={values.mean():.3f}"
+    return (
+        f"n={len(values)}  min={values.min():.3f}  median={np.median(values):.3f}  "
+        f"max={values.max():.3f}  mean={values.mean():.3f}"
+    )
+
 
 def fraction_true(rows, name, where=None):
     flags = [r.get(name, "") for r in rows if (not where or where(r))]
@@ -38,6 +45,7 @@ def fraction_true(rows, name, where=None):
     if not flags:
         return None
     return sum(1 for f in flags if f in ("True", "1")) / len(flags)
+
 
 def main():
     # Use the file given on the command line, else the newest maze_*.csv in logs/
@@ -75,7 +83,10 @@ def main():
     raw = nums(ticks, "bearing_raw")
     smooth = nums(ticks, "bearing_smoothed")
     if len(raw) == len(smooth) and len(raw) > 0:
-        print(f"|raw - smoothed| (deg): mean={np.abs(raw - smooth).mean():.2f}  (big = EMA lag hurting heading)")
+        print(
+            f"|raw - smoothed| (deg): mean={np.abs(raw - smooth).mean():.2f}  (big = EMA lag "
+            f"hurting heading)"
+        )
     print("Z forward (m):        ", describe(nums(ticks, "Z")))
     print("pid_turn:             ", describe(nums(ticks, "pid_turn")))
     sat = fraction_true(ticks, "saturated", is_tick)
@@ -92,7 +103,10 @@ def main():
     pending = None
     for r in rows:
         if r["commanded_deg"] != "" and r["event"] in ("turn to center", "re-aim"):
-            pending = (float(r["commanded_deg"]), float(r["bearing_raw"]) if r["bearing_raw"] else None)
+            pending = (
+                float(r["commanded_deg"]),
+                float(r["bearing_raw"]) if r["bearing_raw"] else None,
+            )
         elif pending is not None and r["bearing_raw"] != "":
             commanded, before = pending
             after = float(r["bearing_raw"])
@@ -101,10 +115,14 @@ def main():
             pending = None
     if pairs:
         ratios = np.array(pairs)
-        print(f"achieved/commanded turn ratio: mean={ratios.mean():.2f}  (1.0 = perfect; <1 = under-turning)")
+        print(
+            f"achieved/commanded turn ratio: mean={ratios.mean():.2f}  (1.0 = perfect; <1 = "
+            f"under-turning)"
+        )
         print(f"  -> the rover turns about {ratios.mean() * 100:.0f}% of the commanded degrees")
     else:
         print("not enough turn->measurement pairs to estimate")
+
 
 if __name__ == "__main__":
     main()

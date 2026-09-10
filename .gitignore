@@ -223,3 +223,4 @@ logs/
 build/
 AGENTS.md
 token.env
+wandb/

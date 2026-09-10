@@ -2,7 +2,8 @@ import os
 
 # If the depth model is already in the local Hugging Face cache, force offline mode so it loads
 # straight from disk with no network calls. This lets the YOLO 3D-pose examples run on a network
-# with no internet (like the rover's BaleNet). The first run still needs internet to download it once.
+# with no internet (like the rover's BaleNet). The first run still needs internet to download it
+# once.
 _DEPTH_MODEL = "depth-anything/Depth-Anything-V2-Metric-Indoor-Small-hf"
 _hf_home = os.environ.get("HF_HOME", os.path.expanduser("~/.cache/huggingface"))
 _hf_hub = os.environ.get("HF_HUB_CACHE", os.path.join(_hf_home, "hub"))
@@ -12,19 +13,18 @@ if os.path.isdir(os.path.join(_hf_hub, "models--" + _DEPTH_MODEL.replace("/", "-
 
 import cv2
 import numpy as np
-import torch
 from PIL import Image
+import torch
 from transformers import pipeline
 
-from YOLO_agent.YOLO_extractor import YOLOExtractor
 from YOLO_agent.depth_client import DepthServerClient
+from YOLO_agent.YOLO_extractor import YOLOExtractor
 
 # Default camera calibration (same ESP32 numbers the ArUco estimator uses)
-camera_matrix_default = np.array([
- [372.69444659,   0.0,         321.25586034],
- [  0.0,         370.94214518, 238.16525187],
- [  0.0,           0.0,           1.0        ]
-], dtype=np.float32)
+camera_matrix_default = np.array(
+    [[372.69444659, 0.0, 321.25586034], [0.0, 370.94214518, 238.16525187], [0.0, 0.0, 1.0]],
+    dtype=np.float32,
+)
 
 # A small, metric (meters) monocular depth model that runs on a laptop CPU
 depth_model_default = _DEPTH_MODEL
@@ -125,10 +125,10 @@ class YOLOPoseEstimator:
             Z = float(depth_map[v, u])
 
             # Back-project the pixel to meters using the pinhole camera model
-            X = (u - self.cx) * Z / self.fx   # +X to the right
-            Y = (v - self.cy) * Z / self.fy   # +Y downward
+            X = (u - self.cx) * Z / self.fx  # +X to the right
+            Y = (v - self.cy) * Z / self.fy  # +Y downward
 
-            detection["position"] = [X, Y, Z]              # X, Y, Z in meters
+            detection["position"] = [X, Y, Z]  # X, Y, Z in meters
             detection["distance"] = float(np.sqrt(X * X + Y * Y + Z * Z))
 
         return annotated, detections

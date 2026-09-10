@@ -7,10 +7,9 @@ The intent is to elevate the basic differential drive rover platform we're curre
 ### Prerequisites
 1. Install [Python3](https://www.python.org/downloads/)
 2. Install [Git](https://git-scm.com/install/) on your platform
-3. Install [Miniconda](https://www.anaconda.com/docs/getting-started/miniconda/main) on your desired platform:
-    - [Windows](https://www.anaconda.com/docs/getting-started/miniconda/install/windows-cli-install)
-    - [MacOS](https://www.anaconda.com/docs/getting-started/miniconda/install/mac-cli-install)
-    - [Linux](https://www.anaconda.com/docs/getting-started/miniconda/install/linux-install)
+3. Install [uv](https://docs.astral.sh/uv/getting-started/installation/), which manages the Python
+   virtual environment and dependencies for this project. It installs its own Python 3.12, so no
+   conda/pyenv setup is needed.
 4. Clone this repository locally:
 
     ```bash
@@ -19,23 +18,38 @@ The intent is to elevate the basic differential drive rover platform we're curre
 
 ### Repository Setup
 
-1) Create a conda environment:
+1) From the project root, sync the environment. Pick the extra that matches your machine — this is
+   the *only* difference between a GPU and a CPU-only setup:
     ```bash
-    conda create -n rover_high_level python=3.10
+    uv sync --extra cu121   # machine with an NVIDIA GPU
+    uv sync --extra cpu     # no NVIDIA GPU (saves ~6 GB)
     ```
 
-2) Activate the environment and install this project (run from this folder):
+This reads `pyproject.toml`/`uv.lock` and builds a single `.venv/` on Python 3.12 containing every
+package in the repo. It is a [uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/):
+the high-level folders (`ArUco_detector`, `YOLO_agent`, `LLM_hybrid`, `depth_anything_server`,
+`rover_control`) *and* the simulator (`rover_mujoco`) are all installed as importable packages from
+that one environment — no `PYTHONPATH`, no second env to activate, and a policy trained in sim is
+importable from the real-rover code without leaving the venv.
+
+2) Run anything in the repo through `uv run`, which uses that environment automatically:
     ```bash
-    conda activate rover_high_level
-    # On a machine without an NVIDIA GPU, grab the small CPU-only torch first (saves ~6 GB)
-    # python3 -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-    python3 -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-    python3 -m pip install -e .
+    uv run rover_control/examples/aruco_pose_movement.py
+    uv run rover_mujoco/scripts/teleop_rover.py
     ```
 
-This installs the project's folders (`ArUco_detector`, `YOLO_agent`, `LLM_hybrid`, `rover_control`) as importable Python packages, along with their dependencies (`opencv-contrib-python`, `ultralytics`, `numpy`, `pynput`, `ollama`, `transformers`, `pillow`) listed in `pyproject.toml` and `requirements.txt` — no `PYTHONPATH` setup needed.
+3) Before committing, lint, format, and type-check everything in one pass:
+    ```bash
+    uv run scripts/check.py         # report problems, change nothing
+    uv run scripts/check.py --fix   # apply the formatter and ruff's safe autofixes
+    ```
 
-3) (Only for the `LLM_hybrid` examples) Install and start the local Ollama server — see [LLM_hybrid/README.md](LLM_hybrid/README.md) for the two-command setup.
+   The rules live in the root `pyproject.toml` under `[tool.ruff]` and follow the
+   [Google Python Style Guide](https://google.github.io/styleguide/pyguide.html), at 100 columns
+   rather than 80. `ruff` and `ty` come from the workspace's dev group, so a plain `uv sync`
+   already installed them, and the same command covers `rover_mujoco/` too.
+
+4) (Only for the `LLM_hybrid` examples) Install and start the local Ollama server — see [LLM_hybrid/README.md](LLM_hybrid/README.md) for the two-command setup.
 
 ---
 
@@ -54,10 +68,18 @@ matrix_lab_rover_above/
 ├── depth_anything_server/   FastAPI server that offloads Depth Anything V3 inference to a
 │                            shared desktop GPU. Rover laptops send a JPEG frame over HTTP and
 │                            receive a full float32 depth map in return.
-└── rover_control/           Rover base class and all runnable examples. Sends motor commands
-        └── examples/        over UDP at 10 Hz and reads encoder counts over the same link.
-                             All other folders are imported here — this is where students run code.
+├── rover_control/           Rover base class and all runnable examples. Sends motor commands
+│       └── examples/        over UDP at 10 Hz and reads encoder counts over the same link.
+│                            All other folders are imported here — this is where students run code.
+└── rover_mujoco/            MuJoCo simulation of the same differential-drive rover, for
+        ├── envs/            developing control and RL policies before touching hardware.
+        ├── scripts/         Ships teleop, a classical PID/bang-bang line follower, and PPO
+        └── assets/          training for camera-only line following on generated tracks.
 ```
+
+`rover_mujoco/` is a workspace member with its own `pyproject.toml`, but it shares the root
+`uv.lock` and `.venv/` — the single `uv sync` above covers it. See
+[rover_mujoco/README.md](rover_mujoco/README.md) for the simulation-specific docs.
 
 ---
 
@@ -75,3 +97,8 @@ matrix_lab_rover_above/
 | Depth Server | [depth_anything_server/](depth_anything_server/) | Offloads Depth Anything V3 inference to a desktop GPU; laptops send a JPEG and get a depth map back. |
 | LLM Object Identification | [LLM_hybrid/](LLM_hybrid/) | Asks a local vision LLM what object is in frame and returns a structured JSON answer. |
 | LLM Rover Driving | [LLM_hybrid/](LLM_hybrid/) | Proof of concept where the LLM watches the camera stream and outputs rover velocity commands. |
+| Sim Manual Control | [rover_mujoco/scripts/](rover_mujoco/scripts/) | Drives the simulated rover around the MuJoCo viewer with WASD/arrow keys. |
+| Sim Line Follower (PID) | [rover_mujoco/scripts/](rover_mujoco/scripts/) | Classical camera-only line following — PID or bang-bang — around a generated track. |
+| Sim Line Follower (RL) | [rover_mujoco/scripts/](rover_mujoco/scripts/) | Trains and evaluates a PPO line-following policy on `LineFollower-v0` / `LineFollowerReal-v0`. |
+| Sim Goal Navigation (RL) | [rover_mujoco/scripts/](rover_mujoco/scripts/) | Trains a PPO policy to drive to a commanded (x, y) offset in a 5x5 m arena while avoiding obstacles, using encoder odometry and the rover's lidar. |
+| RL Line Follower (Real) | [rover_control/examples/](rover_control/examples/) | Runs the PPO policy trained in `rover_mujoco/` on the physical rover. |

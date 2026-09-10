@@ -5,22 +5,24 @@ Features a fair, bounded FIFO queue to prevent multi-user starvation cascades.
 
 import argparse
 import asyncio
+from collections import deque
+from contextlib import asynccontextmanager
 import os
 import threading
 import time
-from collections import deque
-from contextlib import asynccontextmanager
 
 # Apply PyTorch allocations before importing torch to mitigate 8GB VRAM fragmentation
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True,garbage_collection_threshold:0.8"
 
 import cv2
+from depth_anything_3.api import DepthAnything3
+from fastapi import FastAPI
+from fastapi import HTTPException
+from fastapi import Request
+from fastapi.responses import Response
 import numpy as np
 import torch
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import Response
-from depth_anything_3.api import DepthAnything3
 
 # Metric variant required — standard DA3 outputs relative depth, not real-world meters
 MODEL_ID = "depth-anything/DA3METRIC-LARGE"
@@ -34,6 +36,7 @@ class BoundedFIFOInferenceQueue:
     Thread-safe, fair FIFO queue that preserves order across 15 teams
     while capping max lag by dropping stale frames when full.
     """
+
     def __init__(self, maxsize=15):
         self.lock = threading.Lock()
         self.new_item_available = threading.Condition(self.lock)
@@ -47,10 +50,10 @@ class BoundedFIFOInferenceQueue:
             if len(self.queue) >= self.maxsize:
                 try:
                     _, _, old_done_event = self.queue.popleft()
-                    old_done_event.set() # Release the starved client request smoothly
+                    old_done_event.set()  # Release the starved client request smoothly
                 except IndexError:
                     pass
-            
+
             # Append new request to the right side of the queue (FIFO order)
             self.queue.append(item)
             self.new_item_available.notify()
@@ -71,20 +74,19 @@ _model = None
 
 def process_frame():
     """Pulls the next ordered frame from the FIFO queue and processes it on GPU."""
-    global _model
     _ready.set()
-    
+
     while True:
         item = _work_queue.pop()
         if item is None:  # Shutdown signal
             break
-            
+
         jpeg_bytes, result, done = item
-        
+
         # If another thread already tripped this event (e.g. dropped due to queue timeout), skip it
         if done.is_set():
             continue
-            
+
         try:
             buf = np.frombuffer(jpeg_bytes, np.uint8)
             frame = cv2.imdecode(buf, cv2.IMREAD_COLOR)
@@ -101,9 +103,10 @@ def process_frame():
             with torch.autocast(device_type="cuda", dtype=torch.float16):
                 prediction = _model.inference(
                     [frame],
-                    # 378 is the model's native training resolution — resize to this before inference
+                    # 378 is the model's native training resolution — resize to this before
+                    # inference
                     process_res=378,
-                    process_res_method="upper_bound_resize"
+                    process_res_method="upper_bound_resize",
                 )
 
             net_output = prediction.depth[0]
@@ -112,7 +115,7 @@ def process_frame():
 
             result["depth"] = metric_depth_meters.astype(np.float32)
             result["shape"] = metric_depth_meters.shape
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 -- surfaced to the caller as an error field; the worker thread must survive
             result["error"] = str(exc)
         finally:
             done.set()
@@ -120,8 +123,8 @@ def process_frame():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _model, _ready
-    
+    global _model
+
     if not torch.cuda.is_available():
         raise RuntimeError("No CUDA GPU detected.")
 
@@ -141,8 +144,11 @@ async def lifespan(app: FastAPI):
     _ready.wait()
     print("Depth server ready — Fair Bounded FIFO Engine Active")
 
-    yield
-    _work_queue.push(None)
+    try:
+        yield
+    finally:
+        # Sentinel must reach the worker even if the app raises, or the thread never exits.
+        _work_queue.push(None)
 
 
 app = FastAPI(lifespan=lifespan)
@@ -165,7 +171,8 @@ async def depth_endpoint(request: Request):
     # Push to our fair FIFO queue structure
     _work_queue.push((jpeg_bytes, result, done))
 
-    # run_in_executor offloads the blocking done.wait() to a thread so FastAPI's event loop stays responsive
+    # run_in_executor offloads the blocking done.wait() to a thread so FastAPI's event loop stays
+    # responsive
     await asyncio.get_event_loop().run_in_executor(None, done.wait, 5.0)
 
     if not done.is_set():
@@ -173,9 +180,11 @@ async def depth_endpoint(request: Request):
 
     if "error" in result:
         raise HTTPException(status_code=500, detail=result["error"])
-        
+
     if "depth" not in result:
-        raise HTTPException(status_code=408, detail="Frame dropped due to queue congestion management.")
+        raise HTTPException(
+            status_code=408, detail="Frame dropped due to queue congestion management."
+        )
 
     depth: np.ndarray = result["depth"]
     h, w = result["shape"]

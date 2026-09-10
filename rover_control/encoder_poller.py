@@ -20,8 +20,8 @@ class EncoderPoller:
     def __init__(self, poll_hz=10.0):
         # Match the rover's command rate so every drive tick has a fresh encoder reading
         self._interval = 1.0 / poll_hz
-        self._enc_query    = json.dumps({"command": "e"}).encode("utf-8")
-        self._lidar_query  = json.dumps({"command": "l"}).encode("utf-8")
+        self._enc_query = json.dumps({"command": "e"}).encode("utf-8")
+        self._lidar_query = json.dumps({"command": "l"}).encode("utf-8")
 
         # Bind the reply socket once; timeout slightly under the poll interval so we never stall
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -44,7 +44,8 @@ class EncoderPoller:
         self._thread = None
 
     def start(self):
-        # Launch the background polling thread; returns self so you can chain: EncoderPoller().start()
+        # Launch the background polling thread; returns self so you can chain:
+        # EncoderPoller().start()
         self._running = True
         self._thread = threading.Thread(target=self._run, daemon=True, name="encoder_poller")
         self._thread.start()
@@ -71,26 +72,26 @@ class EncoderPoller:
 
                 if "left_encoder" in parsed:
                     # Encoder reply: update counts and compute tick-to-tick deltas
-                    left  = parsed["left_encoder"]
+                    left = parsed["left_encoder"]
                     right = parsed["right_encoder"]
                     with self._lock:
                         if self._prev_left is not None:
-                            self._left_delta  = left  - self._prev_left
+                            self._left_delta = left - self._prev_left
                             self._right_delta = right - self._prev_right
-                        self._left  = left
+                        self._left = left
                         self._right = right
-                        self._prev_left  = left
+                        self._prev_left = left
                         self._prev_right = right
 
                 elif "center_distance" in parsed:
                     # Lidar reply: store distances and center validity flag
                     with self._lock:
-                        self._lidar_left      = parsed.get("left_distance")
-                        self._lidar_center    = parsed.get("center_distance")
-                        self._lidar_right     = parsed.get("right_distance")
+                        self._lidar_left = parsed.get("left_distance")
+                        self._lidar_center = parsed.get("center_distance")
+                        self._lidar_right = parsed.get("right_distance")
                         self._lidar_center_ok = bool(parsed.get("center_ok", False))
 
-            except (socket.timeout, ValueError, KeyError):
+            except (TimeoutError, ValueError, KeyError):
                 pass  # missed packet or bad JSON - try again next tick
 
             query_enc = not query_enc
