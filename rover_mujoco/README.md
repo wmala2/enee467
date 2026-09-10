@@ -53,9 +53,14 @@ The following table denotes the out of box capabilites of the current environmen
 | Task | Script | Descriptions |
 |------|--------|--------------|
 | Manual Control | [`scripts/teleop_rover.py`](scripts/teleop_rover.py) | Use WASD/Arrow Keys to manually drive around the rover in a realistic manner following differential drive kinematics ([docs](docs/simple-control.md)) |
-| Track Generation | [`scripts/gen_track.py`](scripts/gen_track.py) | Generate a black line track (oval or s-curve) as an MJCF fragment from a list of (x, y) waypoints, for the line-following tasks below |
-| Line Following (Classical) | [`scripts/line_follower.py`](scripts/line_follower.py) | Follow a track using only the onboard camera with a PID or bang-bang controller, with a tiltable camera mount — the classical-control baseline ([docs](docs/pid-line-follower.md)) |
+| Track Generation | [`scripts/gen_track.py`](scripts/gen_track.py) | Build a black line track as an MJCF fragment from a list of (x, y) waypoints. Called by `envs/line_scene.py` at scene-build time, so no track files are written to disk |
+| Track from CAD | [`scripts/extract_centerline.py`](scripts/extract_centerline.py) | Turn a flat CAD track mesh into the centreline polyline the environments need, scaling it and rounding cusps the rover cannot drive ([docs](docs/onshape-to-robot-mjcf.md)) |
+| Line Following (Classical) | [`scripts/line_follower.py`](scripts/line_follower.py) | Follow a track using only the onboard camera with a PID or bang-bang controller, with a tiltable camera mount, the classical-control baseline ([docs](docs/pid-line-follower.md)) |
 | Line Following (PPO baseline) | [`scripts/train_ppo.py`](scripts/train_ppo.py), [`scripts/evaluate_ppo.py`](scripts/evaluate_ppo.py) | Train and evaluate on the PID baseline’s 2-inch closed tracks, with camera centroids, wheel encoders, W&B, and TensorBoard ([docs](docs/ppo-line-follower.md)) |
+| Line Following (hyperparameters) | [`scripts/sweep_ppo.py`](scripts/sweep_ppo.py) | Sweep PPO settings against the nominal baseline on a matched budget, scoring each per track ([docs](docs/ppo-hparam-sweep.md)) |
+| Line Following (DR and BAM) | [`scripts/train_ppo.py --dynamics dr`](scripts/train_ppo.py) | Train against the measured motor model and domain randomization, the stage that transfers to hardware ([docs](docs/dr-bam-line-follower.md)) |
+| Training Curves | [`scripts/plot_ppo_training.py`](scripts/plot_ppo_training.py) | Export the TensorBoard scalars mirrored to W&B as a shareable figure |
+| Publishing | [`scripts/publish_policy.py`](scripts/publish_policy.py) | Check a policy against the deployment contract, smoke-run it, and refuse to upload without qualifying evidence |
 | Policy Recovery | [Download guide](docs/policy-downloads.md) | Restore a verified policy and its configuration from the private Hugging Face backup, then run it in simulation. |
 
 Trained policies are deployed to the physical rover from the parent repo — see
