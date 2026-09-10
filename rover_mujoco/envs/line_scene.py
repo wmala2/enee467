@@ -44,7 +44,7 @@ CAM_RES = 64
 CONTROL_HZ = 10
 
 
-def build_model(waypoints, tilt):
+def build_model(waypoints, tilt, *, bam=False):
     """Reuse the CAD rover and velocity-servo scene, replacing only the baseline track."""
     # Expand the two local includes in memory so existing RL scene assets stay reproducible.
     scene = ET.parse(ROVER_DIR / "rover_line_oval.xml").getroot()
@@ -57,6 +57,13 @@ def build_model(waypoints, tilt):
         mesh.set("file", str(ROVER_DIR / mesh.attrib["file"]))
     scene.extend(rover)
     scene.extend(ET.fromstring(build_track_xml("pid_track", waypoints, LINE_WIDTH)))
+    # BAM supplies wheel torque directly and integrates its electrical damping separately.
+    if bam:
+        for actuator in scene.findall("actuator/velocity"):
+            actuator.tag = "motor"
+            actuator.attrib.pop("kv")
+            actuator.attrib.pop("ctrlrange")
+            actuator.set("ctrllimited", "false")
     # MuJoCo exports compiled bindings without type stubs; exercise them in simulation tests.
     model = mujoco.MjModel.from_xml_string(ET.tostring(scene, encoding="unicode"))  # ty: ignore[unresolved-attribute]
     # Match the measured 45-degree mount height above the CAD plate; forward offset is provisional.

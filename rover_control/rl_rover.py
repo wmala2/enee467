@@ -88,7 +88,7 @@ class RLLineFollowerRover(Rover):
 
     # Control steps of continuous line loss before the rover stops. Simulation terminates at
     # half that; see compute_wheel_speeds for why hardware is given longer.
-    LINE_LOST_STOP_STEPS = 10
+    LINE_LOST_STOP_STEPS = 15
 
     # How old either sensor reading may be before the rover stops.
     #
@@ -106,7 +106,11 @@ class RLLineFollowerRover(Rover):
     # Camera polling rate. Kept above CONTROL_HZ so a fresh frame is normally waiting rather
     # than being fetched on demand; the stream's own comment notes load and heat as the reason
     # not to raise it without cause.
-    CAMERA_POLL_HZ = 20.0
+    CAMERA_POLL_HZ = 12.5
+
+    # Class-level default so the attribute exists even when a caller builds the object without
+    # running __init__, as the deployment tests do to exercise the conversion path offline.
+    _recorder = None
 
     def __init__(
         self,

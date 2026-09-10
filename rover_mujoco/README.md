@@ -51,8 +51,6 @@ The following table denotes the out of box capabilites of the current environmen
 | Track Generation | [`scripts/gen_track.py`](scripts/gen_track.py) | Generate a black line track (oval or s-curve) as an MJCF fragment from a list of (x, y) waypoints, for the line-following tasks below |
 | Line Following (Classical) | [`scripts/line_follower.py`](scripts/line_follower.py) | Follow a track using only the onboard camera with a PID or bang-bang controller, with a tiltable camera mount — the classical-control baseline ([docs](docs/pid-line-follower.md)) |
 | Line Following (PPO baseline) | [`scripts/train_ppo.py`](scripts/train_ppo.py), [`scripts/evaluate_ppo.py`](scripts/evaluate_ppo.py) | Train and evaluate on the PID baseline’s 2-inch closed tracks, with camera centroids, wheel encoders, W&B, and TensorBoard ([docs](docs/ppo-line-follower.md)) |
-| Goal Navigation (RL) | [`scripts/train_goal_nav.py`](scripts/train_goal_nav.py), [`scripts/evaluate_goal_nav.py`](scripts/evaluate_goal_nav.py) | Drive to a commanded (x, y) offset — "drive to (1, 2)" — inside a walled 5x5 m arena while avoiding randomly placed obstacles, navigating by dead reckoning from the wheel encoders plus the rover's three-beam lidar ([docs](docs/rl-goal-nav.md)) |
-| Arena Generation | [`scripts/gen_arena.py`](scripts/gen_arena.py) | Generate the walled 5x5 m arena and its pool of movable obstacles as an MJCF fragment, for the goal-navigation task above |
 | Policy Sharing | [`scripts/push_to_hub.py`](scripts/push_to_hub.py) | Push a trained policy to the Hugging Face Hub with a model card covering the environment, reward, hyperparameters, and sim-to-real caveats |
 
 Trained policies are deployed to the physical rover from the parent repo — see

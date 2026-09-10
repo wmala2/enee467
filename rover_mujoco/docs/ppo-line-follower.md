@@ -3,7 +3,9 @@
 This is the next stage after the PID baseline: learn camera-based line following on
 2-inch circle, figure-eight, and oval tracks, using the same CAD rover, provisional
 camera mount, velocity servos, 10 Hz control rate, and geometric success criteria.
-Domain randomization and BAM motor dynamics are deferred to the next stage.
+Domain randomization and BAM motor dynamics now have a separate
+[integration and evaluation guide](dr-bam-line-follower.md), including parameter ranges
+and the physical deployment interface.
 
 The nominal policy now completes **40/40 independent test episodes on each of the three
 tracks**, including figure-eight, using the original camera reward.
@@ -15,13 +17,13 @@ From `rover_mujoco`, using the workspace environment:
 
 ```sh
 # Train on all three closed tracks and log to the authenticated W&B account.
-MUJOCO_GL=egl OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 uv run scripts/train_ppo.py
+MUJOCO_GL=egl OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 uv run scripts/train_ppo.py --tracks circle figure8 oval
 
 # Choose a new run directory and an explicit training budget.
-MUJOCO_GL=egl OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 uv run scripts/train_ppo.py --timesteps 150000 --n-envs 6 --output runs/my-ppo-run
+MUJOCO_GL=egl OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 uv run scripts/train_ppo.py --tracks circle figure8 oval --timesteps 150000 --n-envs 6 --output runs/my-ppo-run
 
 # Continue an existing checkpoint with an additional training budget in a separate run.
-MUJOCO_GL=egl OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 uv run scripts/train_ppo.py --resume runs/my-ppo-run/checkpoints/rl_model_49992_steps.zip --timesteps 150000 --output runs/my-ppo-continuation
+MUJOCO_GL=egl OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 uv run scripts/train_ppo.py --tracks circle figure8 oval --resume runs/my-ppo-run/checkpoints/rl_model_49992_steps.zip --timesteps 150000 --output runs/my-ppo-continuation
 
 # Inspect local TensorBoard metrics.
 uv run tensorboard --logdir runs/my-ppo-run/tensorboard
@@ -286,3 +288,9 @@ and an actual resumed-training CLI run.
 Ruff formatting, Ruff lint, and ty pass on the changed Python files.
 The repository-wide check still reports the pre-existing guide-formatting issue and
 171 type diagnostics outside these changes.
+
+## Downloading the saved policy
+
+See [Download and run saved policies](policy-downloads.md) for the Hugging Face
+checkpoint and configuration downloads, a 3D viewer command, and optional Python
+loading from the local HF cache.

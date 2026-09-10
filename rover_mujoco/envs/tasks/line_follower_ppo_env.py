@@ -7,7 +7,9 @@ from gymnasium import spaces
 import mujoco
 import numpy as np
 
-from envs.camera import line_features
+from envs.contract import observation_from_sensors
+from envs.contract import wheel_targets
+from envs.line_dynamics import LineDynamics
 from envs.line_scene import build_model
 from envs.line_scene import CAM_RES
 from envs.line_scene import CONTROL_HZ
@@ -53,6 +55,8 @@ class LineFollowerPPOEnv(gym.Env):
         render_mode=None,
         max_steps=1200,
         reward_centering="camera",
+        dynamics="nominal",
+        dr_ranges=None,
     ):
         super().__init__()
         if track not in TRACKS:
@@ -66,7 +70,15 @@ class LineFollowerPPOEnv(gym.Env):
         self.reward_centering = reward_centering
         self.points = np.asarray(TRACKS[track]())
         self.lengths, _ = path_length_table(self.points)
-        self.model = build_model(self.points, 45)
+        if dynamics not in ("nominal", "bam", "dr"):
+            raise ValueError("dynamics must be 'nominal', 'bam', or 'dr'")
+        if dr_ranges is not None and dynamics != "dr":
+            raise ValueError("dr_ranges requires dynamics='dr'")
+        self.dynamics_mode = dynamics
+        self.model = build_model(self.points, 45, bam=dynamics != "nominal")
+        self.dynamics = (
+            LineDynamics(self.model, dynamics, dr_ranges) if dynamics != "nominal" else None
+        )
         # MuJoCo's compiled exports lack type stubs in this installation.
         self.data = mujoco.MjData(self.model)  # ty: ignore[unresolved-attribute]
         self.renderer = mujoco.Renderer(self.model, height=CAM_RES, width=CAM_RES)
@@ -82,6 +94,9 @@ class LineFollowerPPOEnv(gym.Env):
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
         mujoco.mj_resetData(self.model, self.data)  # ty: ignore[unresolved-attribute]
+        # Seed all physical and sensor perturbations with Gymnasium's episode generator.
+        if self.dynamics is not None:
+            self.dynamics.reset(self.np_random, self.data)
         segment = int(self.np_random.integers(len(self.points) - 1)) if self.random_start else 0
         tangent = self.points[segment + 1] - self.points[segment]
         tangent /= np.linalg.norm(tangent)
@@ -92,7 +107,12 @@ class LineFollowerPPOEnv(gym.Env):
         self.data.qpos[:2] = self.points[segment] + lateral * np.array([-tangent[1], tangent[0]])
         self.data.qpos[3:7] = [math.cos(yaw / 2), 0, 0, math.sin(yaw / 2)]
         # Settle before starting the episode, matching the classical-controller evaluation.
-        mujoco.mj_step(self.model, self.data, nstep=round(1 / self.model.opt.timestep))  # ty: ignore[unresolved-attribute]
+        if self.dynamics is None:
+            mujoco.mj_step(self.model, self.data, nstep=round(1 / self.model.opt.timestep))  # ty: ignore[unresolved-attribute]
+        else:
+            self.dynamics.advance(
+                self.data, np.zeros(2), round(1 / self.model.opt.timestep), settling=True
+            )
         mujoco.mj_forward(self.model, self.data)  # ty: ignore[unresolved-attribute]
         self.previous_angles = self.data.qpos[self.axles].copy()
         self.wheel_speeds = np.zeros(2)
@@ -108,17 +128,23 @@ class LineFollowerPPOEnv(gym.Env):
         self.episode_return = 0.0
         self.finished = False
         observation = self._get_observation()
-        return observation, {"track": self.track_name}
+        return observation, {
+            "track": self.track_name,
+            "dynamics": self.dynamics_mode,
+            "domain_parameters": self.dynamics.parameters if self.dynamics else {},
+        }
 
     def step(self, action):
         if self.finished:
             raise RuntimeError("Reset the environment after an episode ends")
         action = np.clip(np.asarray(action, dtype=np.float32), -1, 1)
-        forward = CRUISE_RAD_S * (float(action[0]) + 1)
-        steering = MAX_STEERING_RAD_S * float(action[1])
         # CAD axle signs: forward motion is negative left and positive right.
-        self.data.ctrl[:] = [-forward + steering, forward + steering]
-        mujoco.mj_step(self.model, self.data, nstep=self.substeps)  # ty: ignore[unresolved-attribute]
+        targets = wheel_targets(action)
+        if self.dynamics is None:
+            self.data.ctrl[:] = targets * [-1, 1]
+            mujoco.mj_step(self.model, self.data, nstep=self.substeps)  # ty: ignore[unresolved-attribute]
+        else:
+            self.dynamics.advance(self.data, targets, self.substeps)
         mujoco.mj_forward(self.model, self.data)  # ty: ignore[unresolved-attribute]
         self.steps += 1
         angles = self.data.qpos[self.axles].copy()
@@ -182,6 +208,8 @@ class LineFollowerPPOEnv(gym.Env):
                 "max_deviation_cm": float(np.max(self.deviations) * 100),
                 "line_loss_frames": self.total_lost,
                 "duration_s": self.steps * self.dt,
+                "dynamics": self.dynamics_mode,
+                "domain_parameters": self.dynamics.parameters if self.dynamics else {},
             })
         if self.render_mode == "human":
             self.render()
@@ -191,9 +219,10 @@ class LineFollowerPPOEnv(gym.Env):
         # Camera pixels and finite differences of encoder angles are the only policy inputs.
         self.renderer.update_scene(self.data, camera="top_cam")
         self.frame = self.renderer.render().copy()
-        features = line_features(self.frame).flatten()
-        encoders = np.clip(self.wheel_speeds / MAX_WHEEL_RAD_S, -1, 1)
-        return np.concatenate((features, encoders)).astype(np.float32)
+        speeds = self.wheel_speeds
+        if self.dynamics is not None:
+            self.frame, speeds = self.dynamics.sensors(self.frame, speeds)
+        return observation_from_sensors(self.frame, speeds)
 
     def _track_progress(self):
         # Local projection preserves branch identity through the figure-eight crossing.

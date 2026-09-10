@@ -2,12 +2,14 @@
 
 import argparse
 import csv
+import hashlib
 import json
 from pathlib import Path
 import time
 from typing import cast
 
 import envs  # noqa: F401
+from envs.line_dynamics import validate_ranges
 from envs.tasks.line_follower_ppo_env import LineFollowerPPOEnv
 from envs.tasks.line_follower_ppo_env import TRACKS
 import gymnasium as gym
@@ -24,16 +26,21 @@ def evaluate(
     human=False,
     video=False,
     reward_centering="camera",
+    tracks=None,
+    dynamics="nominal",
+    dr_ranges=None,
 ):
     """Use fixed starts with fresh perturbation seeds and deterministic policy actions."""
     summary = {}
     trajectories = {}
-    for track in TRACKS:
+    for track in TRACKS if tracks is None else tracks:
         environment = gym.make(
             "LineFollowerPPO-v0",
             track=track,
             render_mode="human" if human else None,
             reward_centering=reward_centering,
+            dynamics=dynamics,
+            dr_ranges=dr_ranges,
         )
         outcomes, paths = [], []
         writer = None
@@ -119,8 +126,10 @@ def plot_trajectories(trajectories, summary, output):
     import matplotlib.pyplot as plt
 
     # Plot every episode, including failures, against the exact waypoint centerline.
-    figure, axes = plt.subplots(1, 3, figsize=(15, 5))
-    for axis, (track, paths) in zip(axes, trajectories.items()):
+    figure, axes = plt.subplots(
+        1, len(trajectories), figsize=(5 * len(trajectories), 5), squeeze=False
+    )
+    for axis, (track, paths) in zip(axes.flat, trajectories.items()):
         points = np.asarray(TRACKS[track]())
         axis.plot(points[:, 0], points[:, 1], "k--", label="track center")
         for rows in paths:
@@ -137,14 +146,35 @@ def plot_trajectories(trajectories, summary, output):
     plt.close(figure)
 
 
+def write_metadata(model_path, output, summary, dynamics, ranges, centering, seed, episodes):
+    """Bind evaluation results to the exact checkpoint and physical test distribution."""
+    # Store physical settings beside episode outcomes for offline deployment qualification.
+    metadata = {
+        "model_sha256": hashlib.sha256(model_path.read_bytes()).hexdigest(),
+        "dynamics": dynamics,
+        "dr_ranges": ranges,
+        "reward_centering": centering,
+        "seed": seed,
+        "episodes_per_track": episodes,
+        "rates": {track: result["success_rate"] for track, result in summary.items()},
+        "passed_90_percent": all(result["success_rate"] >= 0.9 for result in summary.values()),
+    }
+    (output / "evaluation_metadata.json").write_text(
+        json.dumps(metadata, indent=2), encoding="utf-8"
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("model", type=Path)
     parser.add_argument("--episodes", type=int, default=20)
     parser.add_argument("--seed", type=int, default=10000)
+    parser.add_argument("--tracks", nargs="+", choices=list(TRACKS))
     parser.add_argument("--viewer", action="store_true")
     parser.add_argument("--video", action="store_true")
     parser.add_argument("--reward-centering", choices=("camera", "chassis", "both"))
+    parser.add_argument("--dynamics", choices=("nominal", "bam", "dr"))
+    parser.add_argument("--dr-ranges", type=Path)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     if args.episodes < 1:
@@ -159,6 +189,13 @@ def main():
         config_path = args.model.parent.parent / "config.json"
     config = json.loads(config_path.read_text(encoding="utf-8")) if config_path.exists() else {}
     centering = args.reward_centering or config.get("reward_centering", "camera")
+    dynamics = args.dynamics or config.get("dynamics", "nominal")
+    if args.dr_ranges and dynamics != "dr":
+        parser.error("--dr-ranges requires --dynamics dr")
+    overrides = (
+        json.loads(args.dr_ranges.read_text()) if args.dr_ranges else config.get("dr_ranges")
+    )
+    ranges = validate_ranges(overrides) if dynamics == "dr" else None
     summary = evaluate(
         model,
         args.episodes,
@@ -167,6 +204,12 @@ def main():
         args.viewer,
         args.video,
         reward_centering=centering,
+        tracks=args.tracks or config.get("tracks", list(TRACKS)),
+        dynamics=dynamics,
+        dr_ranges=ranges,
+    )
+    write_metadata(
+        args.model, output, summary, dynamics, ranges, centering, args.seed, args.episodes
     )
     for track, result in summary.items():
         print(

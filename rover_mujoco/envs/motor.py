@@ -63,7 +63,9 @@ def motor_torque(target_omega, measured_omega):
     return torque
 
 
-def motor_drive_and_damping(target_omega, measured_omega):
+def motor_drive_and_damping(
+    target_omega, measured_omega, *, vin=VIN, kt=KT, resistance=R, kp=VELOCITY_KP
+):
     """motor_torque split into a constant drive and a damping coefficient, so the
     speed-dependent half can go to `dof_damping` where the integrator solves it implicitly.
 
@@ -72,10 +74,13 @@ def motor_drive_and_damping(target_omega, measured_omega):
     leaves the ground. Returns (drive [Nm], damping [Nm/(rad/s)])."""
     target = np.asarray(target_omega, dtype=float)
     measured = np.asarray(measured_omega, dtype=float)
-    raw_voltage = VELOCITY_KP * (target - measured)
-    saturated = np.abs(raw_voltage) >= VIN
-    drive = np.where(saturated, KT * np.sign(raw_voltage) * VIN / R, KT * VELOCITY_KP * target / R)
-    damping = np.where(saturated, KT**2 / R, KT * VELOCITY_KP / R + KT**2 / R)
+    # Episode parameters may be independent per wheel while retaining the original defaults.
+    raw_voltage = kp * (target - measured)
+    saturated = np.abs(raw_voltage) >= vin
+    drive = np.where(
+        saturated, kt * np.sign(raw_voltage) * vin / resistance, kt * kp * target / resistance
+    )
+    damping = np.where(saturated, kt**2 / resistance, kt * kp / resistance + kt**2 / resistance)
     return drive, damping
 
 

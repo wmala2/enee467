@@ -9,8 +9,10 @@ import time
 from typing import Any
 
 import envs  # noqa: F401
+from envs.line_dynamics import validate_ranges
 from envs.tasks.line_follower_ppo_env import TRACKS
 from evaluate_ppo import evaluate
+from evaluate_ppo import write_metadata
 import gymnasium as gym
 import numpy as np
 from stable_baselines3 import PPO
@@ -23,7 +25,7 @@ import torch
 ENV_ID = "LineFollowerPPO-v0"
 
 
-def make_environment(track, reward_centering) -> gym.Env:
+def make_environment(track, reward_centering, dynamics="nominal", dr_ranges=None) -> gym.Env:
     # Each worker has a fixed track and samples start positions along it at reset.
     return Monitor(
         gym.make(
@@ -31,6 +33,8 @@ def make_environment(track, reward_centering) -> gym.Env:
             track=track,
             random_start=True,
             reward_centering=reward_centering,
+            dynamics=dynamics,
+            dr_ranges=dr_ranges,
         )
     )
 
@@ -38,16 +42,65 @@ def make_environment(track, reward_centering) -> gym.Env:
 class CompletionCallback(BaseCallback):
     """Select checkpoints using the weakest track's completion rate, then mean return."""
 
-    def __init__(self, output, interval, episodes, reward_centering):
+    def __init__(
+        self,
+        output,
+        interval,
+        episodes,
+        reward_centering,
+        tracks,
+        dynamics="nominal",
+        dr_ranges=None,
+    ):
         super().__init__()
         self.output = output
         self.interval = interval
         self.episodes = episodes
         self.reward_centering = reward_centering
+        self.tracks = tracks
+        self.dynamics = dynamics
+        self.dr_ranges = dr_ranges
         self.next_evaluation = interval
         self.best_score = (-1.0, -float("inf"))
         self.history = []
         self.outcomes = []
+
+    def _on_training_start(self):
+        # Include the incoming policy so fine-tuning cannot discard a stronger starting checkpoint.
+        self._evaluate()
+
+    def _evaluate(self):
+        results = evaluate(
+            self.model,
+            episodes=self.episodes,
+            seed=1000,
+            reward_centering=self.reward_centering,
+            tracks=self.tracks,
+            dynamics=self.dynamics,
+            dr_ranges=self.dr_ranges,
+        )
+        for track, result in results.items():
+            for key in ("success_rate", "mean_return", "mean_deviation_cm", "mean_progress"):
+                self.logger.record(f"eval/{track}/{key}", result[key])
+        score = (
+            min(result["success_rate"] for result in results.values()),
+            float(np.mean([result["mean_return"] for result in results.values()])),
+        )
+        if score > self.best_score:
+            self.best_score = score
+            self.model.save(self.output / "best_model")
+        self.history.append({"timesteps": self.num_timesteps, "tracks": results})
+        (self.output / "validation.json").write_text(
+            json.dumps(self.history, indent=2), encoding="utf-8"
+        )
+        self.logger.dump(self.num_timesteps)
+        print(
+            f"Validation at {self.num_timesteps}: "
+            + ", ".join(
+                f"{track}={result['success_rate']:.0%}" for track, result in results.items()
+            ),
+            flush=True,
+        )
 
     def _on_step(self):
         # Report episode-level physical metrics beside SB3's optimization diagnostics.
@@ -55,34 +108,7 @@ class CompletionCallback(BaseCallback):
             if done:
                 self.outcomes.append(info)
         if self.num_timesteps >= self.next_evaluation:
-            results = evaluate(
-                self.model,
-                episodes=self.episodes,
-                seed=1000,
-                reward_centering=self.reward_centering,
-            )
-            for track, result in results.items():
-                for key in ("success_rate", "mean_return", "mean_deviation_cm", "mean_progress"):
-                    self.logger.record(f"eval/{track}/{key}", result[key])
-            score = (
-                min(result["success_rate"] for result in results.values()),
-                float(np.mean([result["mean_return"] for result in results.values()])),
-            )
-            if score > self.best_score:
-                self.best_score = score
-                self.model.save(self.output / "best_model")
-            self.history.append({"timesteps": self.num_timesteps, "tracks": results})
-            (self.output / "validation.json").write_text(
-                json.dumps(self.history, indent=2), encoding="utf-8"
-            )
-            self.logger.dump(self.num_timesteps)
-            print(
-                f"Validation at {self.num_timesteps}: "
-                + ", ".join(
-                    f"{track}={result['success_rate']:.0%}" for track, result in results.items()
-                ),
-                flush=True,
-            )
+            self._evaluate()
             self.next_evaluation += self.interval
         return True
 
@@ -91,7 +117,7 @@ class CompletionCallback(BaseCallback):
             for key in ("is_success", "mean_deviation_cm", "line_loss_frames", "progress_fraction"):
                 self.logger.record(f"task/{key}", float(np.mean([o[key] for o in self.outcomes])))
             # Separate tracks so easy laps cannot hide poor learning on the figure eight.
-            for track in TRACKS:
+            for track in self.tracks:
                 outcomes = [outcome for outcome in self.outcomes if outcome["track"] == track]
                 if outcomes:
                     for key in ("is_success", "mean_deviation_cm", "progress_fraction"):
@@ -108,13 +134,18 @@ def main():
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--learning-rate", type=float, default=3e-4)
     parser.add_argument("--ent-coef", type=float, default=0.005)
+    parser.add_argument("--gamma", type=float, default=0.995)
+    parser.add_argument("--tracks", nargs="+", choices=list(TRACKS), default=list(TRACKS))
     parser.add_argument(
         "--reward-centering", choices=("camera", "chassis", "both"), default="camera"
     )
+    parser.add_argument("--dynamics", choices=("nominal", "bam", "dr"), default="nominal")
+    parser.add_argument("--dr-ranges", type=Path, help="JSON parameter min/max overrides for DR")
     parser.add_argument("--eval-every", type=int, default=25_000)
     parser.add_argument("--eval-episodes", type=int, default=5)
     parser.add_argument("--test-episodes", type=int, default=20)
     parser.add_argument("--no-wandb", action="store_true")
+    parser.add_argument("--wandb-group")
     parser.add_argument("--resume", type=Path)
     parser.add_argument(
         "--output", type=Path, default=Path("runs") / time.strftime("ppo-%Y%m%d-%H%M%S")
@@ -125,11 +156,17 @@ def main():
         < 1
     ):
         parser.error("step, worker, and episode counts must be positive")
-    if args.n_envs < len(TRACKS):
+    if args.n_envs < len(args.tracks):
         parser.error(
-            f"use at least {len(TRACKS)} workers so every track participates in training; "
-            f"tracks are {list(TRACKS)}"
+            f"use at least {len(args.tracks)} workers so every selected track participates"
         )
+    if not 0 < args.gamma <= 1:
+        parser.error("gamma must be in (0, 1]")
+    if args.dr_ranges and args.dynamics != "dr":
+        parser.error("--dr-ranges requires --dynamics dr")
+    # Store resolved bounds so evaluation does not depend on a later edit to the range file.
+    overrides = json.loads(args.dr_ranges.read_text()) if args.dr_ranges else None
+    dr_ranges = validate_ranges(overrides) if args.dynamics == "dr" else None
     args.output.mkdir(parents=True, exist_ok=False)
     torch.set_num_threads(1)
     hyperparameters: dict[str, Any] = {
@@ -137,7 +174,7 @@ def main():
         "n_steps": 512,
         "batch_size": 256,
         "n_epochs": 10,
-        "gamma": 0.995,
+        "gamma": args.gamma,
         "gae_lambda": 0.95,
         "clip_range": 0.2,
         "ent_coef": args.ent_coef,
@@ -150,8 +187,10 @@ def main():
         "output": str(args.output),
         "resume": str(args.resume) if args.resume else None,
         "env_id": ENV_ID,
-        "tracks": list(TRACKS),
-        "domain_randomization": False,
+        "tracks": args.tracks,
+        "domain_randomization": args.dynamics == "dr",
+        "dr_ranges": dr_ranges,
+        "actuator_model": "velocity_servo" if args.dynamics == "nominal" else "bam_stribeck_dc",
         "control_hz": 10,
         "tape_width_m": 0.0508,
         "camera_tilt_deg": 45,
@@ -171,6 +210,7 @@ def main():
             run = wandb.init(
                 project="rover-line-follower",
                 name=args.output.name,
+                group=args.wandb_group,
                 config=config,
                 sync_tensorboard=True,
                 dir=str(args.output),
@@ -179,8 +219,10 @@ def main():
         factories: list[Callable[[], gym.Env]] = [
             partial(
                 make_environment,
-                list(TRACKS)[i % len(TRACKS)],
+                args.tracks[i % len(args.tracks)],
                 args.reward_centering,
+                args.dynamics,
+                dr_ranges,
             )
             for i in range(args.n_envs)
         ]
@@ -206,17 +248,34 @@ def main():
                 tensorboard_log=str(args.output / "tensorboard"),
                 **hyperparameters,
             )
-        # Record inherited training separately because SB3 starts this run's counter at zero.
-        config["prior_timesteps"] = model.num_timesteps
+        # Carry the source run's lineage because SB3 resets its counter on every continuation.
+        prior_timesteps = model.num_timesteps
+        if args.resume:
+            source_directory = args.resume.parent
+            if source_directory.name == "checkpoints":
+                source_directory = source_directory.parent
+            source_config = source_directory / "config.json"
+            if source_config.exists():
+                prior_timesteps += json.loads(source_config.read_text(encoding="utf-8")).get(
+                    "prior_timesteps", 0
+                )
+        config["checkpoint_timesteps"] = model.num_timesteps
+        config["prior_timesteps"] = prior_timesteps
         (args.output / "config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
         if run is not None:
-            run.config.update({"prior_timesteps": model.num_timesteps})
+            run.config.update({
+                "checkpoint_timesteps": model.num_timesteps,
+                "prior_timesteps": prior_timesteps,
+            })
         callbacks: list[BaseCallback] = [
             CompletionCallback(
                 args.output,
                 args.eval_every,
                 args.eval_episodes,
                 args.reward_centering,
+                args.tracks,
+                args.dynamics,
+                dr_ranges,
             ),
             CheckpointCallback(
                 save_freq=max(1, args.eval_every // args.n_envs),
@@ -240,6 +299,19 @@ def main():
             evaluation_dir,
             video=True,
             reward_centering=args.reward_centering,
+            tracks=args.tracks,
+            dynamics=args.dynamics,
+            dr_ranges=dr_ranges,
+        )
+        write_metadata(
+            args.output / "best_model.zip",
+            evaluation_dir,
+            results,
+            args.dynamics,
+            dr_ranges,
+            args.reward_centering,
+            10000,
+            args.test_episodes,
         )
         print(
             "Final evaluation: "

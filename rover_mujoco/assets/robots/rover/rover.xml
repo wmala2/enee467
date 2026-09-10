@@ -52,28 +52,6 @@
       <camera name="top_cam" pos="0 -0.098 0.07" quat="0 0 0.50000000 0.86602540" fovy="60"/>
       <!-- Massless reference frame for the base velocimeter sensor. -->
       <site name="base_imu" pos="0 0 0" size="0.005"/>
-      <!-- BEGIN generated lidar sites (scripts/gen_rover_lidar.py) -->
-      <!-- The rover's three forward ToF beams. Each is a fan of rays spanning
-           LIDAR_FOV_DEG (25 deg); GoalNavEnv takes the minimum over each fan,
-           which is what a real cone-FOV part reports. A rangefinder casts along its
-           site's local +Z, so zaxis aims each ray. Massless, collision-free sites:
-           scenes without matching <rangefinder> sensors pay nothing for them. -->
-      <site name="lidar_left_0" pos="0 -0.13 -0.06" size="0.005" zaxis="0.216440 -0.976296 0"/>
-      <site name="lidar_left_1" pos="0 -0.13 -0.06" size="0.005" zaxis="0.321439 -0.946930 0"/>
-      <site name="lidar_left_2" pos="0 -0.13 -0.06" size="0.005" zaxis="0.422618 -0.906308 0"/>
-      <site name="lidar_left_3" pos="0 -0.13 -0.06" size="0.005" zaxis="0.518773 -0.854912 0"/>
-      <site name="lidar_left_4" pos="0 -0.13 -0.06" size="0.005" zaxis="0.608761 -0.793353 0"/>
-      <site name="lidar_center_0" pos="0 -0.13 -0.06" size="0.005" zaxis="-0.216440 -0.976296 0"/>
-      <site name="lidar_center_1" pos="0 -0.13 -0.06" size="0.005" zaxis="-0.108867 -0.994056 0"/>
-      <site name="lidar_center_2" pos="0 -0.13 -0.06" size="0.005" zaxis="0.000000 -1.000000 0"/>
-      <site name="lidar_center_3" pos="0 -0.13 -0.06" size="0.005" zaxis="0.108867 -0.994056 0"/>
-      <site name="lidar_center_4" pos="0 -0.13 -0.06" size="0.005" zaxis="0.216440 -0.976296 0"/>
-      <site name="lidar_right_0" pos="0 -0.13 -0.06" size="0.005" zaxis="-0.608761 -0.793353 0"/>
-      <site name="lidar_right_1" pos="0 -0.13 -0.06" size="0.005" zaxis="-0.518773 -0.854912 0"/>
-      <site name="lidar_right_2" pos="0 -0.13 -0.06" size="0.005" zaxis="-0.422618 -0.906308 0"/>
-      <site name="lidar_right_3" pos="0 -0.13 -0.06" size="0.005" zaxis="-0.321439 -0.946930 0"/>
-      <site name="lidar_right_4" pos="0 -0.13 -0.06" size="0.005" zaxis="-0.216440 -0.976296 0"/>
-      <!-- END generated lidar sites -->
       <geom pos="0.0160863 -0.0852797 0.272765" quat="0.707105 0 0.707108 0" type="mesh" contype="0" conaffinity="0" rgba="0.647059 0.647059 0.647059 1" mesh="left_motor"/>
       <geom pos="-0.0886915 -0.18808 -0.0273587" quat="0.707105 0 0 -0.707108" type="mesh" contype="0" conaffinity="0" rgba="0.917647 0.917647 0.917647 1" mesh="base_plate"/>
       <geom pos="-0.473714 0.0946882 -0.0468587" quat="1.76043e-12 1.32679e-06 -1 -1.32679e-06" type="mesh" contype="0" conaffinity="0" rgba="0.498039 0.498039 0.498039 1" mesh="front_wheel_upper_joint"/>
