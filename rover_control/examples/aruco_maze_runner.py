@@ -306,6 +306,13 @@ class ArucoRunner(Rover):
         if stop_distance_m is not None:
             self.stop_tolerance_m = stop_distance_m
 
+        # On the `ty: ignore[not-subscriptable]` markers below: `raw`, `position` and
+        # `bearing_smoothed` are all `<value> if seen else None`, and every use of them sits
+        # after an `if not seen:` block that returns on both paths. They cannot be None there.
+        # ty narrows on values, not on a proxy boolean, so it cannot see that. The markers are
+        # per-line rather than a file-level suppression so a genuinely unguarded use would
+        # still be reported.
+
         # Start the controllers clean so the first dt isn't a stale stop-and-stare gap
         self.distance_pid.reset()
         self.heading_pid.reset()
@@ -322,13 +329,13 @@ class ArucoRunner(Rover):
             seen = tag_id in poses
             raw = poses[tag_id] if seen else None
             bearing_raw = (
-                np.degrees(np.arctan2(raw["position"][0], raw["position"][2])) if seen else None
+                np.degrees(np.arctan2(raw["position"][0], raw["position"][2])) if seen else None  # ty: ignore[not-subscriptable]
             )
 
             # Smooth the pose in place - this EMA pose is what the heading PID actually acts on
             self.estimator._smooth(poses)
             position = poses[tag_id]["position"] if seen else None
-            bearing_smoothed = np.degrees(np.arctan2(position[0], position[2])) if seen else None
+            bearing_smoothed = np.degrees(np.arctan2(position[0], position[2])) if seen else None  # ty: ignore[not-subscriptable]
 
             # How old is this frame, and is it actually new since last tick? (camera-lag
             # diagnostics)
@@ -371,14 +378,14 @@ class ArucoRunner(Rover):
                 return "recenter"
 
             # Arrived: within the forward stop tolerance
-            if position[2] - self.stop_tolerance_m <= 0:
+            if position[2] - self.stop_tolerance_m <= 0:  # ty: ignore[not-subscriptable]
                 self.logger.log(
                     phase="drive",
                     event="arrived",
                     seen=True,
                     tag_id=tag_id,
-                    Z=position[2],
-                    distance=raw["distance"],
+                    Z=position[2],  # ty: ignore[not-subscriptable]
+                    distance=raw["distance"],  # ty: ignore[not-subscriptable]
                     frame_stamp=stamp,
                     frame_age=frame_age,
                     frame_is_new=frame_is_new,
@@ -389,7 +396,7 @@ class ArucoRunner(Rover):
                 return "arrived"
 
             # Drifted too far off-center to trust a straight approach: stop and re-center
-            if abs(bearing_smoothed) > self.DRIVE_RECENTER_DEG:
+            if abs(bearing_smoothed) > self.DRIVE_RECENTER_DEG:  # ty: ignore[invalid-argument-type]
                 self.logger.log(
                     phase="drive",
                     event=f"recenter (bearing {bearing_smoothed:.1f})",
@@ -397,7 +404,7 @@ class ArucoRunner(Rover):
                     tag_id=tag_id,
                     bearing_raw=bearing_raw,
                     bearing_smoothed=bearing_smoothed,
-                    Z=position[2],
+                    Z=position[2],  # ty: ignore[not-subscriptable]
                     frame_stamp=stamp,
                     frame_age=frame_age,
                     frame_is_new=frame_is_new,
@@ -406,7 +413,7 @@ class ArucoRunner(Rover):
                 self.stop()
                 return "recenter"
 
-            _last_known_distance = position[2]
+            _last_known_distance = position[2]  # ty: ignore[not-subscriptable]
 
             # Otherwise keep driving toward it with the PID, logging the full tick
             wheel_speeds = self.wheel_speeds_for(position)
@@ -416,11 +423,11 @@ class ArucoRunner(Rover):
                 tag_id=tag_id,
                 bearing_raw=bearing_raw,
                 bearing_smoothed=bearing_smoothed,
-                X=position[0],
-                Y=position[1],
-                Z=position[2],
-                distance=raw["distance"],
-                reproj_error=raw.get("reproj_error"),
+                X=position[0],  # ty: ignore[not-subscriptable]
+                Y=position[1],  # ty: ignore[not-subscriptable]
+                Z=position[2],  # ty: ignore[not-subscriptable]
+                distance=raw["distance"],  # ty: ignore[not-subscriptable]
+                reproj_error=raw.get("reproj_error"),  # ty: ignore[unresolved-attribute]
                 frame_stamp=stamp,
                 frame_age=frame_age,
                 frame_is_new=frame_is_new,
