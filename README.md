@@ -1,6 +1,7 @@
 # Matrix Lab Rover — High Level
 This repository contains the higher-level AI agent code for the STEM Rovers: object detection, ArUco pose estimation, LLM integration, and the control loops that tie them together into autonomous behaviours.
 The intent is to elevate the basic differential drive rover platform we're currently control with closed loop techniques, with modern neural network, higher level algorithms.
+This project is a joint effort between [UMD's ECE department](https://ece.umd.edu/) and [MATRIX Lab](https://matrix.umd.edu/)
 
 ## Installation
 
