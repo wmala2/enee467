@@ -1,6 +1,7 @@
 """Run the current eleven-input PPO policy after offline simulation qualification."""
 
 import json
+from pathlib import Path
 import socket
 import threading
 import time
@@ -97,6 +98,7 @@ class RLLineFollowerRover(Rover):
         counts_per_revolution,
         encoder_signs,
         camera_addr=Rover.DEFAULT_CAMERA_ADDR,
+        record_dir=None,
         **kwargs,
     ):
         # Validate local evidence and calibration before opening camera or encoder connections.
@@ -113,6 +115,7 @@ class RLLineFollowerRover(Rover):
         self._encoders = _EncoderOnlyPoller(poll_hz=CONTROL_HZ)
         self._started = time.perf_counter()
         self._lost_steps = 0
+        self._recorder = _RunRecorder(record_dir) if record_dir else None
         try:
             self._camera.start()
             self._encoders.start()
@@ -134,7 +137,10 @@ class RLLineFollowerRover(Rover):
         self._maybe_show(frame)
         image = cv2.resize(frame, (CAM_RES, CAM_RES))[:, :, ::-1]
         speeds = encoder_speeds(counts, elapsed, self._counts_per_revolution, self._encoder_signs)
-        return observation_from_sensors(image, speeds)
+        observation = observation_from_sensors(image, speeds)
+        if self._recorder is not None:
+            self._recorder.write(image, observation)
+        return observation
 
     def compute_wheel_speeds(self):
         observation = self._get_obs()
@@ -161,6 +167,99 @@ class RLLineFollowerRover(Rover):
             self.stop()
 
     def close(self):
+        if self._recorder is not None:
+            self._recorder.close()
+            self._recorder = None
         self._encoders.stop()
         self._camera.stop()
         super().close()
+
+
+class _RunRecorder:
+    """Save what the detector sees, not what the rover looks like.
+
+    A video of the robot cannot show why a frame failed detection. This writes the same 64x64
+    image the policy is given, upscaled, with the detection mask painted over it and the
+    eleven observation values beside it, plus a CSV of those values. Recording never
+    interrupts driving: any failure disables the recorder and the run continues.
+    """
+
+    SCALE = 8
+
+    def __init__(self, directory):
+        import csv
+
+        self._dir = Path(directory)
+        self._dir.mkdir(parents=True, exist_ok=True)
+        self._writer = None
+        self._video = None
+        # Held open for the run's lifetime and closed in close(); a context manager here
+        # would shut the file before the first frame is written.
+        self._rows = open(  # noqa: SIM115
+            self._dir / "observations.csv", "w", newline="", encoding="utf-8"
+        )
+        self._csv = csv.writer(self._rows)
+        self._csv.writerow(
+            ["t"]
+            + [f"{band}_{field}" for band in ("near", "mid", "far") for field in ("x", "y", "seen")]
+            + ["left_rad_s", "right_rad_s", "min_rgb"]
+        )
+        self._start = time.perf_counter()
+
+    def write(self, image, observation):
+        try:
+            import cv2
+            from envs.pid import centroid_error
+
+            _, mask = centroid_error(image, band=1.0)
+            view = cv2.resize(
+                image[:, :, ::-1],
+                (CAM_RES * self.SCALE, CAM_RES * self.SCALE),
+                interpolation=cv2.INTER_NEAREST,
+            )
+            painted = cv2.resize(
+                mask.astype(np.uint8) * 255,
+                (CAM_RES * self.SCALE, CAM_RES * self.SCALE),
+                interpolation=cv2.INTER_NEAREST,
+            )
+            view[painted > 0] = (0, 0, 255)
+            elapsed = time.perf_counter() - self._start
+            # The darkest pixel present is the number that decides whether the tape is found
+            # at all, since detection needs every channel under its threshold.
+            darkest = int(image.reshape(-1, 3).min(axis=1).min())
+            for index, text in enumerate((
+                f"t={elapsed:6.2f}s  darkest_rgb={darkest:3d}",
+                f"near x={observation[0]:+.2f} seen={observation[2]:.0f}",
+                f"mid  x={observation[3]:+.2f} seen={observation[5]:.0f}",
+                f"far  x={observation[6]:+.2f} seen={observation[8]:.0f}",
+            )):
+                cv2.putText(
+                    view,
+                    text,
+                    (6, 16 + 16 * index),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.4,
+                    (0, 255, 0),
+                    1,
+                    cv2.LINE_AA,
+                )
+            if self._video is None:
+                self._video = cv2.VideoWriter(
+                    str(self._dir / "camera.mp4"),
+                    cv2.VideoWriter.fourcc(*"mp4v"),
+                    CONTROL_HZ,
+                    (view.shape[1], view.shape[0]),
+                )
+            self._video.write(view)
+            self._csv.writerow([f"{elapsed:.3f}"] + [f"{v:.4f}" for v in observation] + [darkest])
+        except Exception as error:  # noqa: BLE001  driving must not stop for a recorder
+            print(f"recording disabled: {error}")
+            self.close()
+
+    def close(self):
+        if self._video is not None:
+            self._video.release()
+            self._video = None
+        if self._rows is not None:
+            self._rows.close()
+            self._rows = None

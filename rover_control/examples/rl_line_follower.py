@@ -21,6 +21,10 @@ def main():
     parser.add_argument("--wheel-radius-m", type=float, default=0.03435)
     parser.add_argument("--camera-addr", default=RLLineFollowerRover.DEFAULT_CAMERA_ADDR)
     parser.add_argument(
+        "--record",
+        help="directory for camera.mp4 and observations.csv showing what the detector sees",
+    )
+    parser.add_argument(
         "--rover-addr",
         default=network_interface.UDP_IP,
         help="rover UDP address; defaults to $ROVER_IP or the built-in",
@@ -37,6 +41,7 @@ def main():
         wheel_diameter_m=2 * args.wheel_radius_m,
         camera_addr=args.camera_addr,
         rover_addr=args.rover_addr,
+        record_dir=args.record,
         show_camera=True,
     )
     try:
