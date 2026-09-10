@@ -65,7 +65,7 @@ curl -s -o /dev/null -w '%{http_code}\n' -u "$ONSHAPE_ACCESS_KEY:$ONSHAPE_SECRET
 
 ## 2. In the OnShape assembly, before exporting
 
-- **Root part**: leave it un-fixed if the robot should be free-floating (a rover, an arm on
+- Leave the root part un-fixed if the robot should be free-floating (a rover, an arm on
   wheels). Only apply OnShape's own **Fixed** mate/feature to the root if the robot is meant
   to be bolted to the world (e.g. a stationary arm). The exporter reads that flag to decide
   whether to emit a `<freejoint>` on the root body.

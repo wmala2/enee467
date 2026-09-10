@@ -229,21 +229,24 @@ checkpoint in both BAM modes; Goomba is reported separately and is not included
 in this three-track gate.
 The manifest is local evidence, not a cryptographic attestation of hardware safety.
 
-After measured encoder calibration and physical setup are available, the hardware
-entry point is `uv run python -m rover_control.examples.rl_line_follower MODEL MANIFEST
---counts-per-revolution MEASURED_COUNTS --encoder-signs LEFT_SIGN RIGHT_SIGN`.
-Set `--wheel-radius-m` and `--camera-addr` to the measured radius and actual camera
-endpoint, and configure the rover destination in `rover_control/network_interface.py`.
-Each encoder sign must be `1` or `-1`, chosen so forward wheel motion gives a
-positive angular velocity.
-No hardware commands were sent during this simulation bringup.
+The selected policy subsequently ran successfully on the physical rover, as
+reported by the experimenter; the [Zero to Hero tutorial](<Deploying a Mini Claw Rover Policy _ Zero to Hero.md#8-deploy-the-selected-policy-on-the-physical-rover>)
+records the hardware stage and its differences from simulation.
+The entry point is `uv run python -m rover_control.examples.rl_line_follower MODEL MANIFEST`.
+It now defaults to the firmware profile's 680 encoder counts per wheel revolution
+and signs `(1, 1)`, with `--counts-per-revolution` and `--encoder-signs` overrides
+for a different profile or calibration.
+Use `--wheel-radius-m`, `--camera-addr`, and `--rover-addr` for the physical setup,
+and `--record DIRECTORY` to save the camera overlay and observation CSV.
 
-The runner sends zero while sensors initialize, exits on camera or encoder data
-older than 250 ms, stops after five consecutive missing-line observations,
-and sends zero on inference errors or keyboard interruption.
-These checks use local receipt times; camera capture latency, network buffering,
-encoder quantization, firmware control behavior, and physical motor parameters
-still need measurements before claiming sim-to-real equivalence.
+The current runner polls the camera at 12.5 Hz, sends zero during sensor startup,
+and stops on sensor data older than 1.0 s or 15 consecutive missing-line
+observations (1.5 s at the 10 Hz policy rate).
+It also sends zero on inference errors or keyboard interruption.
+These hardware limits replaced the initial 250 ms sensor-age and five-step
+line-loss limits after physical bringup; simulation still uses 0.5 s of line loss.
+The successful physical demonstration does not establish a hardware lap-success
+rate or make the provisional motor parameters a measured fit.
 
 ## Verification
 

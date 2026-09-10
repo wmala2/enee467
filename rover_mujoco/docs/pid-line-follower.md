@@ -60,11 +60,10 @@ The RL environments' appearance randomization selects them by name instead of by
 group, which is what allowed the group number to change at all.
 
 The line width differs by consumer, deliberately.
-This runner passes 0.0508 m (2 inches) to match physical tape, while `gen_track.py`'s
-default, used for the RL scene assets in `assets/objects/tracks/`, stays at 0.03 m.
-A policy trained against the RL assets sees a line about 40% narrower than this baseline
-does, which scales the centroid error the two consume.
-Aligning them is outstanding work before any sim-to-real comparison.
+Both this runner and the current `LineFollowerPPO-v0` environment pass 0.0508 m
+(2 inches) through `envs/line_scene.py` to match physical tape.
+`gen_track.py`'s default for standalone assets remains 0.03 m, but those narrower
+assets are not the track geometry used for the reported PPO comparisons.
 
 ## Controller and measurements
 

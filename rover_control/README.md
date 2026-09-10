@@ -54,7 +54,7 @@ finally:
 | [ArUco Maze Runner](examples/aruco_maze_runner.py) | Drive through a list of ArUco tags in order using a continuous PID approach. |
 | [ArUco Maze Runner (Trapezoid)](examples/aruco_maze_runner_trapezoid.py) | Same maze, but measures the tag once then drives a pre-planned trapezoidal speed curve to it. |
 | [Encoder Readout](examples/encoder_readout.py) | Poll the rover for its wheel encoder counts over UDP and print the replies. |
-| [RL Line Follower](examples/rl_line_follower.py) | Drive using a PPO policy trained in [rover_mujoco](https://huggingface.co/CursedRock17/rover-line-follower-ppo) instead of hand-written control logic — see `rover_control/rl_rover.py` for the sim<->real translation (sign convention, units, real velocity clamping). Never validated on real hardware before this; watch closely on first run. |
+| [RL Line Follower](examples/rl_line_follower.py) | Run the qualified DR/BAM PPO policy, successfully demonstrated on the physical rover, with firmware encoder defaults and optional camera/observation recording; see the [Zero to Hero tutorial](<../rover_mujoco/docs/Deploying a Mini Claw Rover Policy _ Zero to Hero.md>) for the experiment and deployment steps. |
 | [DA3 Object Follower](examples/da3_object_movement.py) | Follows a named COCO object (default: person) in real time using GPU depth + PID control. |
 | [Rover Mission Dashboard](examples/rover_yolo_estimator.py) | Side-by-side live camera + depth view with YOLO overlays; press S to save a depth histogram. |
 

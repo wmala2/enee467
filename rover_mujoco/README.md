@@ -43,6 +43,11 @@ You should be able to use WASD/Arrow Key controls to drive a rover around follow
 
 **Going Further**
 The main goal of this directory is simulation to real life transfer with our Mini Claw STEM Rover which will allow individuals using the rovers to test their algorithms, control, RL policies, and more in simulation then deploy them in real life.
+
+The [Zero to Hero tutorial](<docs/Deploying a Mini Claw Rover Policy _ Zero to Hero.md>)
+documents the completed PID → nominal PPO → DR/BAM → physical-rover journey,
+with measured results, figures, W&B runs, and saved policies.
+
 The following table denotes the out of box capabilites of the current environment
 
 | Task | Script | Descriptions |
@@ -51,8 +56,7 @@ The following table denotes the out of box capabilites of the current environmen
 | Track Generation | [`scripts/gen_track.py`](scripts/gen_track.py) | Generate a black line track (oval or s-curve) as an MJCF fragment from a list of (x, y) waypoints, for the line-following tasks below |
 | Line Following (Classical) | [`scripts/line_follower.py`](scripts/line_follower.py) | Follow a track using only the onboard camera with a PID or bang-bang controller, with a tiltable camera mount — the classical-control baseline ([docs](docs/pid-line-follower.md)) |
 | Line Following (PPO baseline) | [`scripts/train_ppo.py`](scripts/train_ppo.py), [`scripts/evaluate_ppo.py`](scripts/evaluate_ppo.py) | Train and evaluate on the PID baseline’s 2-inch closed tracks, with camera centroids, wheel encoders, W&B, and TensorBoard ([docs](docs/ppo-line-follower.md)) |
-| Policy Sharing | [`scripts/push_to_hub.py`](scripts/push_to_hub.py) | Push a trained policy to the Hugging Face Hub with a model card covering the environment, reward, hyperparameters, and sim-to-real caveats |
+| Policy Recovery | [Download guide](docs/policy-downloads.md) | Restore a verified policy and its configuration from the private Hugging Face backup, then run it in simulation. |
 
 Trained policies are deployed to the physical rover from the parent repo — see
 `rover_control/rl_rover.py` and `rover_control/examples/rl_line_follower.py`.
-
