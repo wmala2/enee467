@@ -90,10 +90,18 @@ class RLLineFollowerRover(Rover):
     # half that; see compute_wheel_speeds for why hardware is given longer.
     LINE_LOST_STOP_STEPS = 10
 
-    # How old either sensor reading may be before the rover stops. At 10 Hz this is two and a
-    # half control steps, so a single dropped camera frame or encoder reply is fatal; raise it
-    # if the logs show ordinary WiFi jitter tripping it rather than a real stall.
-    STALE_LIMIT_S = 0.25
+    # How old either sensor reading may be before the rover stops.
+    #
+    # 0.25 s sat inside the camera's own latency tail rather than outside it. Measured over
+    # 356 steps of runs that completed: median 28 ms, p99 167, max 232, with 0.28% of frames
+    # past 230 ms. At 10 Hz that is a near-miss roughly every 36 seconds, so runs did not fail
+    # because something was wrong, they failed because they lasted long enough. Three stalls
+    # all reported 0.26-0.27 s with the encoder healthy at 0.07-0.10.
+    #
+    # One second is well clear of that tail while still stopping promptly on a camera that has
+    # actually died. The cost is bounded: at MAX_VELOCITY the rover covers 25 cm on a stale
+    # image, the same exposure already accepted for line loss.
+    STALE_LIMIT_S = 1.0
 
     # Camera polling rate. Kept above CONTROL_HZ so a fresh frame is normally waiting rather
     # than being fetched on demand; the stream's own comment notes load and heat as the reason
@@ -218,7 +226,13 @@ class _RunRecorder:
         import csv
 
         self._dir = Path(directory)
+        # Never overwrite: a failed run's log is the evidence for why it failed, and reusing
+        # the directory once destroyed exactly that.
+        if self._dir.exists() and any(self._dir.iterdir()):
+            stamp = time.strftime("%H%M%S")
+            self._dir = self._dir.with_name(f"{self._dir.name}-{stamp}")
         self._dir.mkdir(parents=True, exist_ok=True)
+        print(f"recording to {self._dir}")
         self._writer = None
         self._video = None
         # Held open for the run's lifetime and closed in close(); a context manager here
