@@ -43,9 +43,9 @@ def make_friction_model():
     motor's ~0.108 Nm stall torque, leaving the wheel unable to move, so they are scaled to a
     fraction of our own stall torque. Dimensionally sane, still a guess, not a fit."""
     model = Model(stribeck=True)
-    model.set_actuator(DCMotorActuator(testbench_class=None, vin=VIN, kp=0.0))
-    model.kt.value = KT
-    model.R.value = R
+    model.set_actuator(DCMotorActuator(testbench_class=None, vin=VIN, kp=0.0))  # ty: ignore[invalid-argument-type]
+    model.kt.value = KT  # ty: ignore[unresolved-attribute]
+    model.R.value = R  # ty: ignore[unresolved-attribute]
     model.friction_base.value = 0.1 * STALL_TORQUE_OUTPUT_NM
     model.friction_stribeck.value = 0.1 * STALL_TORQUE_OUTPUT_NM
     model.friction_viscous.value = 0.05 * STALL_TORQUE_OUTPUT_NM

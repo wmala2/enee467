@@ -31,10 +31,10 @@ import pytest
 def _bam_reference_actuator():
     """BAM's own voltage-controlled actuator, carrying our motor's kt and R."""
     model = Model(stribeck=True)
-    actuator = VoltageControlledActuator(testbench_class=None, vin=motor.VIN, kp=0.0)
+    actuator = VoltageControlledActuator(testbench_class=None, vin=motor.VIN, kp=0.0)  # ty: ignore[invalid-argument-type]
     model.set_actuator(actuator)
-    model.kt.value = motor.KT
-    model.R.value = motor.R
+    model.kt.value = motor.KT  # ty: ignore[unresolved-attribute]
+    model.R.value = motor.R  # ty: ignore[unresolved-attribute]
     return actuator
 
 
@@ -76,16 +76,16 @@ def _settle(timestep, target=5.0, seconds=8.0):
       <actuator><motor name="drive" joint="axle" gear="1"/></actuator>
     </mujoco>
     """
-    model = mujoco.MjModel.from_xml_string(xml)
-    data = mujoco.MjData(model)
-    dof = model.jnt_dofadr[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "axle")]
+    model = mujoco.MjModel.from_xml_string(xml)  # ty: ignore[unresolved-attribute]
+    data = mujoco.MjData(model)  # ty: ignore[unresolved-attribute]
+    dof = model.jnt_dofadr[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "axle")]  # ty: ignore[unresolved-attribute]
     friction = motor.make_friction_model()
     for _ in range(int(seconds / timestep)):
         speed = float(data.qvel[dof])
         drive, electrical_damping = motor.motor_drive_and_damping(target, speed)
         motor.apply_friction(friction, model, dof, speed, extra_damping=float(electrical_damping))
         data.ctrl[0] = float(drive)
-        mujoco.mj_step(model, data)
+        mujoco.mj_step(model, data)  # ty: ignore[unresolved-attribute]
     return float(data.qvel[dof])
 
 
@@ -182,9 +182,9 @@ def test_split_form_is_stable_across_the_inertias_the_rover_spans():
           <actuator><motor name="drive" joint="axle" gear="1"/></actuator>
         </mujoco>
         """
-        model = mujoco.MjModel.from_xml_string(xml)
-        data = mujoco.MjData(model)
-        dof = model.jnt_dofadr[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "axle")]
+        model = mujoco.MjModel.from_xml_string(xml)  # ty: ignore[unresolved-attribute]
+        data = mujoco.MjData(model)  # ty: ignore[unresolved-attribute]
+        dof = model.jnt_dofadr[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "axle")]  # ty: ignore[unresolved-attribute]
         friction = motor.make_friction_model()
         trace = []
         for _ in range(6000):
@@ -192,7 +192,7 @@ def test_split_form_is_stable_across_the_inertias_the_rover_spans():
             drive, electrical = motor.motor_drive_and_damping(5.0, speed)
             motor.apply_friction(friction, model, dof, speed, extra_damping=float(electrical))
             data.ctrl[0] = float(drive)
-            mujoco.mj_step(model, data)
+            mujoco.mj_step(model, data)  # ty: ignore[unresolved-attribute]
             trace.append(float(data.qvel[dof]))
         tail = np.asarray(trace[-500:])
         assert tail.mean() == pytest.approx(predicted, rel=0.01), (

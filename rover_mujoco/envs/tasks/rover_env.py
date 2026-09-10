@@ -8,15 +8,15 @@ import numpy as np
 
 
 class RoverEnv(gym.Env):
-    metadata: ClassVar[dict] = {"render_modes": ["human", "rgb_array"], "render_fps": 50}
+    metadata: ClassVar[dict] = {"render_modes": ["human", "rgb_array"], "render_fps": 50}  # ty: ignore[invalid-attribute-override]
 
     def __init__(self, render_mode=None):
         super().__init__()
         model_path = os.path.join(
             os.path.dirname(__file__), "../../assets/robots/rover/rover_scene.xml"
         )
-        self.model = mujoco.MjModel.from_xml_path(model_path)
-        self.data = mujoco.MjData(self.model)
+        self.model = mujoco.MjModel.from_xml_path(model_path)  # ty: ignore[unresolved-attribute]
+        self.data = mujoco.MjData(self.model)  # ty: ignore[unresolved-attribute]
         self.render_mode = render_mode
 
         # 2D action space: [left_wheel_ctrl, right_wheel_ctrl] target angular velocities (rad/s)
@@ -28,14 +28,14 @@ class RoverEnv(gym.Env):
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
-        mujoco.mj_resetData(self.model, self.data)
+        mujoco.mj_resetData(self.model, self.data)  # ty: ignore[unresolved-attribute]
         return self._get_obs(), {}
 
     def step(self, action):
         # Drive the left/right wheel velocity actuators directly
         self.data.ctrl[:] = action
         # Advance physics by one timestep using the actuator forces above
-        mujoco.mj_step(self.model, self.data)
+        mujoco.mj_step(self.model, self.data)  # ty: ignore[unresolved-attribute]
 
         obs = self._get_obs()
         reward = 0.0
