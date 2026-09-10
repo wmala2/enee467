@@ -14,6 +14,16 @@ class Rover:
     COMMAND_RATE_HZ = 10.0  # the rover firmware listens for commands at about this rate
     MAX_VELOCITY = 0.25  # m/s
     MIN_VELOCITY = 0.075  # m/s
+
+    # Encoder calibration, read from rover-firmware/include/hardware_config.h. platformio.ini
+    # does not override MOTOR_PROFILE, so the header's default of 500 applies and
+    # ENCODER_CPR_WHEEL is 680 ("measured with scope"). Rebuilding the firmware under
+    # MOTOR_PROFILE 130 makes it 1980, so check the header if speeds look scaled wrong.
+    ENCODER_COUNTS_PER_REVOLUTION = 680.0
+    # Both wheels count positive when driving forward. src/encoder.cpp mirrors the right
+    # encoder's ISR so it does, and src/pid.cpp relies on that: it computes
+    # TargetTicksPerFrame - delta identically per wheel, so an inverted wheel would diverge.
+    ENCODER_SIGNS = (1, 1)
     # Open-loop turns are timed, not encoder-measured, so they can under- or overshoot.
     # If turns consistently land short, increase this (e.g. 1.5 if turns are ~30% short).
     TURN_SCALE = 1.0
