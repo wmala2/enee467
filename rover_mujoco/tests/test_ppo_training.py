@@ -34,6 +34,8 @@ def test_resume_uses_requested_hyperparameters(tmp_path):
     finally:
         environment.close()
 
+    # Include earlier interactions to exercise cumulative provenance across multiple resumptions.
+    (tmp_path / "config.json").write_text(json.dumps({"prior_timesteps": 100}), encoding="utf-8")
     # Exercise the actual CLI, worker processes, checkpoint serialization, and final evaluation.
     output = tmp_path / "continued"
     subprocess.run(
@@ -55,6 +57,8 @@ def test_resume_uses_requested_hyperparameters(tmp_path):
             "0.0001",
             "--ent-coef",
             "0.001",
+            "--gamma",
+            "0.98",
             "--no-wandb",
         ],
         check=True,
@@ -70,7 +74,12 @@ def test_resume_uses_requested_hyperparameters(tmp_path):
     assert resumed.ent_coef == config["hyperparameters"]["ent_coef"] == pytest.approx(0.001)
     assert resumed.policy.optimizer.param_groups[0]["lr"] == pytest.approx(0.0001)
     assert resumed.n_steps == config["hyperparameters"]["n_steps"] == 512
-    assert config["prior_timesteps"] == 16
+    assert resumed.gamma == config["hyperparameters"]["gamma"] == pytest.approx(0.98)
+    assert config["checkpoint_timesteps"] == 16
+    assert config["prior_timesteps"] == 116
+    history = json.loads((output / "validation.json").read_text(encoding="utf-8"))
+    assert history[0]["timesteps"] == 0
+    assert list(history[0]["tracks"]) == list(TRACKS)
     # SB3 finishes whole rollouts, so a 1-step request still collects n_steps per worker.
     assert resumed.num_timesteps == len(TRACKS) * resumed.n_steps
     assert (output / "evaluation/evaluation.json").is_file()
