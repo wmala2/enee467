@@ -39,7 +39,7 @@ class ArucoFollower(Rover):
         # Remember when we last ran the controller so the PIDs get a real time step
         self._last_pid_time = time.perf_counter()
 
-    def compute_wheel_speeds(self, pose):
+    def wheel_speeds_for(self, pose):
         # Measure the time since the last control step for the PID math
         now = time.perf_counter()
         dt = now - self._last_pid_time
@@ -92,7 +92,7 @@ class ArucoFollower(Rover):
 
             if self.MARKER_ID in poses:
                 print("Pose : ", poses[self.MARKER_ID]["position"])
-                wheel_speeds = self.compute_wheel_speeds(poses[self.MARKER_ID]["position"])
+                wheel_speeds = self.wheel_speeds_for(poses[self.MARKER_ID]["position"])
             else:
                 # No tag in sight, so hold still
                 wheel_speeds = [0.0, 0.0]

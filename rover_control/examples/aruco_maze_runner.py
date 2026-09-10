@@ -244,7 +244,7 @@ class ArucoRunner(Rover):
             )
             return
 
-    def compute_wheel_speeds(self, position):
+    def wheel_speeds_for(self, position):
         # Measure the time since the last control step for the PID math
         now = time.perf_counter()
         dt = now - self._last_pid_time
@@ -295,10 +295,16 @@ class ArucoRunner(Rover):
         }
         return speed
 
-    def drive_to_tag(self, target_id):
+    def drive_to_tag(self, tag_id, stop_distance_m=None):
         # Continuous PID approach toward an already-centered tag. Returns "arrived" once we're
         # within the stop tolerance, or "recenter" if the tag drifts off-center or drops out of
         # view.
+        #
+        # stop_distance_m keeps this compatible with Rover.drive_to_tag, whose signature the
+        # inherited run_maze() calls with that keyword. Without it, run_maze() raised TypeError
+        # on this subclass. None means "use the tolerance this runner was constructed with".
+        if stop_distance_m is not None:
+            self.stop_tolerance_m = stop_distance_m
 
         # Start the controllers clean so the first dt isn't a stale stop-and-stare gap
         self.distance_pid.reset()
@@ -313,15 +319,15 @@ class ArucoRunner(Rover):
             annotated, poses = self.estimator.detect(frame)
             self._show(annotated if annotated is not None else frame)
 
-            seen = target_id in poses
-            raw = poses[target_id] if seen else None
+            seen = tag_id in poses
+            raw = poses[tag_id] if seen else None
             bearing_raw = (
                 np.degrees(np.arctan2(raw["position"][0], raw["position"][2])) if seen else None
             )
 
             # Smooth the pose in place - this EMA pose is what the heading PID actually acts on
             self.estimator._smooth(poses)
-            position = poses[target_id]["position"] if seen else None
+            position = poses[tag_id]["position"] if seen else None
             bearing_smoothed = np.degrees(np.arctan2(position[0], position[2])) if seen else None
 
             # How old is this frame, and is it actually new since last tick? (camera-lag
@@ -341,7 +347,7 @@ class ArucoRunner(Rover):
                         phase="drive",
                         event="tag lost near goal -> assumed arrived",
                         seen=False,
-                        target_id=target_id,
+                        tag_id=tag_id,
                         distance=_last_known_distance,
                         frame_stamp=stamp,
                         frame_age=frame_age,
@@ -355,7 +361,7 @@ class ArucoRunner(Rover):
                     phase="drive",
                     event="lost tag",
                     seen=False,
-                    target_id=target_id,
+                    tag_id=tag_id,
                     frame_stamp=stamp,
                     frame_age=frame_age,
                     frame_is_new=frame_is_new,
@@ -370,7 +376,7 @@ class ArucoRunner(Rover):
                     phase="drive",
                     event="arrived",
                     seen=True,
-                    target_id=target_id,
+                    tag_id=tag_id,
                     Z=position[2],
                     distance=raw["distance"],
                     frame_stamp=stamp,
@@ -388,7 +394,7 @@ class ArucoRunner(Rover):
                     phase="drive",
                     event=f"recenter (bearing {bearing_smoothed:.1f})",
                     seen=True,
-                    target_id=target_id,
+                    tag_id=tag_id,
                     bearing_raw=bearing_raw,
                     bearing_smoothed=bearing_smoothed,
                     Z=position[2],
@@ -403,11 +409,11 @@ class ArucoRunner(Rover):
             _last_known_distance = position[2]
 
             # Otherwise keep driving toward it with the PID, logging the full tick
-            wheel_speeds = self.compute_wheel_speeds(position)
+            wheel_speeds = self.wheel_speeds_for(position)
             self.logger.log(
                 phase="drive",
                 seen=True,
-                target_id=target_id,
+                tag_id=tag_id,
                 bearing_raw=bearing_raw,
                 bearing_smoothed=bearing_smoothed,
                 X=position[0],

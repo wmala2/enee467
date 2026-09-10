@@ -43,7 +43,7 @@ class ArucoTracker(Rover):
         # Count frames where the tag was missing so we know when to search
         self.frames_without_tag = 0
 
-    def compute_wheel_speeds(self, position):
+    def wheel_speeds_for(self, position):
         # Measure the time since the last control step for the PID math
         now = time.perf_counter()
         dt = now - self._last_pid_time
@@ -104,7 +104,7 @@ class ArucoTracker(Rover):
                 # Tag is in view: reset the lost-frame counter and chase the standoff distance
                 self.frames_without_tag = 0
                 print("Pose : ", poses[self.MARKER_ID]["position"])
-                wheel_speeds = self.compute_wheel_speeds(poses[self.MARKER_ID]["position"])
+                wheel_speeds = self.wheel_speeds_for(poses[self.MARKER_ID]["position"])
             else:
                 # Tag missing: wait a few frames, then spin in place to find it again
                 self.frames_without_tag += 1

@@ -113,7 +113,7 @@ class ObjectFollower(Rover):
 
         return float(peak_center) if len(filtered_pixels) == 0 else float(np.mean(filtered_pixels))
 
-    def compute_wheel_speeds(self, pseudo_pose):
+    def wheel_speeds_for(self, pseudo_pose):
         """Mixes forward velocity and steering trim via standard differential control."""
         now = time.perf_counter()
         dt = now - self._last_pid_time
@@ -203,7 +203,7 @@ class ObjectFollower(Rover):
                         )
 
                         # Compile steering rates
-                        wheel_speeds = self.compute_wheel_speeds(pseudo_pose)
+                        wheel_speeds = self.wheel_speeds_for(pseudo_pose)
                         print(
                             f"                  -> Computed Commands: Left={wheel_speeds[0]:.2f}, "
                             f"Right={wheel_speeds[1]:.2f}"

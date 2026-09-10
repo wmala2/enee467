@@ -87,7 +87,10 @@ class RunLogger:
             return
 
         now = time.perf_counter()
-        row = dict.fromkeys(self.COLUMNS, "")
+        # Heterogeneous by design: "" for a missing field, a number otherwise, which
+        # csv.writer renders either way. Annotated so that is stated rather than inferred
+        # from the empty-string default.
+        row: dict[str, object] = dict.fromkeys(self.COLUMNS, "")
         for key, value in fields.items():
             if key in row and value is not None:
                 row[key] = self._round(value)

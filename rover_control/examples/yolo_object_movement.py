@@ -44,7 +44,7 @@ class YoloFollower(Rover):
         # Remember when we last ran the controller so the PIDs get a real time step
         self._last_pid_time = time.perf_counter()
 
-    def compute_wheel_speeds(self, position):
+    def wheel_speeds_for(self, position):
         # Measure the time since the last control step for the PID math
         now = time.perf_counter()
         dt = now - self._last_pid_time
@@ -106,7 +106,7 @@ class YoloFollower(Rover):
             if targets:
                 nearest = min(targets, key=lambda d: d["position"][2])
                 print("Pose : ", nearest["position"])
-                wheel_speeds = self.compute_wheel_speeds(nearest["position"])
+                wheel_speeds = self.wheel_speeds_for(nearest["position"])
             else:
                 # Object not in sight, so hold still
                 wheel_speeds = [0.0, 0.0]
