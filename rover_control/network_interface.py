@@ -11,8 +11,10 @@ UDP_REPLY_PORT = (
     9001  # firmware sends encoder/lidar replies here; owned by EncoderPoller when active
 )
 
-network_name = "BaleNet"
-network_password = "F1ockOfTurtle$"
+# Placeholders. The firmware holds the real credentials in rover-firmware's wifi_config.h;
+# nothing in this package reads these, so keep real ones out of a tracked file.
+network_name = "WIFI-SSID"
+network_password = "PASSWORD"
 
 # Create the UDP Gateway
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

@@ -222,3 +222,5 @@ __marimo__/
 # Training runs (model checkpoints, tensorboard logs) — trained models are pushed to
 # Hugging Face (scripts/push_to_hub.py) instead of committed here.
 runs/
+# Generated evaluation output, like runs/ and wandb/
+artifacts/
