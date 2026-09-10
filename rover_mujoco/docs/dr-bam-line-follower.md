@@ -1,10 +1,11 @@
 # DR and BAM line follower
 
-The PPO environment now supports `--dynamics nominal`, `--dynamics bam`, and
-`--dynamics dr` through the same training and evaluation scripts.
-The first mode preserves the qualified velocity-servo baseline; the second uses
-fixed BAM/DC motor parameters and the firmware speed envelope; the third samples
-motor, contact, camera, noise, and command-delay parameters at every reset.
+The training and evaluation scripts support three dynamics modes:
+
+- `--dynamics nominal`: the qualified velocity-servo baseline.
+- `--dynamics bam`: fixed BAM/DC motor parameters and the firmware speed envelope.
+- `--dynamics dr`: BAM with motor, contact, camera, noise, and command-delay
+  parameters sampled at every reset.
 
 All three use the CAD rover, 64×64 camera, eleven sensor inputs, normalized
 forward/steering actions, and 10 Hz policy rate described in
@@ -25,8 +26,8 @@ the episode's sampled standard deviation.
 All draws use the Gymnasium episode seed, and each saved evaluation episode
 includes its complete `domain_parameters` dictionary.
 
-These are provisional engineering priors, not measured confidence intervals or
-identified motor parameters.
+These ranges are provisional engineering assumptions; they have not been
+established through motor identification or measured confidence intervals.
 
 | Parameter | Minimum | Maximum | Description |
 | --- | ---: | ---: | --- |
@@ -75,11 +76,11 @@ then `mj_setConst` refreshes derived model constants.
 
 Both BAM modes clip wheel targets at `0.25 / 0.03435 = 7.278 rad/s` and zero
 targets below `0.075 / 0.03435 = 2.183 rad/s` in magnitude.
-The linear limits come from `Rover`, while the radius is the CAD collision radius;
-the old motor helper's 33.5 mm radius and `Rover`'s 35 mm default are not silently
-mixed into this path.
-The envelope is fixed for this first integration, pending measurements of the
-actual motor dead zone and wheel radius.
+The linear limits come from `Rover` and use the CAD collision radius.
+This path does not use the old motor helper's 33.5 mm radius or `Rover`'s 35 mm
+default.
+The envelope remains fixed pending measurements of the motor dead zone and
+wheel radius.
 
 ## Training and independent evaluation
 
@@ -116,11 +117,10 @@ the resolved hyperparameters, and the selected model artifact.
 
 To tune ranges, supply `--dr-ranges ranges.json` with a subset of parameter bounds,
 for example `{"command_delay_steps": [0, 0], "kp_scale": [0.9, 1.1]}`.
-The complete merged ranges are saved, so editing that input file later cannot
-change an existing run's evaluation distribution.
-Compare candidates on fixed validation seeds and keep final test seeds out of
-selection; after using a test set to make a training decision, reserve new seeds
-for the next final evaluation.
+The run saves the merged ranges, preserving its evaluation distribution if the
+input file changes later.
+Compare candidates on fixed validation seeds and reserve fresh seeds for final
+testing; any test set used to guide training becomes part of selection.
 
 ## First DR training result
 
@@ -171,13 +171,12 @@ The final tests below use seeds 40000 onward on the original tracks and
 | DR policy, randomized BAM | Oval | 50/50 | 2.74 cm | 5.59 cm | 27.70 s |
 | DR policy, randomized BAM, unseen geometry | Goomba | 20/20 | 1.92 cm | 4.25 cm | 32.09 s |
 
-Both implementations pass the requested empirical 90% simulation gate on each
-original track, and the DR policy also passes the held-out Goomba evaluation.
-The DR policy trades longer laps for completion under the harder dynamics;
-its smaller mean figure-eight deviation does not imply faster driving or uniform
-improvement on the other tracks.
-This is one training seed and a provisional simulation distribution, with no
-measured hardware transfer result yet.
+Both policies pass the empirical 90% simulation gate on each original track;
+the DR policy also passes the held-out Goomba test.
+DR produces longer laps under harder dynamics, with lower mean figure-eight
+deviation but no uniform improvement across tracks.
+These measurements cover one training seed and a provisional simulation
+distribution; the physical demonstration is described below.
 
 ![Completion and tracking before and after DR fine-tuning](images/Resources/ppo_dr_comparison.png)
 
@@ -197,8 +196,8 @@ and simulation evidence as the `rover-dr-bam-qualified-seed0` model artifact.
 
 ## Preparing physical rollout
 
-`rover_control.rl_rover` now takes an explicit local checkpoint and deployment
-manifest instead of downloading the old image-based policy.
+`rover_control.rl_rover` takes a local checkpoint and deployment manifest;
+it does not download the old image-based policy.
 It uses the shared eleven-input observation builder and maps normalized actions
 to left/right rad/s with both physical wheel signs positive forward.
 Only MuJoCo negates the left wheel to match the CAD axle orientation.
@@ -221,19 +220,18 @@ uv run python -m rover_control.ppo_deployment \
   --output rover_mujoco/runs/dr-bam-bringup/deployment.json
 ```
 
-The gate requires at least 20 distinct episode seeds per original track and
-checks geometric completion rather than accepting a pooled reward or reported
-aggregate rate.
-It qualifies the nominal reference in nominal simulation and the exact deployment
-checkpoint in both BAM modes; Goomba is reported separately and is not included
-in this three-track gate.
+The gate checks geometric completion over at least 20 distinct seeds per original
+track; pooled rewards or reported aggregate rates do not satisfy it.
+It checks the nominal reference under nominal physics and the exact deployment
+checkpoint in both BAM modes.
+Goomba is reported separately from this three-track gate.
 The manifest is local evidence, not a cryptographic attestation of hardware safety.
 
 The selected policy subsequently ran successfully on the physical rover, as
 reported by the experimenter; the [Zero to Hero tutorial](<Deploying a Mini Claw Rover Policy _ Zero to Hero.md#8-deploy-the-selected-policy-on-the-physical-rover>)
 records the hardware stage and its differences from simulation.
 The entry point is `uv run python -m rover_control.examples.rl_line_follower MODEL MANIFEST`.
-It now defaults to the firmware profile's 680 encoder counts per wheel revolution
+It defaults to the firmware profile's 680 encoder counts per wheel revolution
 and signs `(1, 1)`, with `--counts-per-revolution` and `--encoder-signs` overrides
 for a different profile or calibration.
 Use `--wheel-radius-m`, `--camera-addr`, and `--rover-addr` for the physical setup,
@@ -250,18 +248,19 @@ rate or make the provisional motor parameters a measured fit.
 
 ## Verification
 
-The full simulation suite passed 42 tests, and an additional targeted runtime-parity
-test passed, covering nominal behavior, seeded DR
-replay after intervening resets, contact coefficients, delayed motor commands,
+At DR bringup, the full simulation suite passed 42 tests plus a targeted
+runtime-parity test, covering nominal behavior, seeded DR replay after intervening
+resets, contact coefficients, delayed motor commands,
 the motor equation and free-wheel integration, encoder units, deployment-gate
 rejections, and stop behavior without hardware access.
 Run it from `rover_mujoco` with
 `MUJOCO_GL=egl uv run python -m pytest tests -q`.
-Repository Ruff formatting and lint pass; the root `uv run scripts/check.py`
-still reports 124 existing type diagnostics, including three in the reused
+At that stage, repository Ruff formatting and lint passed; the root
+`uv run scripts/check.py` reported 124 existing type diagnostics, including three in
 `envs/motor.py` BAM setup involving its optional testbench and dynamic attributes.
-The new modules, runner, environment, training/evaluation scripts, and new tests
-pass scoped `ty` checks.
+The new modules, runner, environment, training/evaluation scripts, and tests
+passed scoped `ty` checks.
+These counts record the bringup checks; rerun the commands for the current checkout.
 
 ## Downloading the saved policy
 

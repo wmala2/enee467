@@ -20,9 +20,9 @@ MUJOCO_GL=egl uv run scripts/line_follower.py --headless --track all --episodes 
 `MUJOCO_GL=egl` selects offscreen rendering on supported Linux systems; headless
 execution still renders the onboard camera.
 Available tracks are `circle`, `figure8`, `oval`, and `s_curve`.
-The runner builds continuous black lines from the shared waypoint functions, with
-width **0.0508 m (2 inches)**; the figure eight is a generated path with a crossing,
-replacing the old mesh-based baseline track selection.
+The runner generates continuous black lines of width **0.0508 m (2 inches)**
+from shared waypoints, including the figure-eight crossing.
+These generated paths replace the old mesh-based baseline tracks.
 The runner constructs its scene in memory without writing the shared RL asset files.
 
 The default output folder is `artifacts/pid/<timestamp>` and contains the exact
@@ -34,8 +34,7 @@ Use a fresh `--output` directory for each experiment to preserve previous result
 
 `scripts/line_follower.py` builds its scene through `gen_track.py`'s `build_track_xml`
 and `envs/tracks.py`'s waypoint functions, both shared with the RL environments.
-Three changes to those shared files landed alongside this baseline and affect what the
-runner renders.
+The baseline changed track resolution, visibility, and naming in those shared files.
 
 The waypoint functions now default to 144 segments per shape, up from 48
 (`figure8_waypoints` is unchanged at 160).
@@ -46,20 +45,18 @@ put the centerline 1.29 mm off the true curve and pushed each box corner 1.47 mm
 its neighbor on the outside of a bend.
 At 144 those figures are 3.9 degrees, 0.14 mm, and 0.51 mm: under 2% of the 2-inch tape
 width, and finer than the 64×64 camera resolves.
-The serration only ever added area on the outside of a curve, so it biased the centroid
-outward on exactly the frames where steering matters.
+The serration added area outside each curve, biasing the centroid outward during turns.
 
 Track segments are emitted in geom group 2 rather than 3.
 MuJoCo's default `MjvOption` mask is `[1, 1, 1, 0, 0, 0]`, so group 3 was invisible to
 every renderer unless each call site re-enabled it.
-Group 2 renders by default, which is why the `--camera` diagnostic view and the viewer
-both show the line without any scene-option handling.
+Group 2 renders by default, so both the `--camera` diagnostic and the viewer show
+the line without custom scene options.
 
 Segments also carry names, `line_0`, `line_1`, and so on.
-The RL environments' appearance randomization selects them by name instead of by geom
-group, which is what allowed the group number to change at all.
+The RL environments select segments by name for appearance randomization, so
+changing their geom group preserves that behavior.
 
-The line width differs by consumer, deliberately.
 Both this runner and the current `LineFollowerPPO-v0` environment pass 0.0508 m
 (2 inches) through `envs/line_scene.py` to match physical tape.
 `gen_track.py`'s default for standalone assets remains 0.03 m, but those narrower
@@ -79,8 +76,8 @@ wheel-speed command in rad/s (about 0.10 m/s from the wheel radius).
 The PID uses elapsed seconds for both integral and derivative, suppresses derivative
 kick on initialization/reacquisition, and freezes integration when error drives further
 into saturation.
-With zero integral gain the default is a **PD setting of the PID controller**;
-a nonzero integral term is available for investigating measured persistent bias.
+The default is a **PD setting of the PID controller** because its integral gain
+is zero; use the integral term to investigate measured persistent bias.
 Steering is limited so both wheel commands remain within ±10 rad/s.
 For the CAD joint signs, forward motion is `[-speed, +speed]` and the same steering
 correction is added to both commands.
@@ -112,8 +109,10 @@ These runs establish a simulation baseline, not a calibrated hardware camera mod
 
 Each seed adds an initial lateral offset uniformly within ±1 cm and heading offset
 within ±5 degrees, then lets the chassis settle for one simulated second.
-All episodes begin at the same end/start of each track and traverse the same direction;
-these are small spawn perturbations, not domain randomization or arbitrary recovery tests.
+All episodes start at the same track endpoint or lap origin and travel in the
+same direction.
+They test small spawn perturbations, with no domain randomization or arbitrary
+recovery maneuvers.
 
 Success requires all of the following:
 
@@ -122,8 +121,7 @@ Success requires all of the following:
 - Avoid losing the line for 0.5 seconds consecutively.
 - Finish within 120 simulated seconds.
 
-The 6 cm criterion is a bring-up tolerance, not a claim that the base origin always
-stays inside the tape's 2.54 cm half-width.
+The 6 cm bring-up tolerance allows the base origin beyond the tape's 2.54 cm half-width.
 The evaluator projects onto a small neighborhood of the previous segment and unwraps
 closed-loop arc length, preventing the figure-eight crossing from being mistaken for
 a shortcut to the other branch.
@@ -134,12 +132,10 @@ A zero-steering negative control (`--track figure8 --kp 0 --ki 0 --kd 0`)
 failed from line loss at 5.6% progress, showing that completion requires
 steering rather than a permissive progress score.
 
-The open S-curve currently stops from line loss near its endpoint: the forward camera
-runs out of tape before the base reaches the evaluator's 3 cm finish tolerance.
-This is recorded as a failure; reaching most of the path does not count as completion.
-The circle, figure eight, and oval provide the three closed tracks for the initial
-line-following baseline; endpoint recognition is a separate behavior to resolve before
-using open paths as a success benchmark.
+The open S-curve fails near its endpoint because the forward camera runs out of
+tape before the base reaches the 3 cm finish tolerance.
+Endpoint recognition remains unresolved, so the initial benchmark uses the
+closed circle, figure eight, and oval tracks.
 
 ## Measured baseline (2026-09-09)
 
@@ -181,6 +177,7 @@ narrow `ty` suppressions on those binding calls, which are exercised by scene co
 and the headless runs.
 The rendering and stepping API follows the [MuJoCo Python documentation](https://mujoco.readthedocs.io/en/stable/python.html).
 
-Before RL integration, compare simulated and physical camera frames, measure the
-mount's forward offset and actual camera field of view, and decide whether to tighten
-centering tolerance or require multiple consecutive laps.
+For further camera calibration, compare simulated and physical frames and
+measure the mount's forward offset and field of view.
+Tighter centering tolerances and consecutive-lap requirements remain separate
+evaluation choices.

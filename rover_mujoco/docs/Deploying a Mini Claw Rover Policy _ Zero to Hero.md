@@ -1,11 +1,10 @@
 # Deploying a Mini Claw Rover Policy: Zero to Hero
 
-We started with a custom CAD rover and a camera-based PID line follower, trained
-PPO in MuJoCo, evaluated it independently, added domain randomization (DR) and
-Better Actuator Models (BAM), and deployed the resulting policy on the physical
-rover, where it successfully followed the line.
-This guide walks through that complete experiment, including the failures that
-shaped it, the recorded simulation results, and the hardware integration.
+We taught a custom CAD rover to follow a line: first with camera-based PID, then
+with PPO trained in MuJoCo, and finally on hardware after adding domain
+randomization (DR) and Better Actuator Models (BAM).
+This guide records the full experiment: setup, failures, training decisions,
+independent simulation tests, and the successful physical rollout.
 
 The models and experiment artifacts are preserved in a
 [dated Hugging Face backup](https://huggingface.co/CursedRock17/rover-line-follower-ppo/tree/main/backups/2026-09-10).
@@ -31,9 +30,8 @@ flowchart LR
 | DR/BAM | PPO can adapt to motor limits and sampled physical/sensor variation. | 50/50 per original track under DR; 20/20 on unseen Goomba. |
 | Physical rover | The selected DR policy transfers to the real line-following task. | Successful hardware operation, reported by the experimenter. |
 
-The episode counts in this guide are simulation measurements; the hardware
-milestone is a successful physical demonstration, not a measured 90% hardware
-success rate across those simulation seeds.
+All episode counts below come from simulation.
+The successful hardware demonstration has no measured 90% success rate.
 
 ## 1. Set up the rover and workspace
 
@@ -41,14 +39,14 @@ success rate across those simulation seeds.
 
 Use an assembled Mini Claw Rover, its ESP32 camera, a USB data cable for flashing,
 and a computer that can communicate with both devices.
-The Python workspace requires **Python 3.12**, as declared in both project
-`pyproject.toml` files, and uses `uv` to manage dependencies.
+The workspace uses `uv` and requires **Python 3.12**, as declared in both
+`pyproject.toml` files.
 VSCode with PlatformIO is useful for firmware work; a GPU is not required for
 these small PPO policies.
 
-The shell examples below use Bash syntax on Linux.
-Desktop viewer commands need a graphical session, while `MUJOCO_GL=egl` selects
-headless camera rendering on supported Linux systems.
+Examples use Bash on Linux.
+The desktop viewer needs a graphical session; `MUJOCO_GL=egl` enables headless
+camera rendering on supported Linux systems.
 For other platforms and package variants, follow the
 [workspace setup guide](workspace-setup.md).
 
@@ -66,8 +64,8 @@ uv sync --extra cpu
 uv run rover_mujoco/scripts/teleop_rover.py
 ```
 
-Use the repository revision containing the line-follower code described here;
-the HF backup separately pins the policy weights and available training snapshots.
+Use a repository revision containing this line-follower implementation.
+The HF backup pins the weights and available training snapshots separately.
 
 ### Flash the rover and camera
 
@@ -99,12 +97,11 @@ shapes, joint axes, and the track-mesh workflow.
 For these experiments, [`envs/line_scene.py`](../envs/line_scene.py) expands the
 rover scene and generates tape from [`envs/tracks.py`](../envs/tracks.py) waypoints
 in memory.
-PID and current PPO both use **0.0508 m tape width**, avoiding the mismatch with
-older standalone 0.03 m track assets.
-Circle, figure eight, and oval are the original closed-track benchmark;
-Goomba was added as another geometry and held out of the reported DR training.
-The PID runner also has an open S-curve, whose endpoint behavior remains a
-separate problem.
+PID and PPO both use **0.0508 m tape width**; older standalone track assets use
+0.03 m.
+Circle, figure eight, and oval form the original closed-track benchmark.
+Goomba was held out of DR training to test a new geometry.
+The PID runner also supports an open S-curve, with unresolved endpoint behavior.
 
 ### Know where the implementation lives
 
@@ -126,7 +123,7 @@ The checked-in dependency files are the source of truth for versions.
 
 ## 2. Establish a PID baseline before training
 
-From this point through the simulation sections, run commands from `rover_mujoco`:
+Run this and the remaining simulation commands from `rover_mujoco`:
 
 ```bash
 # Watch PID line following alongside the camera image used for steering.
@@ -140,12 +137,11 @@ MUJOCO_GL=egl uv run scripts/line_follower.py \
 
 The controller uses the bottom 15% of a 64×64 RGB image, detects pixels with all
 channels below 60, and estimates the normalized horizontal line centroid.
-At least six dark pixels are required; a missing line is different from a
-centered line.
+At least six dark pixels are required, and the controller distinguishes a
+missing line from a centered one.
 The default gains are `kp=2`, `ki=0`, and `kd=0.1`, with a 3 rad/s forward wheel
 command and a 10 Hz control rate.
-This is a PD setting of the PID controller, with integral action available when
-needed.
+With zero integral gain, this is a PD setting of the PID controller.
 
 ![Figure 4: PID following the figure eight in simulation](vids/pid_figure8.gif)
 
@@ -161,30 +157,70 @@ failure distinguishable from a perception failure.
 | Open S-curve | 0/20 | 1.88 cm | 4.17 cm |
 
 These trials used seeds 100–119 with up to 1 cm lateral and 5° heading offsets.
-The S-curve failures occurred near the endpoint because the forward camera ran
-out of tape before the chassis reached the finish tolerance; those episodes
-remain failures despite their modest mean deviation.
+The S-curve failed near its endpoint: the forward camera ran out of tape before
+the chassis reached the finish tolerance.
+Its modest mean deviation therefore describes incomplete runs.
 A zero-steering figure-eight control also failed, at about 5.6% progress.
 The [PID guide](pid-line-follower.md) records the baseline protocol in detail.
 
-PID establishes feasibility, not a guarantee that PPO will learn the behavior in
-an arbitrary training budget.
-We later ran PID through the exact PPO action/observation interface and completed
-a figure-eight lap, checking that the interface itself was sufficient.
+PID established that the task was feasible, though PPO still needed enough
+training to learn it.
+We later verified the PPO action/observation interface by completing a
+figure-eight lap with PID through that same interface.
+
+### Read the baseline control loop
+
+[`scripts/line_follower.py`](../scripts/line_follower.py) runs and evaluates PID;
+PPO training belongs to [`scripts/train_ppo.py`](../scripts/train_ppo.py).
+This excerpt from `run_episode` shows the reusable loop after scene setup,
+settling, and controller initialization: observe the camera, handle missing
+measurements, command steering, then advance the physics.
+
+```python
+# Read the camera and apply one PID command per control interval.
+for step in range(math.ceil(args.duration / dt)):
+    wall_start = time.monotonic()
+    renderer.update_scene(data, camera="top_cam")
+    frame = renderer.render()
+    error, mask = centroid_error(frame)
+    if step == 0:
+        from PIL import Image
+
+        Image.fromarray(camera_overlay(frame, error, mask)).save(output / f"camera_{seed}.png")
+    missing = missing + 1 if error is None else 0
+    if missing * dt >= 0.5:
+        data.ctrl[:] = 0
+        reason = "line_lost"
+        break
+    # Hold steering briefly across a dropout, resetting PID memory on reacquisition.
+    correction = pid.update(error, dt)
+    steering = last_steering if error is None else correction
+    if args.controller == "bang_bang" and error is not None:
+        steering = -3.0 * np.sign(error) if abs(error) > 0.05 else 0.0
+    steering = float(np.clip(steering, -pid.limit, pid.limit))
+    last_steering = steering
+    data.ctrl[:] = [-args.speed + steering, args.speed + steering]
+    mujoco.mj_step(model, data, nstep=substeps)  # ty: ignore[unresolved-attribute]
+    mujoco.mj_forward(model, data)  # ty: ignore[unresolved-attribute]
+```
+
+The surrounding function initializes `pid`, `renderer`, `data`, and the episode
+counters, then scores ordered progress and saves trajectories after these steps.
+For a new task, establish a simple controller through the same sensing and
+actuation path before asking RL to learn it; our PID comparison later helped
+separate an insufficient PPO training budget from an unusable sensor interface.
 
 ## 3. Define the RL task and its success criteria
 
-The objective is to complete a line-following lap reliably, then examine speed
-and centering among policies that complete it.
-The rover observes only quantities available on hardware; privileged simulator
-state is reserved for rewards and evaluation.
+First require reliable lap completion, then compare speed and centering.
+The policy receives only quantities available on hardware; rewards and
+evaluation can use privileged simulator state.
 
 ![Figure 5: Observation, action, reward, and environment interaction](images/Resources/reinforcement_learning_loop.png)
 
 ### Observation and action contract
 
-The registered environment is `LineFollowerPPO-v0`.
-Its observation is an eleven-element `float32` vector bounded by `[-1, 1]`:
+`LineFollowerPPO-v0` receives an eleven-element `float32` observation in `[-1, 1]`:
 
 | Indices | Meaning |
 | --- | --- |
@@ -227,14 +263,17 @@ Missing-line observations earn a motion term of −1, action changes cost
 Completion adds 10; terminated failures subtract 5, while a timeout is truncated
 without that terminal penalty.
 
-Stopping therefore cannot collect a positive centering reward.
-However, a large shaped return is still not proof of task completion.
-The evaluator requires an ordered lap within the 3 cm finish tolerance, no
-chassis deviation above 6 cm, no continuous line loss lasting 0.5 seconds, no
-tipping below the environment's height threshold, and completion within
-120 simulated seconds.
-The 6 cm tolerance is a chassis-path criterion, not a claim that the chassis
-origin stays inside the tape's 2.54 cm half-width.
+Stopping earns no positive centering reward, and high return alone does not
+establish success.
+The evaluator requires all of the following:
+
+- Complete an ordered lap within the 3 cm finish tolerance.
+- Keep chassis deviation at or below 6 cm.
+- Avoid continuous line loss lasting 0.5 seconds.
+- Avoid tipping below the environment's height threshold.
+- Finish within 120 simulated seconds.
+
+The 6 cm chassis-path tolerance extends beyond the tape's 2.54 cm half-width.
 
 Progress projects onto nearby ordered track segments, preserving branch identity
 through the figure-eight crossing.
@@ -243,13 +282,398 @@ the step limit is a truncation and still counts as an unsuccessful evaluation.
 Keeping truncation separate allows value bootstrapping as described in
 [Gymnasium's time-limit documentation](https://gymnasium.farama.org/tutorials/gymnasium_basics/handling_time_limits/).
 
+### Build the Gymnasium environment
+
+The following blocks assemble `LineFollowerPPOEnv` from
+[`envs/tasks/line_follower_ppo_env.py`](../envs/tasks/line_follower_ppo_env.py),
+using the existing scene, sensor, track, and motor helpers.
+Together, blocks 3a–3h supply the complete class: keep 3a at module level, indent
+methods from 3b–3e and 3h four spaces inside the class, and append 3f–3g eight
+spaces inside `step` (the excerpts omit that enclosing indentation).
+For a new task, create a separate module under `envs/tasks`, replace the geometry
+and task-specific scoring, and preserve the reset, sensing, action, and episode lifecycle.
+
+#### 3a. Declare the task and its dependencies
+
+Import the shared helpers so scene construction and sensor conversion stay consistent
+with the PID runner and hardware runtime.
+The track registry defines which geometries this task accepts, while the constants
+set the wheel units and optional reward blend; the reported policies use camera reward.
+
+```python
+# Share scene, sensor, and actuator helpers across control methods.
+import math
+
+import gymnasium as gym
+from gymnasium import spaces
+import mujoco
+import numpy as np
+
+from envs.contract import observation_from_sensors
+from envs.contract import wheel_targets
+from envs.line_dynamics import LineDynamics
+from envs.line_scene import build_model
+from envs.line_scene import CAM_RES
+from envs.line_scene import CONTROL_HZ
+from envs.tracks import circle_waypoints
+from envs.tracks import figure8_waypoints
+from envs.tracks import goomba_waypoints
+from envs.tracks import oval_waypoints
+from envs.tracks import path_length_table
+from envs.tracks import project_arc_length
+
+TRACKS = {
+    "circle": circle_waypoints,
+    "figure8": figure8_waypoints,
+    "goomba": goomba_waypoints,
+    "oval": oval_waypoints,
+}
+
+# Keep the optional blended reward reproducible alongside camera and chassis modes.
+CHASSIS_SHARE = 0.2
+WHEEL_RADIUS = 0.03435
+CRUISE_RAD_S = 3.0
+MAX_STEERING_RAD_S = 4.0
+MAX_WHEEL_RAD_S = 10.0
+
+
+class LineFollowerPPOEnv(gym.Env):
+    """Observe camera features and wheel speeds; command forward speed and steering."""
+
+    # Declare the supported render modes and policy frame rate for Gymnasium.
+    metadata: dict = {"render_modes": ["rgb_array", "human"], "render_fps": 10}  # noqa: RUF012
+```
+
+#### 3b. Construct the simulator and spaces
+
+Build the MuJoCo model once per environment and allocate its state and renderer.
+The constructor exposes the eleven sensor inputs and two actions to Gymnasium,
+then derives the physics substeps needed for a 10 Hz policy; a new task should
+declare its own spaces here and keep them consistent with deployment.
+
+```python
+# Allocate the simulator and declare the policy interface once per environment.
+def __init__(
+    self,
+    track="circle",
+    random_start=False,
+    render_mode=None,
+    max_steps=1200,
+    reward_centering="camera",
+    dynamics="nominal",
+    dr_ranges=None,
+):
+    super().__init__()
+    if track not in TRACKS:
+        raise ValueError(f"Unknown track {track!r}; choose from {list(TRACKS)}")
+    self.track_name = track
+    self.random_start = random_start
+    self.render_mode = render_mode
+    self.max_steps = max_steps
+    if reward_centering not in ("camera", "chassis", "both"):
+        raise ValueError("reward_centering must be 'camera', 'chassis' or 'both'")
+    self.reward_centering = reward_centering
+    self.points = np.asarray(TRACKS[track]())
+    self.lengths, _ = path_length_table(self.points)
+    if dynamics not in ("nominal", "bam", "dr"):
+        raise ValueError("dynamics must be 'nominal', 'bam', or 'dr'")
+    if dr_ranges is not None and dynamics != "dr":
+        raise ValueError("dr_ranges requires dynamics='dr'")
+    self.dynamics_mode = dynamics
+    self.model = build_model(self.points, 45, bam=dynamics != "nominal")
+    self.dynamics = LineDynamics(self.model, dynamics, dr_ranges) if dynamics != "nominal" else None
+    # MuJoCo's compiled exports lack type stubs in this installation.
+    self.data = mujoco.MjData(self.model)  # ty: ignore[unresolved-attribute]
+    self.renderer = mujoco.Renderer(self.model, height=CAM_RES, width=CAM_RES)
+    self.substeps = round(1 / CONTROL_HZ / self.model.opt.timestep)
+    self.dt = self.substeps * self.model.opt.timestep
+    self.axles = [self.model.joint(name).qposadr[0] for name in ("left_axle", "right_axle")]
+    self.viewer = None
+    # Nine camera features plus two signed wheel-speed estimates, all bounded by [-1, 1].
+    self.observation_space = spaces.Box(-1, 1, shape=(11,), dtype=np.float32)
+    self.action_space = spaces.Box(-1, 1, shape=(2,), dtype=np.float32)
+    self.frame = np.zeros((CAM_RES, CAM_RES, 3), dtype=np.uint8)
+```
+
+#### 3c. Reset the world and episode memory
+
+Use Gymnasium's seeded generator for spawn offsets and DR so a saved seed can
+reproduce an episode.
+After one second of settling, reset encoder history, progress, line-loss counters,
+and reward state; for a new task, clear every variable that should not carry
+information between episodes.
+
+```python
+# Start each episode from seeded conditions with cleared control and scoring history.
+def reset(self, seed=None, options=None):
+    super().reset(seed=seed)
+    mujoco.mj_resetData(self.model, self.data)  # ty: ignore[unresolved-attribute]
+    # Seed all physical and sensor perturbations with Gymnasium's episode generator.
+    if self.dynamics is not None:
+        self.dynamics.reset(self.np_random, self.data)
+    segment = int(self.np_random.integers(len(self.points) - 1)) if self.random_start else 0
+    tangent = self.points[segment + 1] - self.points[segment]
+    tangent /= np.linalg.norm(tangent)
+    lateral = self.np_random.uniform(-0.01, 0.01)
+    yaw = math.atan2(tangent[0], -tangent[1]) + self.np_random.uniform(
+        -math.radians(5), math.radians(5)
+    )
+    self.data.qpos[:2] = self.points[segment] + lateral * np.array([-tangent[1], tangent[0]])
+    self.data.qpos[3:7] = [math.cos(yaw / 2), 0, 0, math.sin(yaw / 2)]
+    # Settle before starting the episode, matching the classical-controller evaluation.
+    if self.dynamics is None:
+        mujoco.mj_step(self.model, self.data, nstep=round(1 / self.model.opt.timestep))  # ty: ignore[unresolved-attribute]
+    else:
+        self.dynamics.advance(
+            self.data, np.zeros(2), round(1 / self.model.opt.timestep), settling=True
+        )
+    mujoco.mj_forward(self.model, self.data)  # ty: ignore[unresolved-attribute]
+    self.previous_angles = self.data.qpos[self.axles].copy()
+    self.wheel_speeds = np.zeros(2)
+    self.previous_action = np.array([-1, 0], dtype=np.float32)
+    self.arc, self.segment = project_arc_length(
+        self.points, self.lengths, self.data.qpos[:2], segment, window=4, closed=True
+    )
+    self.progress = 0.0
+    self.steps = 0
+    self.lost_steps = 0
+    self.total_lost = 0
+    self.deviations = []
+    self.episode_return = 0.0
+    self.finished = False
+    observation = self._get_observation()
+    return observation, {
+        "track": self.track_name,
+        "dynamics": self.dynamics_mode,
+        "domain_parameters": self.dynamics.parameters if self.dynamics else {},
+    }
+```
+
+#### 3d. Build observations from deployable sensors
+
+Render the camera and read wheel-speed estimates, then apply sensor perturbations
+before feature extraction.
+The shared `observation_from_sensors` helper calls `line_features`, flattens the
+three camera bands, and appends wheel speeds clipped after division by 10;
+replace those features for a new task only if its hardware can supply them.
+
+```python
+def _get_observation(self):
+    # Camera pixels and finite differences of encoder angles are the only policy inputs.
+    self.renderer.update_scene(self.data, camera="top_cam")
+    self.frame = self.renderer.render().copy()
+    speeds = self.wheel_speeds
+    if self.dynamics is not None:
+        self.frame, speeds = self.dynamics.sensors(self.frame, speeds)
+    return observation_from_sensors(self.frame, speeds)
+```
+
+#### 3e. Apply an action and advance physical time
+
+Begin `step` by decoding the policy action into physical wheel targets and
+advancing one control interval through either velocity servos or BAM.
+Wheel-angle differences over that interval provide encoder speed, and the
+resulting observation and ordered path projection provide the inputs for
+reward and episode scoring.
+
+```python
+# Advance one policy interval before observing and scoring its result.
+def step(self, action):
+    if self.finished:
+        raise RuntimeError("Reset the environment after an episode ends")
+    action = np.clip(np.asarray(action, dtype=np.float32), -1, 1)
+    # CAD axle signs: forward motion is negative left and positive right.
+    targets = wheel_targets(action)
+    if self.dynamics is None:
+        self.data.ctrl[:] = targets * [-1, 1]
+        mujoco.mj_step(self.model, self.data, nstep=self.substeps)  # ty: ignore[unresolved-attribute]
+    else:
+        self.dynamics.advance(self.data, targets, self.substeps)
+    mujoco.mj_forward(self.model, self.data)  # ty: ignore[unresolved-attribute]
+    self.steps += 1
+    angles = self.data.qpos[self.axles].copy()
+    self.wheel_speeds = (angles - self.previous_angles) / self.dt * [-1, 1]
+    self.previous_angles = angles
+    observation = self._get_observation()
+    delta, deviation = self._track_progress()
+    self.deviations.append(deviation)
+    visible = bool(observation[2])
+    self.lost_steps = 0 if visible else self.lost_steps + 1
+    self.total_lost += not visible
+```
+
+#### 3f. Calculate reward inside the same step
+
+Continue inside `step` at the same indentation: reward forward progress while
+encouraging centering and smooth commands.
+Camera, chassis, and blended modes change only the reward, which lets us compare
+shaping choices under the same physics and success criteria; for another task,
+replace this calculation without hiding the outcome in the reward value.
+
+```python
+# Forward progress earns reward only while the line is visible; stopping earns no alignment.
+progress_reward = float(np.clip(delta / (CRUISE_RAD_S * WHEEL_RADIUS * self.dt), -2, 1))
+# Select the configured centering reward without changing observations or physics.
+camera_error = abs(float(observation[0]))
+chassis_error = min(deviation / 0.06, 1.0)
+if self.reward_centering == "camera":
+    error = camera_error
+elif self.reward_centering == "chassis":
+    error = chassis_error
+else:
+    error = (1 - CHASSIS_SHARE) * camera_error + CHASSIS_SHARE * chassis_error
+alignment = 1 - error if visible else 0
+motion_reward = progress_reward * (0.25 + 0.75 * alignment) if visible else -1.0
+smoothness_penalty = 0.02 * float(np.sum((action - self.previous_action) ** 2))
+reward = motion_reward - smoothness_penalty - 0.01
+self.previous_action = action.copy()
+```
+
+#### 3g. Decide outcomes and return the transition
+
+Finish `step` by checking failure and completion independently of reward, with
+failures checked before completion when both occur on the same step.
+Return Gymnasium's five values and put physical metrics in `info`; a timeout
+is a truncation, while tipping, leaving the track, line loss, and completion
+are terminal task outcomes.
+
+```python
+# Task outcomes are geometric and temporal, independent of the shaped reward.
+reason = "running"
+if self.data.qpos[2] < 0.03:
+    reason = "tipped"
+elif deviation > 0.06:
+    reason = "off_track"
+elif self.lost_steps * self.dt >= 0.5:
+    reason = "line_lost"
+elif self.progress >= self.lengths[-1] - 0.03:
+    reason = "completed"
+elif self.steps >= self.max_steps:
+    reason = "timeout"
+terminated = reason in ("tipped", "off_track", "line_lost", "completed")
+truncated = reason == "timeout"
+if terminated:
+    reward += 10 if reason == "completed" else -5
+self.finished = terminated or truncated
+self.episode_return += reward
+info = {
+    "track": self.track_name,
+    "is_success": reason == "completed",
+    "reason": reason,
+    "progress_fraction": float(self.progress / self.lengths[-1]),
+    "deviation_cm": deviation * 100,
+    "line_visible": visible,
+    "reward_motion": motion_reward,
+    "reward_smoothness": -smoothness_penalty,
+}
+if self.finished:
+    info.update({
+        "mean_deviation_cm": float(np.mean(self.deviations) * 100),
+        "max_deviation_cm": float(np.max(self.deviations) * 100),
+        "line_loss_frames": self.total_lost,
+        "duration_s": self.steps * self.dt,
+        "dynamics": self.dynamics_mode,
+        "domain_parameters": self.dynamics.parameters if self.dynamics else {},
+    })
+if self.render_mode == "human":
+    self.render()
+return observation, float(reward), terminated, truncated, info
+```
+
+#### 3h. Track progress and release resources
+
+For this task, local ordered projection prevents the figure-eight crossing
+from counting as a jump to another branch; replace this helper with the progress
+measure appropriate to your task.
+The remaining methods support viewing and close the viewer and renderer, which
+is necessary when training creates and destroys multiple environments.
+
+```python
+def _track_progress(self):
+    # Local projection preserves branch identity through the figure-eight crossing.
+    arc, self.segment = project_arc_length(
+        self.points, self.lengths, self.data.qpos[:2], self.segment, window=4, closed=True
+    )
+    total = self.lengths[-1]
+    delta = float((arc - self.arc + total / 2) % total - total / 2)
+    self.arc = arc
+    self.progress += delta
+    fraction = (arc - self.lengths[self.segment]) / (
+        self.lengths[self.segment + 1] - self.lengths[self.segment]
+    )
+    projection = self.points[self.segment] + fraction * (
+        self.points[self.segment + 1] - self.points[self.segment]
+    )
+    return delta, float(np.linalg.norm(self.data.qpos[:2] - projection))
+
+
+# Keep rendering optional and release the viewer and camera resources on close.
+def render(self):
+    if self.render_mode == "human":
+        import mujoco.viewer
+
+        if self.viewer is None:
+            self.viewer = mujoco.viewer.launch_passive(self.model, self.data)
+            self.viewer.cam.lookat[:] = [0, 0, 0]
+            self.viewer.cam.distance = 2.8
+            self.viewer.cam.elevation = -75
+        if self.viewer.is_running():
+            self.viewer.sync()
+    return self.frame.copy()
+
+
+def close(self):
+    if self.viewer is not None:
+        self.viewer.close()
+    self.renderer.close()
+```
+
+#### 3i. Register and check the environment
+
+The registry in [`envs/__init__.py`](../envs/__init__.py) maps a Gymnasium ID to
+this class; importing `envs` performs that registration.
+For a new task, add a distinct ID and module path, then check its API before
+starting a long training run.
+
+```python
+from gymnasium.envs.registration import register
+
+# Map the public environment ID to the module and class Gymnasium should construct.
+register(
+    id="LineFollowerPPO-v0",
+    entry_point="envs.tasks.line_follower_ppo_env:LineFollowerPPOEnv",
+)
+```
+
+Run this separate check from `rover_mujoco` with `MUJOCO_GL=egl` for headless
+rendering; the existing package already registers the environment.
+The checker validates the API and spaces, while the seeded transition confirms
+that `reset` and `step` can run; use the project's tests to check task semantics.
+
+```python
+import envs  # noqa: F401
+import gymnasium as gym
+from stable_baselines3.common.env_checker import check_env
+
+# Check the environment contract and one seeded transition before committing to training.
+environment = gym.make("LineFollowerPPO-v0", track="figure8")
+try:
+    check_env(environment.unwrapped, warn=True)
+    observation, info = environment.reset(seed=1000)
+    action = environment.action_space.sample()
+    observation, reward, terminated, truncated, info = environment.step(action)
+    print(observation.shape, reward, terminated, truncated, info["reason"])
+finally:
+    environment.close()
+```
+
 ## 4. Train and evaluate nominal PPO
 
 ### Run a new experiment
 
-W&B is enabled by default, with project `rover-line-follower`.
-Authenticate once, choose a fresh output directory, and keep the original track
-set explicit so newly registered tracks do not change the experiment.
+W&B logs to `rover-line-follower` by default.
+Authenticate once and choose a fresh output directory.
+Specify the original tracks so registering a new track cannot change the experiment.
 
 ```bash
 # Authenticate the experiment tracker before starting a logged run.
@@ -270,23 +694,192 @@ The default PPO configuration uses a `[64, 64]` MLP, learning rate 0.0003,
 gamma 0.995, GAE lambda 0.95, clipping range 0.2, and entropy coefficient 0.005.
 Six workers distribute the three tracks evenly and sample training start
 positions along each track.
-The incoming checkpoint is eligible during continuation, so worse fine-tuning
-cannot automatically replace it as the selected model.
+During continuation, the incoming checkpoint remains eligible for selection
+if further training performs worse.
 
 Every 25,000 steps, validation uses five episodes per track, seeds 1000–1004.
 Selection prioritizes the weakest track's completion rate, then mean validation
 return; final tests use different seeds and deterministic policy actions.
 This follows the principle of separate evaluation in the
 [SB3 experiment guidance](https://stable-baselines3.readthedocs.io/en/master/guide/rl_tips.html).
-TensorBoard scalars, configurations, validation histories, selected/final models,
-evaluation CSVs, plots, and videos make the decision inspectable afterward.
+Each run saves TensorBoard scalars, configurations, validation histories,
+selected/final models, evaluation CSVs, plots, and videos for review.
+
+### Connect the environment to PPO
+
+The environment supplies transitions; `scripts/train_ppo.py` owns optimization,
+checkpoint selection, and experiment logging.
+The following excerpts belong to that existing runner and use its imports,
+parsed `args`, resolved `dr_ranges`, and `hyperparameters`; they are not a
+second standalone training script.
+
+#### Create independent workers and initialize PPO
+
+`make_environment` wraps each task in `Monitor`, and the worker factories assign
+tracks round-robin while randomizing training start positions.
+Inside `main`, `SubprocVecEnv` creates separate simulator processes and the runner
+either constructs PPO or loads a checkpoint with the explicitly configured
+hyperparameters; retain the runner's `if __name__ == "__main__"` guard when adapting
+this multiprocessing structure.
+
+```python
+def make_environment(track, reward_centering, dynamics="nominal", dr_ranges=None) -> gym.Env:
+    # Each worker has a fixed track and samples start positions along it at reset.
+    return Monitor(
+        gym.make(
+            ENV_ID,
+            track=track,
+            random_start=True,
+            reward_centering=reward_centering,
+            dynamics=dynamics,
+            dr_ranges=dr_ranges,
+        )
+    )
+```
+
+With the factory defined, the next block creates and seeds the workers inside
+`main`.
+Passing the same resolved hyperparameters to both branches keeps resumed
+training consistent with the saved configuration.
+
+```python
+# Build independent simulator workers and apply the recorded PPO settings.
+factories: list[Callable[[], gym.Env]] = [
+    partial(
+        make_environment,
+        args.tracks[i % len(args.tracks)],
+        args.reward_centering,
+        args.dynamics,
+        dr_ranges,
+    )
+    for i in range(args.n_envs)
+]
+environment = SubprocVecEnv(factories, start_method="spawn")
+environment.seed(args.seed)
+# Resumed policies use the same explicit hyperparameters recorded for this run.
+if args.resume:
+    model = PPO.load(
+        args.resume,
+        env=environment,
+        device="cpu",
+        seed=args.seed,
+        tensorboard_log=str(args.output / "tensorboard"),
+        **hyperparameters,
+    )
+else:
+    model = PPO(
+        "MlpPolicy",
+        environment,
+        device="cpu",
+        seed=args.seed,
+        verbose=0,
+        tensorboard_log=str(args.output / "tensorboard"),
+        **hyperparameters,
+    )
+```
+
+#### Select checkpoints using completion
+
+`CompletionCallback._evaluate` tests fixed validation seeds and ranks the
+weakest track's completion rate before mean return, so easy tracks cannot hide
+failure on the figure eight.
+Its surrounding callback evaluates the incoming policy at training start and
+repeats at the configured interval; for a new task, define the success metric
+and selection rule before comparing candidates.
+
+```python
+# Preserve the strongest validation checkpoint and record every comparison.
+def _evaluate(self):
+    results = evaluate(
+        self.model,
+        episodes=self.episodes,
+        seed=1000,
+        reward_centering=self.reward_centering,
+        tracks=self.tracks,
+        dynamics=self.dynamics,
+        dr_ranges=self.dr_ranges,
+    )
+    for track, result in results.items():
+        for key in ("success_rate", "mean_return", "mean_deviation_cm", "mean_progress"):
+            self.logger.record(f"eval/{track}/{key}", result[key])
+    score = (
+        min(result["success_rate"] for result in results.values()),
+        float(np.mean([result["mean_return"] for result in results.values()])),
+    )
+    if score > self.best_score:
+        self.best_score = score
+        self.model.save(self.output / "best_model")
+    self.history.append({"timesteps": self.num_timesteps, "tracks": results})
+    (self.output / "validation.json").write_text(
+        json.dumps(self.history, indent=2), encoding="utf-8"
+    )
+    self.logger.dump(self.num_timesteps)
+    print(
+        f"Validation at {self.num_timesteps}: "
+        + ", ".join(f"{track}={result['success_rate']:.0%}" for track, result in results.items()),
+        flush=True,
+    )
+```
+
+The next block in `main` attaches that selection callback and periodic recovery
+checkpoints before starting optimization.
+`final_model` records the last update, while `best_model` records the selected
+policy; the runner then reloads the latter for independent tests on seed 10000
+onward, as described above.
+
+```python
+# Train with validation-based selection and periodic recovery checkpoints.
+callbacks: list[BaseCallback] = [
+    CompletionCallback(
+        args.output,
+        args.eval_every,
+        args.eval_episodes,
+        args.reward_centering,
+        args.tracks,
+        args.dynamics,
+        dr_ranges,
+    ),
+    CheckpointCallback(
+        save_freq=max(1, args.eval_every // args.n_envs),
+        save_path=str(args.output / "checkpoints"),
+    ),
+]
+model.learn(total_timesteps=args.timesteps, callback=callbacks)
+model.save(args.output / "final_model")
+if not (args.output / "best_model.zip").exists():
+    model.save(args.output / "best_model")
+```
+
+#### Save the experiment context alongside its curves
+
+Before worker creation, `main` writes `config.json` with the resolved task,
+dynamics, DR ranges, and PPO settings, then initializes W&B as shown below.
+TensorBoard synchronization carries the optimization and callback metrics to
+W&B; after testing, the runner adds evaluation summaries, trajectories, and the
+selected model artifact so a graph can be traced back to its configuration.
+
+```python
+# W&B is enabled by default and must initialize successfully before training starts.
+if not args.no_wandb:
+    import wandb
+
+    run = wandb.init(
+        project="rover-line-follower",
+        name=args.output.name,
+        group=args.wandb_group,
+        config=config,
+        sync_tensorboard=True,
+        dir=str(args.output),
+    )
+    print(f"W&B: {run.url}", flush=True)
+```
 
 ### What happened in our run
 
 The initial nominal run stopped after roughly 52,000 interactions and failed the
 figure eight around 8.5% progress, before the crossing.
-Rather than concluding that the sensors were insufficient, we compared against
-PID through the same interface and resumed the 49,992-step checkpoint.
+After checking PID through the same interface, we resumed the 49,992-step
+checkpoint to test whether PPO needed more training.
 The camera-reward continuation requested 150,000 more steps, collected 150,528
 because SB3 finishes whole rollouts, and selected a policy at 199,992 cumulative
 interactions.
@@ -311,18 +904,17 @@ the larger 40-episode rerun of the same checkpoint.
 The [nominal W&B run](https://wandb.ai/cursedrock17-university-of-maryland/rover-line-follower/runs/hzl1xy2f)
 and [expanded evaluation JSON](https://huggingface.co/CursedRock17/rover-line-follower-ppo/blob/77c0bf85aa4c0dd36ec0862fd17be485c1e686ac/backups/2026-09-10/runs/ppo-continued-seed0/evaluation-40/evaluation.json)
 retain the supporting evidence.
-These results exceed the requested observed 90% rate on every original track,
-under nominal simulation conditions and from one training seed.
+Every original track exceeded the requested observed 90% completion rate in
+nominal simulation, using one training seed.
 The learned policy uses no PID demonstrations or PID fallback.
 
 ## 5. Compare rewards and sweep hyperparameters
 
-A controlled chassis-centering reward ablation resumed the same original
+We compared camera and chassis centering rewards by resuming the same original
 checkpoint with the same additional budget.
-It reduced mean figure-eight deviation but completed only 4/20 figure-eight
+Chassis centering reduced mean figure-eight deviation but completed only 4/20
 episodes, versus 20/20 for camera centering.
-The smaller error included early failures, so it was not a reason to select the
-chassis-reward policy.
+Because that smaller error included early failures, we kept camera centering.
 
 ![Figure 8: Figure-eight validation under camera and chassis reward](images/Resources/ppo_reward_comparison.png)
 
@@ -345,8 +937,7 @@ The reference winner completed 50/50 fresh episodes per original track on seeds
 The discount candidate's common-benchmark figure-eight mean lap was 39.32 s,
 versus 42.28 s for the incoming nominal policy, while mean deviation increased
 from about 2.08 to 2.32 cm.
-Validation return, lap speed, and physical accuracy therefore tell different
-parts of the result.
+The highest validation return did not identify the fastest or most accurate policy.
 We used the original qualified nominal policy as the starting point for DR.
 The [sweep report](ppo-hparam-sweep.md) and
 [final sweep W&B evaluation](https://wandb.ai/cursedrock17-university-of-maryland/rover-line-follower/runs/g09tliwh)
@@ -354,10 +945,10 @@ record the full comparison and selected model.
 
 ## 6. Add BAM and domain randomization
 
-Nominal success did not automatically transfer to a more realistic actuator.
-With the original policy, five fixed-BAM trials and five randomized-BAM trials
-per track each produced 5/5 circle, **0/5 figure eight**, and 5/5 oval.
-That was a measurable transfer gap to address before deployment.
+The nominal policy failed the figure eight with more realistic actuators.
+Five trials per track under fixed BAM and another five under randomized BAM
+each produced 5/5 circle, **0/5 figure eight**, and 5/5 oval.
+We fine-tuned under these dynamics to close the gap before deployment.
 
 The environment exposes three modes without changing the policy's eleven-input,
 two-action interface:
@@ -368,23 +959,46 @@ two-action interface:
 | `bam` | DC motor drive, BAM friction, and the hardware speed envelope with fixed parameters. |
 | `dr` | BAM plus newly sampled dynamics and sensor perturbations on each reset. |
 
-BAM models friction; it is not simply random motor noise.
-Our integration computes voltage-limited drive torque and electrical damping at
-every physics substep, with BAM's Coulomb/Stribeck/viscous friction applied to the
-wheel joints.
+BAM models actuator friction.
+At every physics substep, our integration computes voltage-limited drive torque
+and electrical damping, then applies BAM's Coulomb/Stribeck/viscous friction to
+the wheel joints.
 Speed-dependent damping is handled implicitly to reproduce the tested motor
 steady state at the scene's 2 ms timestep.
 Both BAM modes zero targets below `0.075 / 0.03435 ≈ 2.183 rad/s` and clip them at
 `0.25 / 0.03435 ≈ 7.278 rad/s` in magnitude.
 
-The electrical and friction values are **provisional**, not bench-identified:
+The electrical and friction values are **provisional** and need bench identification:
 `kt=0.10787315 Nm/A`, resistance `12 ohm`, and proportional speed-to-voltage gain
 `6 V/(rad/s)`.
 The stall-derived electrical model's predicted no-load speed differs from the
 stated motor datasheet by about a factor of 2.3.
-Successful transfer does not turn these assumptions into measured motor fits;
-[BAM's identification workflow](https://github.com/Rhoban/bam) is available when
-recorded motor-response data are collected.
+Successful transfer leaves that calibration work open;
+[BAM's identification workflow](https://github.com/Rhoban/bam) requires recorded
+motor-response data.
+
+### Why we made these DR/BAM choices
+
+The nominal policy's figure-eight failure under BAM motivated training with
+actuator limits and uncertainty while keeping the policy interface fixed.
+The table separates the reasons for those choices from the numerical ranges
+below, which remain provisional engineering assumptions rather than fitted
+measurements.
+
+| Decision | Implementation | Reason and limit |
+| --- | --- | --- |
+| Keep a nominal baseline and a fixed-BAM mode. | `dynamics="nominal"`, `"bam"`, and `"dr"` select the actuator and sampling behavior. | Separate the effect of changing the actuator model from the effect of randomization. |
+| Reuse the qualified nominal weights. | `--resume` loads the original camera-reward checkpoint before DR fine-tuning. | Start with an existing line-following behavior; the sweep winner was not the source of the reported DR policy. |
+| Preserve the sensor/action contract. | All modes call `observation_from_sensors` and `wheel_targets`. | Attribute the comparison to dynamics and training while keeping the learned interface deployable. |
+| Replace velocity servos with torque actuators. | `build_model(..., bam=True)` changes wheel actuators and `LineDynamics.advance` supplies motor drive. | Model the voltage and friction limits that an ideal velocity servo can hide. |
+| Integrate electrical damping implicitly at every physics substep. | `motor_drive_and_damping` splits drive torque from damping, and `apply_friction` adds electrical and BAM damping. | The free-wheel test exposed incorrect steady-state behavior with explicit integration at the rover's small wheel inertia. |
+| Train with the hardware command envelope. | `apply_actuator_envelope` uses the CAD radius to convert the firmware's linear speed limits. | Let PPO experience the dead zone and saturation during training; the limits still need physical calibration. |
+| Sample persistent conditions once per episode. | `reset` uses Gymnasium's RNG, with independent left/right motor scales and shared chassis, camera, and supply parameters. | Model variation between runs and wheel mismatch without changing physical constants every control step. |
+| Restore saved baselines before scaling. | Copy mass, inertia, and camera position in `__init__`, then assign from those copies in `reset`. | Prevent repeated resets from accumulating unintended model changes. |
+| Change both sides of contact friction. | Set sliding friction on the model's contact geoms and refresh constants with `mj_setConst`. | Avoid the unchanged contact partner dominating MuJoCo's equal-priority friction combination. |
+| Perturb pixels before extracting line features. | `sensors` applies brightness and Gaussian pixel noise, then the environment builds camera centroids. | Allow image quality to affect visibility as well as centroid position; encoder noise is added to wheel-speed estimates separately. |
+| Model command delay with an episode-local queue. | Reset a zero-filled queue and delay targets by zero or one policy step. | Expose PPO to actuation lag without carrying commands across episodes; this does not model all hardware communication faults. |
+| Record the sampled conditions and keep final seeds separate. | Save resolved ranges in `config.json` and per-episode `domain_parameters`, then evaluate the selected checkpoint on fresh seeds. | Make runs replayable and avoid selecting a model on its final test set; one training seed and these ranges do not establish universal robustness. |
 
 ### DR parameter table
 
@@ -420,6 +1034,149 @@ use separate validation and fresh final seeds when tuning them.
 The [DR/BAM guide](dr-bam-line-follower.md) explains sampling, reset restoration,
 and the exact motor coupling.
 
+### Implement the dynamics adapter
+
+`LineFollowerPPOEnv` already calls `reset`, `advance`, and `sensors` on its optional
+`LineDynamics` adapter, keeping the task's reward and success rules in the
+environment class.
+These excerpts from [`envs/line_dynamics.py`](../envs/line_dynamics.py) and
+[`envs/line_scene.py`](../envs/line_scene.py) show how to implement that adapter;
+retain their surrounding imports, range definitions, and validation helpers
+when adapting the pattern.
+
+#### Switch the scene to torque control
+
+Inside `build_model`, replace velocity actuators only when BAM is selected;
+remove the servo gain and its velocity command limits because the new controls
+represent torque.
+The dynamics adapter will apply the wheel-speed envelope before converting
+targets to motor drive.
+
+```python
+# BAM supplies wheel torque directly and integrates its electrical damping separately.
+if bam:
+    for actuator in scene.findall("actuator/velocity"):
+        actuator.tag = "motor"
+        actuator.attrib.pop("kv")
+        actuator.attrib.pop("ctrlrange")
+        actuator.set("ctrllimited", "false")
+```
+
+#### Capture immutable baselines
+
+The adapter constructor looks up the wheel degrees of freedom, actuators, and
+camera once, then copies the physical values needed to restore each episode.
+For a new robot, update these names and the parameters you intend to randomize;
+the two friction models remain separate so the wheels can differ.
+
+```python
+# Capture the compiled baseline before any episode changes its parameters.
+def __init__(self, model, mode, ranges=None):
+    self.model = model
+    self.mode = mode
+    self.ranges = validate_ranges(ranges)
+    self.dofs = np.array([model.joint(name).dofadr[0] for name in ("left_axle", "right_axle")])
+    self.actuators = [model.actuator(name).id for name in ("left_wheel_motor", "right_wheel_motor")]
+    self.camera = model.camera("top_cam")
+    self.mass = model.body_mass.copy()
+    self.inertia = model.body_inertia.copy()
+    self.camera_pos = self.camera.pos.copy()
+    self.frictions = [motor.make_friction_model(), motor.make_friction_model()]
+```
+
+#### Sample and apply one episode's parameters
+
+At reset, draw from the resolved ranges using the environment's RNG, with two
+values for each wheel-specific parameter and one for shared conditions.
+Apply the draw to the saved baselines, update the motor constants, and clear
+the command queue; fixed BAM follows this same path with nominal values so the
+comparison does not require a second integration implementation.
+
+```python
+def reset(self, rng, data):
+    # Draw independent motor properties but share chassis, camera, and supply parameters.
+    self.rng = rng
+    self.parameters = {}
+    for key, (low, high) in self.ranges.items():
+        size = 2 if key in WHEEL_PARAMETERS else None
+        if self.mode == "dr":
+            value = (
+                rng.integers(low, high + 1)
+                if key == "command_delay_steps"
+                else rng.uniform(low, high, size=size)
+            )
+        else:
+            value = np.full(2, NOMINAL[key]) if size else NOMINAL[key]
+        self.parameters[key] = np.asarray(value).tolist()
+    p = self.parameters
+    # Restore absolute baselines before scaling so successive resets cannot accumulate drift.
+    self.model.body_mass[:] = self.mass * p["mass_scale"]
+    self.model.body_inertia[:] = self.inertia * p["mass_scale"]
+    # Set both sides of every contact because MuJoCo mixes equal-priority friction by maximum.
+    self.model.geom_friction[:, 0] = p["contact_friction"]
+    self.camera.pos[:] = self.camera_pos + [p[f"camera_{axis}_m"] for axis in "xyz"]
+    angle = math.radians(p["camera_tilt_deg"]) / 2
+    self.camera.quat[:] = [0, 0, math.sin(angle), math.cos(angle)]
+    self.camera.fovy[:] = p["camera_fovy_deg"]
+    mujoco.mj_setConst(self.model, data)  # ty: ignore[unresolved-attribute]
+    for index, friction in enumerate(self.frictions):
+        scale = p["friction_scale"][index] * motor.STALL_TORQUE_OUTPUT_NM
+        friction.friction_base.value = 0.1 * scale
+        friction.friction_stribeck.value = 0.1 * scale
+        friction.friction_viscous.value = 0.05 * scale
+    self.electrical = {
+        "vin": p["voltage"],
+        "kt": motor.KT * np.array(p["kt_scale"]),
+        "resistance": motor.R * np.array(p["resistance_scale"]),
+        "kp": motor.VELOCITY_KP * np.array(p["kp_scale"]),
+    }
+    self.commands = deque(np.zeros(2) for _ in range(int(p["command_delay_steps"])))
+```
+
+#### Advance motors and perturb sensor measurements
+
+`advance` applies the dead zone, speed ceiling, delay, and CAD wheel signs before
+updating drive and damping on every MuJoCo substep.
+`sensors` adds the episode's observation noise before the shared feature builder,
+so dynamics and perception vary while the eleven-input policy contract stays fixed.
+
+```python
+def advance(self, data, wheel_targets, substeps, *, settling=False):
+    # The firmware envelope is applied to physical wheel targets before the CAD sign change.
+    targets = motor.apply_actuator_envelope(wheel_targets, MAX_WHEEL_RAD_S, MIN_WHEEL_RAD_S)
+    if not settling:
+        self.commands.append(targets.copy())
+        targets = self.commands.popleft()
+    targets = targets * [-1, 1]
+    for _ in range(substeps):
+        speeds = data.qvel[self.dofs]
+        drive, damping = motor.motor_drive_and_damping(targets, speeds, **self.electrical)
+        for index, friction in enumerate(self.frictions):
+            motor.apply_friction(
+                friction, self.model, self.dofs[index], speeds[index], damping[index]
+            )
+        data.ctrl[self.actuators] = drive
+        mujoco.mj_step(self.model, data)  # ty: ignore[unresolved-attribute]
+
+
+def sensors(self, frame, speeds):
+    # Corrupt pixels before feature extraction so line visibility responds to image quality.
+    p = self.parameters
+    if p["brightness"] != 1 or p["pixel_noise_std"]:
+        pixels = frame.astype(float) * p["brightness"]
+        pixels += self.rng.normal(0, p["pixel_noise_std"], frame.shape)
+        frame = np.clip(pixels, 0, 255).astype(np.uint8)
+    if p["encoder_noise_std"]:
+        speeds = speeds + self.rng.normal(0, p["encoder_noise_std"], 2)
+    return frame, speeds
+```
+
+For another task, use the same separation: sample persistent physical conditions
+at reset, integrate the actuator at the physics rate, and perturb measurements
+where sensors enter the policy.
+Keep a fixed-parameter comparison and tests for seeded replay, actuator behavior,
+and task outcomes before widening the ranges or tuning against validation results.
+
 ### Train the DR policy
 
 Download the nominal checkpoint first if it is not available locally; the
@@ -442,7 +1199,7 @@ steps.
 It retained the nominal PPO hyperparameters and camera reward.
 Figure-eight validation moved from 0/5 initially to 3/5, 1/5, 2/5, then 5/5 at
 the successive 25,000-step evaluations.
-Learning was not monotonic, which is why the selection rule matters.
+The reversals show why checkpoint selection matters.
 
 ![Figure 10: DR/BAM training and validation curves](images/Resources/ppo_dr_training.png)
 
@@ -454,9 +1211,8 @@ artifact.
 
 ## 7. Evaluate fresh randomized conditions and an unseen track
 
-We froze the selected policy and tested fresh seeds 40000 onward on the original
-tracks, plus seeds 50000–50019 on Goomba.
-These results did not select another checkpoint.
+After freezing the selected policy, we tested fresh seeds 40000 onward on the
+original tracks and 50000–50019 on Goomba, with no further checkpoint selection.
 
 | Test conditions | Track | Completed | Mean deviation | Maximum deviation | Mean lap time |
 | --- | --- | ---: | ---: | ---: | ---: |
@@ -470,18 +1226,17 @@ These results did not select another checkpoint.
 
 ![Figure 11: Completion and deviation before and after DR fine-tuning](images/Resources/ppo_dr_comparison.png)
 
-The pre-training figure-eight episodes stop early, so their smaller mean error
-must not be read as better full-lap tracking.
-The DR policy accepts slower laps than the nominal reference while completing
-under the harder dynamics.
+The pre-training figure-eight episodes stop early, which lowers their mean
+error without demonstrating full-lap tracking.
+The DR policy completes laps under the harder dynamics, but takes longer than
+the nominal reference.
 
 ![Figure 12: All 150 fresh DR evaluation trajectories](images/Resources/ppo_dr_trajectories.png)
 
 Both nominal and DR policies exceeded the required observed 90% completion rate
 on each original track before hardware rollout.
-The independent Goomba test adds evidence about new geometry, while the DR tests
-cover the sampled distribution rather than every possible surface, lighting
-condition, or actuator.
+Goomba tests a new geometry; DR tests the sampled distribution of surfaces,
+lighting, and actuators, with no claim of coverage beyond those bounds.
 The [qualification W&B run](https://wandb.ai/cursedrock17-university-of-maryland/rover-line-follower/runs/9mh560zs)
 and [archived comparison metrics](https://huggingface.co/CursedRock17/rover-line-follower-ppo/blob/77c0bf85aa4c0dd36ec0862fd17be485c1e686ac/backups/2026-09-10/runs/dr-bam-bringup/summary.json)
 contain the final results.
@@ -490,11 +1245,10 @@ comes from the earlier 20-episode independent test.
 
 ## 8. Deploy the selected policy on the physical rover
 
-The experimenter reported successful real-world line following with the selected
-DR/BAM policy, completing the intended progression from the PID baseline through
-simulation training to physical operation.
-The physical runner keeps the learned policy weights and shared sensor/action
-conversion, while handling camera transport, firmware units, and stop behavior.
+The selected DR/BAM policy successfully followed the line on the physical rover,
+as reported by the experimenter.
+The hardware runner uses the same weights and sensor/action conversion, adding
+camera transport, firmware unit conversion, and stop handling.
 
 ### What changed at the hardware boundary
 
@@ -510,8 +1264,8 @@ The current runner polls the camera at 12.5 Hz while inference stays at 10 Hz,
 uses a 1.0 s sensor-age limit, and permits 15 consecutive missing-line observations
 before stopping, or 1.5 s at the control rate.
 Simulation still fails after 0.5 s of continuous line loss.
-These are deployment-side differences, not changes to the trained checkpoint or
-to the reported simulation success criteria.
+These deployment settings leave the trained checkpoint and simulation success
+criteria unchanged.
 At the 0.25 m/s command ceiling, the hardware line-loss allowance corresponds to
 up to 0.375 m of commanded travel before that stop condition fires.
 
@@ -537,20 +1291,17 @@ uv run python -m rover_control.examples.rl_line_follower \
   --record rover_mujoco/artifacts/hardware/new-run
 ```
 
-Replace the address placeholders for the physical setup.
-When restoring from HF, use the downloaded model and manifest paths instead of
-the original local paths shown here.
+When restoring from HF, substitute the downloaded model and manifest paths.
 `--record` produces `camera.mp4` with detection overlays and `observations.csv`
 with the eleven policy inputs and sensor ages.
 The loop commands zero during sensor startup and stops on sensor failures,
 continued line loss, inference errors, or keyboard interruption.
-The recorder provides the policy's view; an external video provides the rover's
-physical path, which the onboard camera alone cannot measure.
+Use an external video to document the rover's physical path; the onboard
+recording shows only the policy's view.
 
-The hardware recording and run conditions belong alongside this checkpoint's
-experiment record; their shareable location is not yet linked in this repository.
-No physical lap count or measured chassis-deviation table is inferred from the
-simulation plots above.
+The hardware footage and run conditions still need a shareable link in this
+record.
+Physical lap counts and chassis-deviation measurements are not documented here.
 
 ## 9. Recover the models and reproduce the figures
 
@@ -558,10 +1309,9 @@ The selected DR model is `dr-bam-bringup/ppo-dr-seed0/best_model.zip`, SHA-256
 `06f837b4cfafbd756c62ae0f97875e6832431da1616b3c2006a64d5fbb2d01bf`.
 The original nominal reference has SHA-256
 `dacac1b410f81761eb782ded8157800394b88e736410055937143812d61bee16`.
-The HF archive contains all 66 saved policy/checkpoint files found at backup time,
-including historical policies that use other interfaces.
-Use the selected current-policy paths rather than the repository-root legacy
-`model.zip` when following this guide.
+The HF archive contains all 66 policy/checkpoint files found at backup time.
+Some historical policies, including the root `model.zip`, use older interfaces;
+use the selected paths in this guide.
 
 From `rover_mujoco`, download the DR checkpoint and matching configuration at the
 verified immutable backup revision, then open it in the viewer:
@@ -591,11 +1341,11 @@ Training plots are exported from the TensorBoard scalars mirrored to W&B:
 uv run scripts/plot_ppo_training.py runs/dr-bam-bringup/ppo-dr-seed0
 ```
 
-The plot command requires the run's TensorBoard event files, not only its model
-and configuration; download the full run folder to recreate it.
-Final evaluation writes the trajectory CSVs and plots used for physical metrics.
-The backup preserves these artifacts and a checksum manifest, and its frozen
-training snapshots retain the corresponding environment code and assets.
+Download the full run folder for its TensorBoard event files; the model and
+configuration alone cannot reproduce training plots.
+Final evaluation saves trajectory CSVs and plots of the rover's motion.
+The backup includes these artifacts, a checksum manifest, and frozen snapshots
+of the training code and assets.
 
 ## 10. Verify the project before publishing changes
 
@@ -618,5 +1368,3 @@ Keep code, documentation, and selected report figures in GitHub; keep generated
 run directories, local recordings, credentials, and caches out of Git.
 The HF archive holds model weights and experiment artifacts, while the W&B links
 retain the training and evaluation views.
-This combination records what was trained, how it was judged, which policy was
-deployed, and how to load it again.

@@ -2,13 +2,14 @@
 
 The saved policies are available in the private
 [Hugging Face backup](https://huggingface.co/CursedRock17/rover-line-follower-ppo/tree/main/backups/2026-09-10).
-For the existing training and evaluation scripts, download the checkpoint and its
-adjacent `config.json`, then pass the local ZIP path as usual.
-The configuration preserves the dynamics mode, DR ranges, reward mode, and tracks;
-the checkpoint alone does not tell the evaluation script which simulation to build.
+Download the checkpoint and its adjacent `config.json`, then pass the local ZIP
+path to the training or evaluation script.
+Keep both files together: the configuration selects the dynamics mode, DR ranges,
+reward mode, and tracks needed to rebuild the simulation.
 
-Run these commands from `rover_mujoco` after `uv run hf auth login` if this machine
-is not already authenticated with an account that can access the private repository.
+Run from `rover_mujoco`.
+If needed, authenticate with `uv run hf auth login` using an account with access
+to the private repository.
 
 | Policy | `HF_POLICY_RUN` |
 | --- | --- |
@@ -42,8 +43,8 @@ The CLI preserves the repository's nested directory structure under `runs/hf`.
 
 Python can download on demand using `hf_hub_download` or `snapshot_download`,
 then give the returned local path to `PPO.load`.
-Hugging Face handles authentication, versioned caching, and downloads; SB3 still
-loads its ZIP checkpoint rather than accepting a Hub repository ID directly.
+Hugging Face handles authentication, versioned caching, and downloads.
+SB3 loads the resulting ZIP; it does not accept a Hub repository ID directly.
 [Hugging Face download documentation](https://huggingface.co/docs/huggingface_hub/guides/download)
 and [SB3 checkpoint format](https://stable-baselines3.readthedocs.io/en/master/guide/save_format.html)
 describe those two parts of the process.

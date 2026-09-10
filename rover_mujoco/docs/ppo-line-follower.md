@@ -1,13 +1,13 @@
 # PPO line-following baseline
 
-This is the next stage after the PID baseline: learn camera-based line following on
-2-inch circle, figure-eight, and oval tracks, using the same CAD rover, provisional
-camera mount, velocity servos, 10 Hz control rate, and geometric success criteria.
-Domain randomization and BAM motor dynamics now have a separate
+PPO learns camera-based line following on 2-inch circle, figure-eight, and oval
+tracks using the PID baseline's CAD rover, provisional camera mount, velocity
+servos, 10 Hz control rate, and geometric success criteria.
+Domain randomization and BAM motor dynamics have a separate
 [integration and evaluation guide](dr-bam-line-follower.md), including parameter ranges
 and the physical deployment interface.
 
-The nominal policy now completes **40/40 independent test episodes on each of the three
+The nominal policy completed **40/40 independent test episodes on each of the three
 tracks**, including figure-eight, using the original camera reward.
 See [measured results](#measured-nominal-results) for the checkpoint, metrics, and artifacts.
 
@@ -33,13 +33,12 @@ W&B logging is enabled by default, using project `rover-line-follower` and the a
 account's default entity; an authentication failure stops startup.
 `--no-wandb` is available for local development checks.
 Each run requires a fresh output directory so earlier experiments are preserved.
-On resume, the runner applies its configured hyperparameters, including command-line
-learning rate and entropy coefficient, to the loaded model and records the checkpoint's
-step count as `prior_timesteps`.
-Training curves count additional steps from zero for the new run; add `prior_timesteps`
-when comparing total training budgets.
-The original runner loaded checkpoint hyperparameters after writing the new configuration,
-so continuation settings could silently differ from the logged experiment.
+On resume, the runner applies the configured hyperparameters, including the
+command-line learning rate and entropy coefficient, to the loaded model.
+It records the checkpoint's step count as `prior_timesteps`; add that to the
+new run's curves, which count additional steps from zero, to compare total budgets.
+This fixes an earlier resume bug that let checkpoint settings override the
+logged configuration.
 
 ## Run evaluation
 
@@ -65,7 +64,7 @@ environment = gym.make("LineFollowerPPO-v0", track="figure8")
 observation, info = environment.reset(seed=0)
 ```
 
-## Small modules with explicit responsibilities
+## Implementation map
 
 | Module | Responsibility |
 |---|---|
@@ -98,8 +97,8 @@ Missing bands contain `[0, 0, 0]`, so a centered visible line remains distinguis
 
 Encoder speed is calculated from wheel-angle change over each 0.1-second control
 interval, with signs converted so forward rotation is positive on both wheels.
-These initial encoders are ideal: quantization, sensor noise, latency, and communication
-handling belong to the later hardware-realism stage.
+Nominal encoders are ideal; quantization, noise, latency, and communication
+handling belong to the hardware-realism stage.
 There is no ground-truth position, track identity, yaw, progress, or body velocity in
 the policy observation.
 All normalization is fixed and documented here; this baseline does not use `VecNormalize`.
@@ -250,19 +249,19 @@ All five validation episodes per track passed at that checkpoint; evaluation the
 
 The result meets the requested **observed success rate of at least 90% on every track**.
 
-The seed count is what lets that statement carry per track. A perfect 20/20 only bounds the
-true rate at 86.1% with 95% confidence, which sits under the 90% requirement; 40/40 raises
-that bound to 92.8%, and the pooled 120/120 across all three tracks reaches 97.5%. The added
-seeds behaved like the original ones: every mean deviation and lap time above differs from the
-20-seed measurement by at most 0.01 cm and 0.01 s, so doubling the sample tightened the bound
-without moving the estimate.
-These are new start-perturbation seeds on known geometries with nominal simulation
-physics, from one training seed; DR/BAM and real-world qualification remain separate.
+More test seeds strengthen the estimate: 20/20 gives a 95% confidence lower bound
+of 86.1%, below the 90% requirement; 40/40 raises it to 92.8%.
+Pooling all three tracks gives 120/120 and a 97.5% lower bound.
+Mean deviation and lap time differ from the 20-seed measurements by at most
+0.01 cm and 0.01 s, so the extra seeds tightened the bounds with little change
+in measured behavior.
+
+These tests vary starting perturbations on known geometries under nominal
+physics, using one training seed; DR/BAM and hardware require separate qualification.
 This policy was trained with PPO alone, without PID demonstrations or a PID fallback.
-The effective correction was completing a sufficient training budget, not changing the
-sensor contract or relaxing the success criteria.
-The default budget is now 250,000 steps to allow more training beyond the earlier cutoff,
-but each resulting model still requires independent evaluation.
+More training solved the task with the original sensor contract and success criteria.
+The default budget is 250,000 steps, allowing training beyond the earlier cutoff;
+each resulting model still requires independent evaluation.
 
 ```sh
 # View the selected nominal policy using its saved reward configuration.
@@ -283,11 +282,12 @@ image, and selected model artifact.
 
 ![All 60 nominal PPO evaluation trajectories](images/Resources/ppo_nominal_trajectories.png)
 
-All 15 simulation and training tests pass, including PID feasibility, reward isolation,
-and an actual resumed-training CLI run.
-Ruff formatting, Ruff lint, and ty pass on the changed Python files.
-The repository-wide check still reports the pre-existing guide-formatting issue and
-171 type diagnostics outside these changes.
+At nominal bringup, all 15 simulation and training tests passed, including PID
+feasibility, reward isolation, and a resumed-training CLI run.
+The changed Python files passed Ruff formatting, Ruff lint, and ty.
+The repository-wide check then reported a pre-existing guide-formatting issue
+and 171 type diagnostics outside those changes.
+These are historical results; rerun the checks above for the current checkout.
 
 ## Downloading the saved policy
 
