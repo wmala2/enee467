@@ -6,6 +6,9 @@ has a native MuJoCo exporter, and it handles things we otherwise had to patch by
 bootstrapped the rover from a pre-existing URDF, like free-floating bases, actuators, and
 visual/collision splitting.
 
+Sections 1 to 6 are the path that works. Section 7 collects every failure we actually hit,
+indexed by the error message you see, because none of them say what is really wrong.
+
 ## 1. Install
 
 `onshape-to-robot` is already a project dependency (see `pyproject.toml`), so a plain
@@ -25,45 +28,19 @@ export ONSHAPE_ACCESS_KEY=...
 export ONSHAPE_SECRET_KEY=...
 ```
 
-Keep them in the repo's gitignored `.env` and source it (`set -a; . ./.env; set +a`) rather
-than putting them in `config.json`; the exporter still reads them from there but prints a
-deprecation warning. Two traps in that list, both of which cost real time here:
-
-- The secret variable is `ONSHAPE_SECRET_KEY`, not `ONSHAPE_ACCESS_SECRET`.
-- `ONSHAPE_API` is easy to miss because omitting it produces the error
-  `ERROR: No Onshape API access key are set`, which blames the key when the URL is what's
-  absent.
+Note that the secret is `ONSHAPE_SECRET_KEY`, not `ONSHAPE_ACCESS_SECRET`. Keep all three in
+the repo's gitignored `.env` and source it (`set -a; . ./.env; set +a`) rather than putting
+them in `config.json`; the exporter still reads them from there but prints a deprecation
+warning.
 
 The [OnShape "File Export" app](https://cad.onshape.com/appstore/apps/File%20Export/698b9abb84adb494ca5d5d5a)
 can also trigger an export directly from the CAD UI if you'd rather not run the CLI.
 
-### If you get 401 Unauthenticated with credentials that are definitely correct
-
-Check your system clock. OnShape signs each request with the `Date` header, and rejects
-anything more than a few minutes from its own clock as `{"message":"Unauthenticated API
-request", "status":401}`, which is indistinguishable from a bad key. This bit us with the
-machine running about six minutes fast:
-
-```shell
-# what the server thinks the time is, versus what you think it is
-curl -sI https://cad.onshape.com/api/users/sessioninfo | grep -i '^date:'
-date -u '+%a, %d %b %Y %H:%M:%S GMT'
-
-timedatectl                             # "System clock synchronized: no" is the tell
-sudo timedatectl set-ntp true           # the fix
-```
-
-A quick way to tell a clock problem from a bad key: HTTP Basic auth does not involve the
-signature, so it still works when the signed request does not.
-
-```shell
-curl -s -o /dev/null -w '%{http_code}\n' -u "$ONSHAPE_ACCESS_KEY:$ONSHAPE_SECRET_KEY" \
-  https://cad.onshape.com/api/users/sessioninfo
-```
-
-200 there plus 401 from the exporter means the credentials are fine and the clock is not.
-
 ## 2. In the OnShape assembly, before exporting
+
+The URL must point at an **assembly**, not a part studio, and that assembly must contain
+something. Your browser's URL is whichever tab you are on, which is the most common reason an
+export fails before it starts.
 
 - Leave the root part un-fixed if the robot should be free-floating (a rover, an arm on
   wheels). Only apply OnShape's own **Fixed** mate/feature to the root if the robot is meant
@@ -72,59 +49,24 @@ curl -s -o /dev/null -w '%{http_code}\n' -u "$ONSHAPE_ACCESS_KEY:$ONSHAPE_SECRET
 - **Mate connectors** at joint axes become MJCF joints; name them something you'll recognize
   in the XML (`left_axle`, `right_axle`, etc.), same as we did by hand on the rover.
 
-## 2b. The URL has to point at a non-empty Assembly
-
-`onshape-to-robot` reads assemblies, never part studios. The URL in your browser points at
-whichever tab you happen to be on, and a part studio tab produces:
-
-```
-! ERROR (400) while using Onshape API
-! { "message" : "Element must be an assembly", "status" : 400 }
-```
-
-An assembly that exists but is empty fails differently, as a bare `KeyError: 'occurrences'`
-from `assembly.py`, because the API omits that key entirely when nothing has been inserted.
-Neither message names the real problem, so list the document's elements and pick the assembly
-deliberately:
+To pick the assembly deliberately rather than trusting the address bar, list the document's
+elements and check the one you want is not empty:
 
 ```shell
 curl -s -u "$ONSHAPE_ACCESS_KEY:$ONSHAPE_SECRET_KEY" -H "Accept: application/json" \
   "https://cad.onshape.com/api/documents/d/<did>/w/<wid>/elements" \
 | python3 -c "import json,sys; [print(e['elementType'], e['id'], e['name']) for e in json.load(sys.stdin)]"
-```
 
-Then confirm it actually contains something before exporting:
-
-```shell
 curl -s -u "$ONSHAPE_ACCESS_KEY:$ONSHAPE_SECRET_KEY" -H "Accept: application/json" \
   "https://cad.onshape.com/api/assemblies/d/<did>/w/<wid>/e/<assembly eid>" \
 | python3 -c "import json,sys; print(len(json.load(sys.stdin)['rootAssembly']['instances']), 'instances')"
 ```
 
-Zero instances means you need to insert the part into the assembly in OnShape first. That was
-the state the `Goomba_Track` document was in: one part in the part studio and an `Assembly 1`
-holding nothing. Dropping the part studio into the assembly by itself is enough, and the export
-then runs clean:
-
-```
-* Found total 0 degrees of freedom
-* Found 1 root nodes:
-  - Goomba_Track <1>
-+ Adding part Goomba_Track <1>
-WARNING: part Goomba_Track <1> has no dynamics (maybe it is a surface)
-* Writing robot.xml
-* Writing scene.xml
-```
-
-Read that warning. See the surface-part gotcha in section 5.
-
-## 2c. Props with no joints: skip the exporter
+## 3. Props with no joints: skip the exporter
 
 A track, a ramp, or a wall has no joints, no actuators, and no free-floating base, so none of
 what `onshape-to-robot` does applies. Pull the mesh straight out of the part studio and write
-a few lines of MJCF around it. The STL endpoint answers with a 307 to a *different* host
-(`cad-usw2.onshape.com`), and `curl -L` drops the `Authorization` header across hosts, so
-following the redirect by hand is the difference between a mesh and a 401:
+a few lines of MJCF around it:
 
 ```shell
 URL="https://cad.onshape.com/api/partstudios/d/<did>/w/<wid>/e/<part studio eid>/stl?mode=binary&units=meter&grouping=true"
@@ -135,13 +77,14 @@ curl -s -u "$ONSHAPE_ACCESS_KEY:$ONSHAPE_SECRET_KEY" \
   -H "Accept: application/vnd.onshape.v1+octet-stream" "$LOC" -o part.stl
 ```
 
-Ask for `units=meter`; MuJoCo works in metres and OnShape will happily hand you millimetres.
-`assets/objects/tracks/goomba_track.xml` is the result of exactly this, and shows the two
-attributes a flat CAD part needs: `inertia="shell"` on the mesh, because a part 0.1 mm thick
-is degenerate under MuJoCo's volume-based inertia, and `contype="0" conaffinity="0"` on the
-geom, because paint on the floor is not something to drive into.
+The redirect is followed by hand on purpose; see section 7 for why `curl -L` returns a 401
+here. Ask for `units=meter`; MuJoCo works in metres and OnShape will happily hand you
+millimetres. `assets/objects/tracks/goomba_track.xml` is the result of exactly this, and shows
+the two attributes a flat CAD part needs: `inertia="shell"` on the mesh, because a part 0.1 mm
+thick is degenerate under MuJoCo's volume-based inertia, and `contype="0" conaffinity="0"` on
+the geom, because paint on the floor is not something to drive into.
 
-## 3. config.json
+## 4. config.json
 
 ```jsonc
 {
@@ -160,20 +103,18 @@ geom, because paint on the floor is not something to drive into.
 ```
 
 Prefer `"type": "velocity"` (or `"position"`) over `"motor"` for small/light parts like
-wheels. See the gotcha below on why a raw torque motor is easy to mistune into instability.
+wheels. A raw torque motor is easy to mistune into instability; see section 7.
 
-Two things about how those keys are matched, both worth knowing before you debug a joint that
-ignored its settings. Names are matched with `fnmatch`, so `"*"` matches every joint and
-`"*_axle"` matches both wheels. Matches then merge **in the order the keys appear in the JSON**,
-so a specific joint must come *after* the wildcard or the wildcard wins. The one exception is
-the key `"default"`, which is always applied first no matter where it sits, so it is the safer
-way to express "settings for everything, overridden below".
+Names are matched with `fnmatch`, so `"*"` matches every joint and `"*_axle"` matches both
+wheels. Matches merge **in the order the keys appear in the JSON**, so a specific joint must
+come *after* the wildcard or the wildcard wins. The one exception is the key `"default"`,
+which is always applied first no matter where it sits, so it is the safer way to express
+"settings for everything, overridden below".
 
-## 4. Run it, bring the output in
+## 5. Run it, bring the output in
 
-`onshape-to-robot` ships as a console script, not a runnable module, so `python -m
-onshape_to_robot` fails with "No module named onshape_to_robot.__main__". The argument is a
-path to the directory holding `config.json`, which has to be named exactly that:
+The argument is a path to the directory holding `config.json`, which has to be named exactly
+that:
 
 ```shell
 mkdir -p assets/robots/rover
@@ -198,61 +139,19 @@ an `<include>` of `robot.xml`, the same composition pattern our hand-built
 `assets/robots/<name>/` as-is; no path rewriting needed (unlike the `package://` URDF mesh
 URIs we had to `sed` earlier).
 
-**`scene.xml` is written only if it is not already there.** Your edits to it survive a
-re-export, which is the behavior you want, but it also means a scene you customized months ago
-silently keeps its old contents while `robot.xml` underneath it changes. Delete it if you want
-the generated one back. The generated version is minimal: a skybox, a headlight, one
-directional light, and a checkerboard ground plane, with no `<option>` block at all, which is
-why the integrator gotcha below is something you add rather than something you change.
+A successful export on a single-part prop looks like this:
 
-## 5. Gotchas specific to the MJCF exporter
+```
+* Found total 0 degrees of freedom
+* Found 1 root nodes:
+  - Goomba_Track <1>
++ Adding part Goomba_Track <1>
+WARNING: part Goomba_Track <1> has no dynamics (maybe it is a surface)
+* Writing robot.xml
+* Writing scene.xml
+```
 
-- **Explicit-Euler + velocity/position actuators + tiny inertias can blow up.** This is what
-  bit us on the rover's wheels (angular velocity diverged to NaN within a few steps). MuJoCo's
-  own [Numerical Integration docs](https://github.com/google-deepmind/mujoco/blob/main/doc/computation/index.rst)
-  call out exactly this case: "stiff springs, position servos or strong damping interact
-  with contacts," and name `implicitfast` as *"the recommended integrator for most models"*
-  precisely because it has Euler's computational cost with much better stability. If you see
-  `Nan, Inf or huge value in QACC` shortly after adding actuated wheels/joints, add
-  `<option integrator="implicitfast"/>` to `scene.xml` before spending time retuning gains.
-  It's usually the faster fix (and was the actual fix here; a `discrete` integrator swap or
-  gain retuning was not needed once we made that one change).
-- **Mesh collision already uses the convex hull: that wasn't our problem.** We initially
-  suspected the wheel STLs themselves and swapped in cylinder collision primitives, but per
-  [XMLreference.rst](https://github.com/google-deepmind/mujoco/blob/main/doc/XMLreference.rst)
-  ("collision detection works with the convex hull of the mesh"), MuJoCo already collides
-  every mesh via its convex hull regardless, so a coarse/non-manifold STL is not, by itself,
-  a source of instability. Swapping to primitives is still worth doing for performance on
-  parts that will contact the ground often, just don't expect it to fix NaNs on its own; reach
-  for the integrator first.
-- **Mated-but-touching parts can self-collide.** OnShape assemblies routinely have brackets,
-  motors, and fasteners flush against each other by design; the exporter keeps each part as
-  its own body/geom (unlike a merged URDF link), so those touching surfaces can register as
-  penetrating contacts. Use `geom_properties` wildcards in `config.json` (or hand-edit
-  `contype`/`conaffinity` after export) to disable collision on parts that are cosmetic or
-  rigidly interior. Only surfaces that actually touch the ground or other objects need it on.
-- **A surface part exports as a free body with placeholder mass, and it is a bomb.** A part
-  with no volume (a track, a decal, anything modelled as a sheet) makes the exporter print
-  `WARNING: part <name> has no dynamics (maybe it is a surface)` and emit
-  `mass="1e-09"` with a matching `1e-09` inertia. It also gets a `<freejoint>`, because the
-  root was not marked Fixed in OnShape. On its own it looks fine: it settles 0.2 mm into the
-  floor and sits there with zero velocity indefinitely. But `f = ma` with `m = 1e-9` means any
-  contact at all launches it. Measured on the exported Goomba track, a 1 mN push, roughly a
-  thousandth of the force a 1.5 kg rover delivers in a collision, accelerated it to 499 km/s
-  and 125 km away in half a second. Either mark the root Fixed in OnShape so no freejoint is
-  emitted, or delete the `<freejoint>` and give the body a real mass by hand, or skip the
-  exporter entirely for props (section 2c).
-- **The exporter emits two geoms per mesh, visual and collision.** They come from the default
-  classes at the top of `robot.xml`: `visual` is `group="2"` with `contype`/`conaffinity` 0,
-  `collision` is `group="3"`. For something the rover drives *over* rather than into, drop the
-  collision geom; for something it collides with, replace the mesh collision with a primitive.
-- **Sanity-check scale after export.** OnShape units, if the assembly wasn't authored in
-  meters, can produce a robot that's a few orders of magnitude off: this shows up as either
-  a robot floating away instantly or barely moving under normal-looking actuator commands.
-- **Verify the free joint landed where you expect.** Load the model and check
-  `model.njnt`/`joint names` (see the checklist below) rather than assuming the root got a
-  `<freejoint>`. It's silently skipped if the root was marked Fixed in OnShape. The exporter
-  names it after the root link, as `<root link name>_freejoint`, so you can grep for it.
+Read that warning rather than skipping past it. See section 7.
 
 ## 6. Quick validation checklist
 
@@ -270,3 +169,134 @@ for _ in range(1000):
     mujoco.mj_step(m, d)  # no "Nan, Inf or huge value" warnings should print
 print(d.qpos[:3])  # moved a sensible distance, didn't teleport or freeze
 ```
+
+Also check scale. OnShape units, if the assembly wasn't authored in metres, can produce a
+robot a few orders of magnitude off, which shows up as either a robot floating away instantly
+or barely moving under normal-looking actuator commands.
+
+## 7. Troubleshooting
+
+Every entry here is something we hit. They are grouped by the message you actually see,
+because in each case the message names something other than the real cause.
+
+### `ERROR: No Onshape API access key are set`
+
+`ONSHAPE_API` is missing. The message blames the key, but the URL is what's absent. All three
+variables in section 1 are required.
+
+### `{"message":"Unauthenticated API request", "status":401}`
+
+Check your system clock before your credentials. OnShape signs each request with the `Date`
+header and rejects anything more than a few minutes from its own clock, which is
+indistinguishable from a bad key. This bit us with the machine running about six minutes fast.
+
+```shell
+# what the server thinks the time is, versus what you think it is
+curl -sI https://cad.onshape.com/api/users/sessioninfo | grep -i '^date:'
+date -u '+%a, %d %b %Y %H:%M:%S GMT'
+
+timedatectl                             # "System clock synchronized: no" is the tell
+sudo timedatectl set-ntp true           # the fix
+```
+
+HTTP Basic auth does not involve the signature, so it still works when the signed request does
+not. That makes it a one-command test:
+
+```shell
+curl -s -o /dev/null -w '%{http_code}\n' -u "$ONSHAPE_ACCESS_KEY:$ONSHAPE_SECRET_KEY" \
+  https://cad.onshape.com/api/users/sessioninfo
+```
+
+200 there plus 401 from the exporter means the credentials are fine and the clock is not.
+
+### 401 when fetching an STL, with credentials that work everywhere else
+
+The STL endpoint answers with a 307 to a *different* host (`cad-usw2.onshape.com`), and
+`curl -L` drops the `Authorization` header across hosts. Follow the redirect by hand, as in
+section 3.
+
+### `ERROR (400) ... "Element must be an assembly"`
+
+The URL points at a part studio. `onshape-to-robot` reads assemblies only. List the document's
+elements (section 2) and use the assembly's id.
+
+### `KeyError: 'occurrences'` from `assembly.py`
+
+The assembly exists but is empty; the API omits that key entirely when nothing has been
+inserted. That was the state the `Goomba_Track` document was in: one part in the part studio
+and an `Assembly 1` holding nothing. Dropping the part studio into the assembly by itself is
+enough.
+
+### `No module named onshape_to_robot.__main__`
+
+`onshape-to-robot` ships as a console script, not a runnable module, so `python -m
+onshape_to_robot` cannot work. Call it by name, as in section 5.
+
+### `Nan, Inf or huge value in QACC`, shortly after adding actuated joints
+
+Explicit-Euler with velocity or position actuators and tiny inertias can blow up. This is what
+bit us on the rover's wheels, where angular velocity diverged to NaN within a few steps.
+MuJoCo's own [Numerical Integration docs](https://github.com/google-deepmind/mujoco/blob/main/doc/computation/index.rst)
+call out exactly this case, "stiff springs, position servos or strong damping interact with
+contacts", and name `implicitfast` as *"the recommended integrator for most models"* because
+it has Euler's cost with much better stability. Add `<option integrator="implicitfast"/>` to
+`scene.xml` before retuning any gains. That was the actual fix here; neither a `discrete`
+integrator swap nor gain retuning was needed once we made that one change.
+
+Do not start by suspecting the mesh. We initially swapped the wheel STLs for cylinder
+collision primitives, but per
+[XMLreference.rst](https://github.com/google-deepmind/mujoco/blob/main/doc/XMLreference.rst),
+"collision detection works with the convex hull of the mesh", so MuJoCo already collides every
+mesh via its convex hull and a coarse or non-manifold STL is not by itself a source of
+instability. Primitives are still worth using for performance on parts that touch the ground
+often; just don't expect them to fix NaNs.
+
+### A part flies away the moment anything touches it
+
+Preceded by `WARNING: part <name> has no dynamics (maybe it is a surface)`. A part with no
+volume, a track or a decal or anything modelled as a sheet, exports with `mass="1e-09"` and a
+matching `1e-09` inertia. It also gets a `<freejoint>`, because the root was not marked Fixed
+in OnShape. On its own it looks fine: it settles 0.2 mm into the floor and sits there with zero
+velocity indefinitely. But `f = ma` with `m = 1e-9` means any contact launches it. Measured on
+the exported Goomba track, a 1 mN push, roughly a thousandth of the force a 1.5 kg rover
+delivers in a collision, accelerated it to 499 km/s and 125 km away in half a second.
+
+Three ways out: mark the root Fixed in OnShape so no freejoint is emitted, delete the
+`<freejoint>` and give the body a real mass by hand, or skip the exporter for props
+(section 3).
+
+### Parts penetrate each other at rest
+
+OnShape assemblies routinely have brackets, motors, and fasteners flush against each other by
+design. The exporter keeps each part as its own body and geom, unlike a merged URDF link, so
+those touching surfaces register as penetrating contacts. Use `geom_properties` wildcards in
+`config.json`, or hand-edit `contype`/`conaffinity` after export, to disable collision on parts
+that are cosmetic or rigidly interior. Only surfaces that actually touch the ground or other
+objects need it on.
+
+### Edits to `scene.xml` are ignored, or a re-export changes nothing
+
+`scene.xml` is written only if it is not already there. Your edits survive a re-export, which
+is the behaviour you want, but it also means a scene you customized months ago silently keeps
+its old contents while `robot.xml` underneath it changes. Delete it if you want the generated
+one back. The generated version is minimal: a skybox, a headlight, one directional light, and
+a checkerboard ground plane, with no `<option>` block at all, which is why the integrator fix
+above is something you add rather than something you change.
+
+### A joint ignored its `joint_properties`
+
+Matching order. A specific joint listed *before* the wildcard is overwritten by it; see
+section 4.
+
+### The robot has no free joint
+
+It's silently skipped if the root was marked Fixed in OnShape. The exporter names it after the
+root link, as `<root link name>_freejoint`, so you can grep `robot.xml` for it rather than
+assuming.
+
+### The exporter emitted two geoms for every mesh
+
+That's intended. They come from the default classes at the top of `robot.xml`: `visual` is
+`group="2"` with `contype`/`conaffinity` 0, `collision` is `group="3"`. For something the rover
+drives *over* rather than into, drop the collision geom; for something it collides with,
+replace the mesh collision with a primitive.
