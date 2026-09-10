@@ -45,8 +45,12 @@ class Rover:
         wheel_diameter_m=(70.0 / 1000.0),
         wheel_separation_m=(187.832 / 1000.0),
         camera_addr=DEFAULT_CAMERA_ADDR,
+        rover_addr=None,
         show_camera=False,
     ):
+        # The rover's own address, alongside the camera's; None keeps whatever is configured.
+        if rover_addr:
+            network_interface.set_rover_ip(rover_addr)
         # Physical geometry of the rover, used for all of the speed conversions
         self.wheel_diameter = wheel_diameter_m
         self.wheel_separation = wheel_separation_m

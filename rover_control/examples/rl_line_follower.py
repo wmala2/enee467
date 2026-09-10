@@ -2,6 +2,7 @@
 
 import argparse
 
+from rover_control import network_interface
 from rover_control.rl_rover import RLLineFollowerRover
 from rover_control.rover import Rover
 
@@ -19,6 +20,11 @@ def main():
     )
     parser.add_argument("--wheel-radius-m", type=float, default=0.03435)
     parser.add_argument("--camera-addr", default=RLLineFollowerRover.DEFAULT_CAMERA_ADDR)
+    parser.add_argument(
+        "--rover-addr",
+        default=network_interface.UDP_IP,
+        help="rover UDP address; defaults to $ROVER_IP or the built-in",
+    )
     args = parser.parse_args()
     if args.wheel_radius_m <= 0:
         parser.error("wheel radius must be positive")
@@ -30,6 +36,7 @@ def main():
         encoder_signs=args.encoder_signs,
         wheel_diameter_m=2 * args.wheel_radius_m,
         camera_addr=args.camera_addr,
+        rover_addr=args.rover_addr,
         show_camera=True,
     )
     try:
