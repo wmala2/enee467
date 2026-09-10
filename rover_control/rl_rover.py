@@ -90,6 +90,16 @@ class RLLineFollowerRover(Rover):
     # half that; see compute_wheel_speeds for why hardware is given longer.
     LINE_LOST_STOP_STEPS = 10
 
+    # How old either sensor reading may be before the rover stops. At 10 Hz this is two and a
+    # half control steps, so a single dropped camera frame or encoder reply is fatal; raise it
+    # if the logs show ordinary WiFi jitter tripping it rather than a real stall.
+    STALE_LIMIT_S = 0.25
+
+    # Camera polling rate. Kept above CONTROL_HZ so a fresh frame is normally waiting rather
+    # than being fetched on demand; the stream's own comment notes load and heat as the reason
+    # not to raise it without cause.
+    CAMERA_POLL_HZ = 20.0
+
     def __init__(
         self,
         model_path,
@@ -111,7 +121,10 @@ class RLLineFollowerRover(Rover):
         super().__init__(camera_addr=camera_addr, **kwargs)
         self._counts_per_revolution = counts_per_revolution
         self._encoder_signs = encoder_signs
-        self._camera = CameraStream(camera_addr, target_hz=CONTROL_HZ)
+        # Poll faster than the control loop consumes. Fetching at exactly CONTROL_HZ left no
+        # headroom: one slow HTTP GET makes the newest frame older than a control step, and a
+        # second in a row exceeded STALE_LIMIT_S and stopped the rover mid-drive.
+        self._camera = CameraStream(camera_addr, target_hz=self.CAMERA_POLL_HZ)
         self._encoders = _EncoderOnlyPoller(poll_hz=CONTROL_HZ)
         self._started = time.perf_counter()
         self._lost_steps = 0
@@ -130,16 +143,31 @@ class RLLineFollowerRover(Rover):
         counts, elapsed, encoder_stamp = self._encoders.latest()
         now = time.perf_counter()
         # Hold zero during sensor startup and stop on stale data once the startup period ends.
-        if frame is None or elapsed <= 0 or now - min(stamp, encoder_stamp) > 0.25:
+        if frame is None or elapsed <= 0 or now - min(stamp, encoder_stamp) > self.STALE_LIMIT_S:
             if now - self._started < 3:
                 return None
-            raise RuntimeError("Camera or encoder measurements are missing or stale")
+            # Name the sensor and the age. One message for three unrelated causes made a
+            # hardware stall undiagnosable, and these fail for entirely different reasons:
+            # no frame at all, an encoder reply that never came, or a link gone quiet.
+            faults = []
+            if frame is None:
+                faults.append("no camera frame received")
+            else:
+                faults.append(f"camera frame {now - stamp:.2f}s old")
+            if elapsed <= 0:
+                faults.append("no encoder reply since the last poll")
+            else:
+                faults.append(f"encoder reading {now - encoder_stamp:.2f}s old")
+            raise RuntimeError(
+                f"Sensors stale after {now - self._started:.1f}s "
+                f"(limit {self.STALE_LIMIT_S:.2f}s): " + "; ".join(faults)
+            )
         self._maybe_show(frame)
         image = cv2.resize(frame, (CAM_RES, CAM_RES))[:, :, ::-1]
         speeds = encoder_speeds(counts, elapsed, self._counts_per_revolution, self._encoder_signs)
         observation = observation_from_sensors(image, speeds)
         if self._recorder is not None:
-            self._recorder.write(image, observation)
+            self._recorder.write(image, observation, now - stamp, now - encoder_stamp)
         return observation
 
     def compute_wheel_speeds(self):
@@ -202,11 +230,11 @@ class _RunRecorder:
         self._csv.writerow(
             ["t"]
             + [f"{band}_{field}" for band in ("near", "mid", "far") for field in ("x", "y", "seen")]
-            + ["left_rad_s", "right_rad_s", "min_rgb"]
+            + ["left_rad_s", "right_rad_s", "min_rgb", "camera_age_s", "encoder_age_s"]
         )
         self._start = time.perf_counter()
 
-    def write(self, image, observation):
+    def write(self, image, observation, camera_age=float("nan"), encoder_age=float("nan")):
         try:
             import cv2
             from envs.pid import centroid_error
