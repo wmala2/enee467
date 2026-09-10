@@ -30,7 +30,7 @@ action = [-linear + angular, linear + angular]  # [left_ctrl, right_ctrl]
 The leading `-` on the left wheel isn't part of the textbook kinematics. It's a quirk of this
 specific rover's CAD: the wheel meshes are mirrored, so the two wheel joints spin in opposite
 senses for the same physical rolling direction. We found this the hard way (see the
-`rover_env.py`/teleop debugging in this repo's history) — driving forward needed
+`rover_env.py`/teleop debugging in this repo's history): driving forward needed
 opposite-signed `ctrl` on the two wheels, not the equal-signed pair you'd expect from the
 kinematics alone. If you export a new rover from OnShape and its wheels *aren't* mirrored,
 you may need to drop that sign flip.
@@ -38,13 +38,13 @@ you may need to drop that sign flip.
 ## Controls
 
 - **Arrow keys** (not WASD): forward/backward and turn left/right.
-- **`+`/`-`**: raise or lower the top speed, in 0.5 rad/s steps.
-- **Space**: stop.
-- **Esc**: exit the viewer.
+- `+` and `-` raise or lower the top speed, in 0.5 rad/s steps.
+- Space stops the rover.
+- Esc exits the viewer.
 
 Arrow keys instead of WASD is a deliberate choice, not an oversight. MuJoCo's own viewer binds
-every letter of the alphabet to a built-in rendering toggle — `W` is Wireframe, `S` is Shadow,
-`A` is Auto Connect, `D` is Static Body — and it processes those on every keypress regardless
+every letter of the alphabet to a built-in rendering toggle (`W` is Wireframe, `S` is Shadow,
+`A` is Auto Connect, `D` is Static Body) and it processes those on every keypress regardless
 of what our own key handler does. Driving with WASD would flip one of those every time you
 touched a key (this is exactly what caused the "floor turns into a grid" bug earlier). Arrow
 keys aren't bound to anything in MuJoCo's shortcut tables, so they don't have that problem.
@@ -56,7 +56,7 @@ rad/s and capped well under that rating to leave room for the acceleration limit
 that sets `teleop_rover.py`'s adjustable top speed range. There's also a floor: a rough
 placeholder for the minimum wheel speed needed to actually overcome static friction and roll,
 rather than just stall the motor against the floor. That floor is an estimate, not a measured
-value — getting the real number is future work once the motors are being modeled with BAM
+value, and getting the real number is future work once the motors are being modeled with BAM
 (a later tutorial).
 
 ## Why speed changes ramp instead of snapping
@@ -66,7 +66,7 @@ pop the rover into a wheelie: MuJoCo instantly commanding a large wheel torque p
 chassis. `teleop_rover.py` ramps the actually-applied speed toward whatever the arrow
 keys/`+`/`-` are asking for, at a capped rate (`MAX_ACCEL`, in rad/s²), rather than jumping to
 it in one step. That rate is tuned by feel in simulation, not derived from a measured motor
-acceleration curve — like the friction floor above, that's real-hardware work for later.
+acceleration curve. Like the friction floor above, that's real-hardware work for later.
 
 ## Running it
 

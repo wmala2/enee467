@@ -79,8 +79,8 @@ def main():
     env.reset()
 
     # Access underlying MuJoCo model and data structures
-    model = env.unwrapped.model
-    data = env.unwrapped.data
+    model = env.unwrapped.model  # ty: ignore[unresolved-attribute]
+    data = env.unwrapped.data  # ty: ignore[unresolved-attribute]
 
     print("Arrow keys to drive, +/- to adjust speed, Space to stop, Esc to exit.")
 

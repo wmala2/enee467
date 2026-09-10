@@ -1,13 +1,13 @@
 # Nominal PPO hyperparameter sweep
 
-**Completed:** four candidates, with the selected reference continuation passing all
-150 fresh test episodes across circle, figure-eight, and oval.
+Of four candidates, the selected reference continuation passed all 150 fresh
+test episodes across circle, figure-eight, and oval.
 
 This sweep fine-tunes the qualified nominal camera-reward policy, which completed 20/20
 reserved episodes on circle, figure-eight, and oval.
-It measures whether further PPO updates improve that policy while preserving completion.
-It is a continuation experiment from one training seed, not a comparison of training from
-scratch or a DR/BAM experiment.
+It tests whether more PPO updates improve the policy while preserving completion.
+All candidates continue from one training seed under nominal dynamics; this
+sweep does not compare training from scratch or DR/BAM.
 
 The preceding reward ablation used the same starting checkpoint and 150,000-step request
 for each run, with the following reserved-seed results:
@@ -76,7 +76,7 @@ checkpoint's SHA-256, selection rule, fresh test rates, and pass/fail result.
 `final_evaluation` holds the winner's independent test artifacts.
 Training and final evaluation runs share the W&B group `ppo-hparam-sweep-seed0`.
 
-The training CLI now accepts `--gamma` and `--tracks` for reproducible comparisons.
+The training CLI accepts `--gamma` and `--tracks` for reproducible comparisons.
 The evaluator defaults to the saved configuration's tracks, so adding a registered
 track does not silently change an older checkpoint's evaluation protocol.
 Explicit `--tracks` can be used to evaluate additional geometries separately.
@@ -108,14 +108,12 @@ making preservation of the earlier selected model essential.
 The entropy candidate also regressed and retained its incoming policy; its benchmark
 repeats the original policy's same 20 cases and is not evidence of a learned improvement.
 
-The original qualified policy had the lowest mean figure-eight chassis deviation among
-these distinct policies.
-The shorter discount horizon completed figure-eight laps about 7.0% faster than that
-original policy, with about 11.6% greater mean deviation.
-Thus the validation-return winner, the most accurate tracker, and the fastest policy
-are different choices under this reward and evaluation protocol.
-The original remains a useful accuracy control for the next DR/BAM stage, and the
-shorter-horizon candidate provides a measured speed tradeoff.
+The original policy had the lowest mean figure-eight chassis deviation.
+The shorter discount horizon completed laps about 7.0% faster with about 11.6%
+greater mean deviation.
+Validation return, accuracy, and speed therefore favored different policies.
+The original provides an accuracy control for DR/BAM, while the shorter-horizon
+candidate shows the cost of faster laps.
 
 ![Figure-eight validation and selected checkpoints for all four candidates](images/Resources/ppo_sweep_validation.png)
 
@@ -151,9 +149,10 @@ The selected model SHA-256 is
 `648c6764241380cc2464e71b42585a0a7ac940cc9808deb28c1c55d85a006163`.
 The final audit verified every snapshot-file hash, matched all four saved models to
 their recorded selected steps, and checked all fresh episode seeds and success counts.
-The 30-test suite passes from `rover_mujoco`; changed Python files pass Ruff and ty,
-and repository-wide formatting and lint pass.
-The full repository type check still reports 124 diagnostics outside these changes.
+At sweep completion, the 30-test suite passed from `rover_mujoco`, changed Python
+files passed Ruff and ty, and repository-wide formatting and lint passed.
+The full type check then reported 124 diagnostics outside those changes.
+Rerun the checks for the current checkout.
 
 ## Downloading the saved policy
 

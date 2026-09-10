@@ -34,14 +34,14 @@ cd matrix_lab_rover_above
 uv sync --extra cpu     # or --extra cu121 on a machine with an NVIDIA GPU
 ```
 
-`uv sync` reads the root `pyproject.toml`/`uv.lock` and builds one `.venv` with every dependency
-— this project's *and* the high-level packages' — pinned to the same versions everyone else is
-using. The `--extra` picks which PyTorch build to pull; nothing in `rover_mujoco/` needs torch
-directly, but the same environment serves both halves of the repo. You don't need `uv init`:
+`uv sync` reads the root `pyproject.toml`/`uv.lock` and builds one `.venv` with every
+dependency, this project's *and* the high-level packages', pinned to the same versions
+everyone else is using. The `--extra` picks which PyTorch build to pull; nothing in
+`rover_mujoco/` needs torch directly, but the same environment serves both halves of the repo. You don't need `uv init`:
 that's for starting a *new* project, and this one already has a `pyproject.toml` from the clone.
 
 The commands in these docs are written relative to this folder, so `cd rover_mujoco` first and
-run them as-is — `uv run` walks up to the workspace root to find the environment on its own.
+run them as-is; `uv run` walks up to the workspace root to find the environment on its own.
 
 If you're using VSCode, point its Python interpreter at the root `.venv` (Command Palette →
 "Python: Select Interpreter" → the one inside `matrix_lab_rover_above/.venv`) so

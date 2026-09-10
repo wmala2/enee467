@@ -86,7 +86,7 @@ def centerline(mask, step):
     plt.close(figure)
     if not paths:
         raise SystemExit("no centerline contour found")
-    return max(paths, key=len), float(band_half * 2 * step)
+    return max(paths, key=len), float(band_half * 2 * step)  # ty: ignore[no-matching-overload]
 
 
 def smooth(points, sigma):
