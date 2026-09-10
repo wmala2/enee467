@@ -279,7 +279,11 @@ class _RunRecorder:
                     (view.shape[1], view.shape[0]),
                 )
             self._video.write(view)
-            self._csv.writerow([f"{elapsed:.3f}"] + [f"{v:.4f}" for v in observation] + [darkest])
+            self._csv.writerow(
+                [f"{elapsed:.3f}"]
+                + [f"{v:.4f}" for v in observation]
+                + [darkest, f"{camera_age:.3f}", f"{encoder_age:.3f}"]
+            )
         except Exception as error:  # noqa: BLE001  driving must not stop for a recorder
             print(f"recording disabled: {error}")
             self.close()
