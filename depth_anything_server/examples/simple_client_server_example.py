@@ -8,11 +8,11 @@ from depth_anything_server.depth_client import RoverNavigationClient
 # Locally Running Loop
 if __name__ == "__main__":
     # Point to your optimized desktop GPU server
-    CAMERA_IP = "192.168.50.123:80"
-    SERVER_IP = "192.168.50.155:5000"
+    CAMERA_IP = "192.168.50.114:80"
+    SERVER_IP = "192.168.50.120:5000"
 
     # Initialize our pre-built rover client with the address of our desired workstation
-    client = RoverNavigationClient(server_url="http://" + SERVER_IP, verbose=False)
+    client = RoverNavigationClient(server_url="http://" + SERVER_IP, verbose=True)
     # cap = cv2.VideoCapture(0)
 
     print("Running navigation client telemetry. Press Ctrl+C to stop.")
