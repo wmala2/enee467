@@ -106,18 +106,17 @@ matrix_lab_rover_above/
 
 | Example | Folder | What it does |
 |---------|--------|-------------|
-| ArUco Pose Movement | [rover_control/examples/](rover_control/examples/) | Finds an ArUco tag, centers on it, and drives to ~0.25 m away. |
-| ArUco Maze Runner | [rover_control/examples/](rover_control/examples/) | Navigates a sequence of ArUco tags in order using a continuous PID approach. |
-| ArUco Maze Runner (Trapezoid) | [rover_control/examples/](rover_control/examples/) | Same maze, but uses a planned trapezoidal speed curve — more reliable in poor lighting. |
-| ArUco Tag Tracker | [rover_control/examples/](rover_control/examples/) | Keeps a moving ArUco tag in frame at a fixed standoff distance, spinning to find it if lost. |
-| YOLO Object Detection | [YOLO_agent/](YOLO_agent/) | Runs YOLOv8n on the laptop camera or ESP32 camera and returns detection dictionaries. |
-| YOLO 3D Pose | [YOLO_agent/](YOLO_agent/) | Pairs YOLO detections with a depth model to give each object a real-world (X, Y, Z) position. |
-| YOLO Object Navigation | [rover_control/examples/](rover_control/examples/) | Drives the rover toward a named COCO object using its YOLO 3D pose. |
-| Depth Server | [depth_anything_server/](depth_anything_server/) | Offloads Depth Anything V3 inference to a desktop GPU; laptops send a JPEG and get a depth map back. |
-| LLM Object Identification | [LLM_hybrid/](LLM_hybrid/) | Asks a local vision LLM what object is in frame and returns a structured JSON answer. |
-| LLM Rover Driving | [LLM_hybrid/](LLM_hybrid/) | Proof of concept where the LLM watches the camera stream and outputs rover velocity commands. |
-| Sim Manual Control | [rover_mujoco/scripts/](rover_mujoco/scripts/) | Drives the simulated rover around the MuJoCo viewer with WASD/arrow keys. |
-| Sim Line Follower (PID) | [rover_mujoco/scripts/](rover_mujoco/scripts/) | Classical camera-only line following — PID or bang-bang — around a generated track. |
-| Sim Line Follower (RL) | [rover_mujoco/scripts/](rover_mujoco/scripts/) | Trains and evaluates a PPO line-following policy on `LineFollower-v0` / `LineFollowerReal-v0`. |
-| Sim Goal Navigation (RL) | [rover_mujoco/scripts/](rover_mujoco/scripts/) | Trains a PPO policy to drive to a commanded (x, y) offset in a 5x5 m arena while avoiding obstacles, using encoder odometry and the rover's lidar. |
-| RL Line Follower (Real) | [rover_control/examples/](rover_control/examples/) | Runs the PPO policy trained in `rover_mujoco/` on the physical rover. |
+| [ArUco Pose Movement](docs/examples/aruco-pose-movement.md) | [rover_control/examples/](rover_control/examples/) | Finds an ArUco tag, centers on it, and drives to ~0.25 m away. |
+| [ArUco Maze Runner](docs/examples/aruco-maze-runner.md) | [rover_control/examples/](rover_control/examples/) | Navigates a sequence of ArUco tags in order using a continuous PID approach. |
+| [ArUco Maze Runner (Trapezoid)](docs/examples/aruco-maze-runner-trapezoid.md) | [rover_control/examples/](rover_control/examples/) | Same maze, but uses a planned trapezoidal speed curve — more reliable in poor lighting. |
+| [ArUco Tag Tracker](docs/examples/aruco-tag-tracker.md) | [rover_control/examples/](rover_control/examples/) | Keeps a moving ArUco tag in frame at a fixed standoff distance, spinning to find it if lost. |
+| [YOLO Object Detection](docs/examples/yolo-object-detection.md) | [YOLO_agent/](YOLO_agent/) | Runs YOLOv8n on the laptop camera or ESP32 camera and returns detection dictionaries. |
+| [YOLO 3D Pose](docs/examples/yolo-3d-pose.md) | [YOLO_agent/](YOLO_agent/) | Pairs YOLO detections with a depth model to give each object a real-world (X, Y, Z) position. |
+| [YOLO Object Navigation](docs/examples/yolo-object-navigation.md) | [rover_control/examples/](rover_control/examples/) | Drives the rover toward a named COCO object using its YOLO 3D pose. |
+| [Depth Server](docs/examples/depth-server.md) | [depth_anything_server/](depth_anything_server/) | Offloads Depth Anything V3 inference to a desktop GPU; laptops send a JPEG and get a depth map back. |
+| [LLM Object Identification](docs/examples/llm-object-identification.md) | [LLM_hybrid/](LLM_hybrid/) | Asks a local vision LLM what object is in frame and returns a structured JSON answer. |
+| [LLM Rover Driving](docs/examples/llm-rover-driving.md) | [LLM_hybrid/](LLM_hybrid/) | Proof of concept where the LLM watches the camera stream and outputs rover velocity commands. |
+| [Sim Manual Control](docs/examples/sim-manual-control.md) | [rover_mujoco/scripts/](rover_mujoco/scripts/) | Drives the simulated rover around the MuJoCo viewer with WASD/arrow keys. |
+| [Sim Line Follower (PID)](docs/examples/sim-line-follower-pid.md) | [rover_mujoco/scripts/](rover_mujoco/scripts/) | Classical camera-only line following — PID or bang-bang — around a generated track. |
+| [Sim Line Follower (RL)](docs/examples/sim-line-follower-rl.md) | [rover_mujoco/scripts/](rover_mujoco/scripts/) | Trains and evaluates a PPO line-following policy on `LineFollowerPPO-v0`. |
+| [RL Line Follower (Real)](docs/examples/rl-line-follower-real.md) | [rover_control/examples/](rover_control/examples/) | Runs the PPO policy trained in `rover_mujoco/` on the physical rover. |
