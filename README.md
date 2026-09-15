@@ -1,7 +1,7 @@
 # Matrix Lab Rover — High Level
 This repository contains the higher-level AI agent code for the STEM Rovers: object detection, ArUco pose estimation, LLM integration, and the control loops that tie them together into autonomous behaviours.
 The intent is to elevate the basic differential drive rover platform we're currently control with closed loop techniques, with modern neural network, higher level algorithms.
-This project is a joint effort between [UMD's ECE department](https://ece.umd.edu/) and [MATRIX Lab](https://matrix.umd.edu/)
+This project is a joint collaboration between [UMD's ECE department](https://ece.umd.edu/) and [MATRIX Lab](https://matrix.umd.edu/)
 
 ## Installation
 
@@ -11,20 +11,38 @@ This project is a joint effort between [UMD's ECE department](https://ece.umd.ed
 3. Install [uv](https://docs.astral.sh/uv/getting-started/installation/), which manages the Python
    virtual environment and dependencies for this project. It installs its own Python 3.12, so no
    conda/pyenv setup is needed.
-4. Clone this repository locally:
 
+4. *Optional, but Recommended*: Install [VSCode](https://code.visualstudio.com/download?_exp_download=fb315fc982), we'll follow a VSCode workflow when navigating the repository. This will make your life easier, but it's not necessarily a requirement.
+
+5. Clone this repository locally:
+    If your using VSCode, simply open VSCode and reveal the command prompt at the top of the screen (1) using `Ctrl + Shift + P`. Then type `Git: Clone` (2) and press `Enter`. You should be able to paste the URL of this repository and press `Enter`. Save this repository a desired directory like "~/Documents" and you should be good.
+
+    ![VSCode Command Palette](images/clean_vscode_clone.png)
+
+    Otherwise, you can do it via the terminal:
     ```bash
+    # Navigate to where you want to install this package
+    cd ~/Documents/
     git clone https://github.com/CursedRock17/matrix_lab_rover_above.git
     ```
 
 ### Repository Setup
 
-1) From the project root, sync the environment. Pick the extra that matches your machine — this is
-   the *only* difference between a GPU and a CPU-only setup:
-    ```bash
-    uv sync --extra cu121   # machine with an NVIDIA GPU
-    uv sync --extra cpu     # no NVIDIA GPU (saves ~6 GB)
-    ```
+Open the project up in VSCode (optional, but recommended). This can be done very simply through VSCode via `File` > `Open Folder`, then going to the location that you cloned the repository.
+
+Alternatively, navigate to the location of the project using the terminal
+
+```bash
+# If you cloned the repo to a different path, use that one.
+cd ~/Documents/matrix_lab_rover_above
+code .
+```
+
+From the project root, sync the environment. Pick the extra that matches your machine. To do this we need to open a terminal. If you're in VSCode either type `Ctrl + "`"` (Control plus Backtick) or go to `View` > `Terminal`.
+
+```bash
+uv sync --extra cpu     # no NVIDIA GPU (saves ~6 GB)
+```
 
 This reads `pyproject.toml`/`uv.lock` and builds a single `.venv/` on Python 3.12 containing every
 package in the repo. It is a [uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/):
@@ -33,28 +51,28 @@ the high-level folders (`ArUco_detector`, `YOLO_agent`, `LLM_hybrid`, `depth_any
 that one environment — no `PYTHONPATH`, no second env to activate, and a policy trained in sim is
 importable from the real-rover code without leaving the venv.
 
-2) Run anything in the repo through `uv run`, which uses that environment automatically:
-    ```bash
-    uv run rover_control/examples/aruco_pose_movement.py
-    uv run rover_mujoco/scripts/teleop_rover.py
-    ```
+Run anything in the repo through `uv run`, which uses that environment automatically:
+    
+```bash
+uv run rover_control/examples/aruco_pose_movement.py
+uv run rover_mujoco/scripts/teleop_rover.py
+```
 
-3) Before committing, lint, format, and type-check everything in one pass:
-    ```bash
-    uv run scripts/check.py         # report problems, change nothing
-    uv run scripts/check.py --fix   # apply the formatter and ruff's safe autofixes
-    ```
+Before committing, lint, format, and type-check everything in one pass:
+```bash
+uv run scripts/check.py         # report problems, change nothing
+uv run scripts/check.py --fix   # apply the formatter and ruff's safe autofixes
+```
 
-   The rules live in the root `pyproject.toml` under `[tool.ruff]` and follow the
-   [Google Python Style Guide](https://google.github.io/styleguide/pyguide.html), at 100 columns
-   rather than 80. `ruff` and `ty` come from the workspace's dev group, so a plain `uv sync`
-   already installed them, and the same command covers `rover_mujoco/` too.
-
-4) (Only for the `LLM_hybrid` examples) Install and start the local Ollama server — see [LLM_hybrid/README.md](LLM_hybrid/README.md) for the two-command setup.
+The rules live in the root `pyproject.toml` under `[tool.ruff]` and follow the
+[Google Python Style Guide](https://google.github.io/styleguide/pyguide.html), at 100 columns rather than 80. `ruff` and `ty` come from the workspace's dev group, so a plain `uv sync`
+already installed them, and the same command covers `rover_mujoco/` too.
 
 ---
 
 ## Project Structure
+
+Explore the project, this repository encapsulates many high level ideas pertaining to the UMD Mini Claw STEM Rovers which you can take advantage of and build off of.
 
 ```
 matrix_lab_rover_above/
