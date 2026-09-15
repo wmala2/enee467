@@ -76,5 +76,9 @@ fresh commands.
 uv run python scripts/teleop_rover.py
 ```
 
+This should open a MuJoCo viewer with the rover model loaded:
+
+![Rover loaded in the MuJoCo viewer](images/rover_in_mujoco.png)
+
 If the viewer opens and arrow keys drive the rover without the floor flickering into a grid,
 everything's wired up correctly.
