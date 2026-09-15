@@ -63,6 +63,14 @@ class RoverNavigationClient:
                 self._show_debug_window(frame, depth_meters)
 
             return depth_meters
+        except requests.exceptions.HTTPError as e:
+            # The server puts the actual failure reason in the response body (e.g. a decode
+            # error, or the exception raised during inference) - raise_for_status()'s own
+            # message alone is just the status line, so read the body too before giving up.
+            if self.verbose:
+                detail = e.response.text if e.response is not None else "(no response body)"
+                print(f"Server inference failed: {e} - {detail}")
+            return None
         except Exception as e:  # noqa: BLE001 -- caller treats None as "no depth this tick"
             if self.verbose:
                 print(f"Server inference failed: {e}")
