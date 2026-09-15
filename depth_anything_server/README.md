@@ -30,7 +30,9 @@ uv run --extra cu121 depth_anything_server/depth_server.py
 uv run depth_anything_server/depth_client.py --server http://<DESKTOP_IP>:5000
 ```
 
-The client sends one frame and opens a side-by-side window showing the original image and its depth map.
+The client sends one frame and opens a side-by-side window showing the original image and its depth map:
+
+![Rover Telemetry side-by-side RGB and depth window](../images/simple_client_server_example.png)
 
 ### Using it in your own code
 ```python

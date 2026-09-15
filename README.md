@@ -134,6 +134,7 @@ matrix_lab_rover_above/
 | [YOLO 3D Pose](docs/examples/yolo-3d-pose.md) | [YOLO_agent/](YOLO_agent/) | Pairs YOLO detections with a depth model to give each object a real-world (X, Y, Z) position. |
 | [YOLO Object Navigation](docs/examples/yolo-object-navigation.md) | [rover_control/examples/](rover_control/examples/) | Drives the rover toward a named COCO object using its YOLO 3D pose. |
 | [Depth Server](docs/examples/depth-server.md) | [depth_anything_server/](depth_anything_server/) | Offloads Depth Anything V3 inference to a desktop GPU; laptops send a JPEG and get a depth map back. |
+| [DA3 Person Picker](docs/examples/da3-person-picker.md) | [rover_control/examples/](rover_control/examples/) | Shows every visible person on a depth-colored view; click one to choose who the rover follows and tracks them by ID. |
 | [LLM Object Identification](docs/examples/llm-object-identification.md) | [LLM_hybrid/](LLM_hybrid/) | Asks a local vision LLM what object is in frame and returns a structured JSON answer. |
 | [LLM Rover Driving](docs/examples/llm-rover-driving.md) | [LLM_hybrid/](LLM_hybrid/) | Proof of concept where the LLM watches the camera stream and outputs rover velocity commands. |
 | [Sim Manual Control](docs/examples/sim-manual-control.md) | [rover_mujoco/scripts/](rover_mujoco/scripts/) | Drives the simulated rover around the MuJoCo viewer with WASD/arrow keys. |
