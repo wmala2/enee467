@@ -16,14 +16,17 @@ Same as the rest of `depth_anything_server`'s examples: a GPU server running
 `depth_server.py` on the network (see [depth_anything_server/README.md](../../depth_anything_server/README.md#quick-start)),
 and a rover laptop that can reach both the server and the rover's ESP32 camera.
 
-`--server` and `--camera-ip` are command-line flags, not hardcoded constants, because every
-setup's IPs are different - one student's rover, camera, and GPU laptop will never share IPs
-with another student's:
+`--server`, `--camera-ip`, and `--rover-ip` are command-line flags, not hardcoded constants,
+because every setup's IPs are different - one student's rover, camera, and GPU laptop will
+never share IPs with another student's. `--rover-ip` is where motor commands get sent (UDP) -
+different from `--camera-ip`, which is where camera frames get fetched (HTTP). Omit `--rover-ip`
+to fall back to the `ROVER_IP` environment variable, or `network_interface.py`'s own default.
 
 ```shell
-uv run rover_control/examples/da3_person_picker.py \
+uv run --extra cu121 rover_control/examples/da3_person_picker.py \
     --server <YOUR_GPU_LAPTOP_IP>:5000 \
-    --camera-ip <YOUR_ROVER_CAMERA_IP>:80
+    --camera-ip <YOUR_ROVER_CAMERA_IP>:80 \
+    --rover-ip <YOUR_ROVER_IP>
 ```
 
 Both flags fall back to `PersonPicker.SERVER_IP`/`ROVER_CAMERA_IP` if omitted - placeholder

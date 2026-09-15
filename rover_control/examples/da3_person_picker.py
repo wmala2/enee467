@@ -86,8 +86,17 @@ class PersonPicker(Rover):
     PICKER_WINDOW = "Choose a person to follow (click their box)"
     FOLLOW_WINDOW = "Following"
 
-    def __init__(self, server_ip=SERVER_IP, rover_camera_ip=ROVER_CAMERA_IP, stop_tolerance_m=0.60):
-        super().__init__()
+    def __init__(
+        self,
+        server_ip=SERVER_IP,
+        rover_camera_ip=ROVER_CAMERA_IP,
+        rover_ip=None,
+        stop_tolerance_m=0.60,
+    ):
+        # rover_ip is where motor commands get sent (UDP) - different from rover_camera_ip,
+        # which is where camera frames get fetched (HTTP). None keeps whatever Rover/
+        # network_interface already defaults to (the ROVER_IP env var, or its own fallback).
+        super().__init__(rover_addr=rover_ip)
 
         # How close (in meters) the rover should get to the chosen person before it stops.
         self.stop_tolerance_m = stop_tolerance_m
@@ -302,6 +311,14 @@ if __name__ == "__main__":
         help="Rover's ESP32 camera host:port, no http:// or /capture (default: %(default)s)",
     )
     parser.add_argument(
+        "--rover-ip",
+        default=None,
+        help=(
+            "Rover's IP for motor commands (UDP), no port - different from --camera-ip. "
+            "Defaults to the ROVER_IP env var, or network_interface.py's own fallback."
+        ),
+    )
+    parser.add_argument(
         "--stop-distance-m",
         type=float,
         default=0.60,
@@ -311,6 +328,7 @@ if __name__ == "__main__":
 
     picker = PersonPicker(
         server_ip=args.server,
+        rover_ip=args.rover_ip,
         rover_camera_ip=args.camera_ip,
         stop_tolerance_m=args.stop_distance_m,
     )
