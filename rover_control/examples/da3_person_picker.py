@@ -98,7 +98,12 @@ class PersonPicker(Rover):
             Path(__file__).resolve().parents[2] / "YOLO_agent" / "models" / "yolov8n.pt"
         )
         self.extractor = YOLOExtractor(model_path=yolo_model_path, imgsz=640, verbose=False)
-        self.client = RoverNavigationClient(server_url="http://" + server_ip, verbose=True)
+        # verbose=True here would be handy for error text, but it also makes get_metric_depth()
+        # pop up its own debug window (RoverNavigationClient._show_debug_window) - since this
+        # class calls it from DepthWorker's background thread while this script's own windows
+        # are drawn on the main thread, two threads fight over OpenCV's GUI state and this
+        # script's own picker/following windows stop rendering. Keep this False.
+        self.client = RoverNavigationClient(server_url="http://" + server_ip, verbose=False)
         self._depth_worker = DepthWorker(self.client, rover_camera_ip)
 
         # A PID controller is a small feedback loop: measure how wrong you are (the error), and
