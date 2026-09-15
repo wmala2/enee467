@@ -12,6 +12,7 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "depth-anything-3",
     "huggingface_hub",
+    "lap>=0.5.12",  # Ultralytics' persistent tracker (YOLOExtractor.track()) needs this
     "numpy",
     "ollama",
     "opencv-contrib-python",

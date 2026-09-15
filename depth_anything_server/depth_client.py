@@ -7,12 +7,26 @@ import requests
 
 
 class RoverNavigationClient:
-    def __init__(self, server_url: str, timeout: float = 5.0, verbose: bool = False):
+    def __init__(
+        self,
+        server_url: str,
+        timeout: float = 5.0,
+        verbose: bool = False,
+        log_errors: bool = True,
+    ):
         self.depth_url = f"{server_url.rstrip('/')}/depth"
         # Reuse one TCP connection across all requests — avoids per-frame handshake overhead
         self.session = requests.Session()
         self.timeout = timeout
-        self.verbose = verbose  # Toggle to automatically render the depth window
+        # Toggle to automatically render the depth window. Only safe from a single-threaded
+        # caller: this pops a cv2 window from wherever get_metric_depth() is called, and if
+        # that's a background fetch thread (e.g. da3_person_picker.py's DepthWorker) while the
+        # main thread also owns OpenCV windows, the two threads fight over GUI state and
+        # neither renders correctly. Leave this False for any background-thread caller.
+        self.verbose = verbose
+        # Print (to stdout) when a request fails, independent of `verbose` above - this is
+        # thread-safe and has no window to conflict with, so it's on by default.
+        self.log_errors = log_errors
 
     def fetch_rover_frame(self, rover_ip: str) -> np.ndarray:
         """Captures a snapshot from the rover to minimize thermal load."""
@@ -25,7 +39,7 @@ class RoverNavigationClient:
             frame = cv2.imdecode(img_arr, cv2.IMREAD_COLOR)
             return frame
         except Exception as e:  # noqa: BLE001 -- caller treats None as "no frame this tick"
-            if self.verbose:
+            if self.log_errors:
                 print(f"Error communicating with rover {rover_ip}: {e}")
             return None
 
@@ -67,12 +81,12 @@ class RoverNavigationClient:
             # The server puts the actual failure reason in the response body (e.g. a decode
             # error, or the exception raised during inference) - raise_for_status()'s own
             # message alone is just the status line, so read the body too before giving up.
-            if self.verbose:
+            if self.log_errors:
                 detail = e.response.text if e.response is not None else "(no response body)"
                 print(f"Server inference failed: {e} - {detail}")
             return None
         except Exception as e:  # noqa: BLE001 -- caller treats None as "no depth this tick"
-            if self.verbose:
+            if self.log_errors:
                 print(f"Server inference failed: {e}")
             return None
 
