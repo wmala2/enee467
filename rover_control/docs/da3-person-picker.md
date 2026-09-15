@@ -16,9 +16,18 @@ Same as the rest of `depth_anything_server`'s examples: a GPU server running
 `depth_server.py` on the network (see [depth_anything_server/README.md](../../depth_anything_server/README.md#quick-start)),
 and a rover laptop that can reach both the server and the rover's ESP32 camera.
 
+`--server` and `--camera-ip` are command-line flags, not hardcoded constants, because every
+setup's IPs are different - one student's rover, camera, and GPU laptop will never share IPs
+with another student's:
+
 ```shell
-uv run rover_control/examples/da3_person_picker.py
+uv run rover_control/examples/da3_person_picker.py \
+    --server <YOUR_GPU_LAPTOP_IP>:5000 \
+    --camera-ip <YOUR_ROVER_CAMERA_IP>:80
 ```
+
+Both flags fall back to `PersonPicker.SERVER_IP`/`ROVER_CAMERA_IP` if omitted - placeholder
+values from this project's example network, not yours.
 
 ## The two-phase state machine
 

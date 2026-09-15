@@ -8,6 +8,7 @@ specific person by their tracked ID, not just "whoever's closest right now."
 """
 
 # External Libraries
+import argparse
 from pathlib import Path
 import threading
 import time
@@ -85,7 +86,7 @@ class PersonPicker(Rover):
     PICKER_WINDOW = "Choose a person to follow (click their box)"
     FOLLOW_WINDOW = "Following"
 
-    def __init__(self, stop_tolerance_m=0.60):
+    def __init__(self, server_ip=SERVER_IP, rover_camera_ip=ROVER_CAMERA_IP, stop_tolerance_m=0.60):
         super().__init__()
 
         # How close (in meters) the rover should get to the chosen person before it stops.
@@ -97,8 +98,8 @@ class PersonPicker(Rover):
             Path(__file__).resolve().parents[2] / "YOLO_agent" / "models" / "yolov8n.pt"
         )
         self.extractor = YOLOExtractor(model_path=yolo_model_path, imgsz=640, verbose=False)
-        self.client = RoverNavigationClient(server_url="http://" + self.SERVER_IP, verbose=False)
-        self._depth_worker = DepthWorker(self.client, self.ROVER_CAMERA_IP)
+        self.client = RoverNavigationClient(server_url="http://" + server_ip, verbose=False)
+        self._depth_worker = DepthWorker(self.client, rover_camera_ip)
 
         # A PID controller is a small feedback loop: measure how wrong you are (the error), and
         # nudge your output based on how big that error is and how fast it's changing. We need
@@ -284,5 +285,28 @@ class PersonPicker(Rover):
 
 
 if __name__ == "__main__":
-    picker = PersonPicker(stop_tolerance_m=0.60)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--server",
+        default=PersonPicker.SERVER_IP,
+        help="GPU depth server's host:port, no http:// (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--camera-ip",
+        default=PersonPicker.ROVER_CAMERA_IP,
+        help="Rover's ESP32 camera host:port, no http:// or /capture (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--stop-distance-m",
+        type=float,
+        default=0.60,
+        help="How close to get to the chosen person before stopping (default: %(default)s)",
+    )
+    args = parser.parse_args()
+
+    picker = PersonPicker(
+        server_ip=args.server,
+        rover_camera_ip=args.camera_ip,
+        stop_tolerance_m=args.stop_distance_m,
+    )
     picker.update()
