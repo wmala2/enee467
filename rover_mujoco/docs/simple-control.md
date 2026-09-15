@@ -1,9 +1,12 @@
 # Simple control: driving the rover with a keyboard
 
+## What this is
+
 Once you've got the rover into simulation (`assets/robots/rover/`, either from
-`docs/onshape-to-robot-mjcf.md`'s export or the copy already in this repo), the next step is
-just driving it around: `scripts/teleop_rover.py` maps keyboard input to the rover's wheels
-using differential drive kinematics.
+[onshape-to-robot-mjcf.md](onshape-to-robot-mjcf.md)'s export or the copy already in this repo),
+the next step is just driving it around by hand. `scripts/teleop_rover.py` maps arrow-key presses
+to the rover's two wheels using differential-drive kinematics — the same math every two-wheeled
+robot uses to turn.
 
 ## The kinematics, briefly
 
@@ -69,6 +72,8 @@ it in one step. That rate is tuned by feel in simulation, not derived from a mea
 acceleration curve. Like the friction floor above, that's real-hardware work for later.
 
 ## Running it
+
+This opens the MuJoCo viewer with the rover loaded and your keyboard live:
 
 ```shell
 uv run python scripts/teleop_rover.py

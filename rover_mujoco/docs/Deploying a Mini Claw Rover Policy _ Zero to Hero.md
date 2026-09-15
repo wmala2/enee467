@@ -33,6 +33,17 @@ flowchart LR
 All episode counts below come from simulation.
 The successful hardware demonstration has no measured 90% success rate.
 
+### How to use this guide
+
+By the end, you'll have a policy trained entirely in simulation driving the real
+rover around a line-following track. That takes ten stages, matching the table
+above: get the workspace and hardware ready, prove a simple controller can do the
+task at all, define the learning problem, train a policy, sweep its settings,
+make it robust to real motor/sensor imperfections, test it on fresh conditions,
+then deploy and verify it. You don't have to read it start to finish in one
+sitting — each section below is numbered to match the table, so you can jump to
+whichever stage you're working on.
+
 ## 1. Set up the rover and workspace
 
 ### Hardware and software
@@ -283,6 +294,11 @@ Keeping truncation separate allows value bootstrapping as described in
 [Gymnasium's time-limit documentation](https://gymnasium.farama.org/tutorials/gymnasium_basics/handling_time_limits/).
 
 ### Build the Gymnasium environment
+
+If you haven't built a Gymnasium environment before: it's just a Python class with a fixed
+shape — a constructor, a `reset()` that starts an episode, and a `step()` that advances it one
+tick and returns a reward — that's why the code below is split into lettered blocks (3a-3i)
+instead of one long listing, one block per piece of that shape.
 
 The following blocks assemble `LineFollowerPPOEnv` from
 [`envs/tasks/line_follower_ppo_env.py`](../envs/tasks/line_follower_ppo_env.py),

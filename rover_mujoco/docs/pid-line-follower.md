@@ -1,36 +1,106 @@
-# PID line-following bring-up
+# PID line-following baseline
 
-The baseline runs the CAD rover with MuJoCo velocity servos, camera-only steering,
-and a 10 Hz command loop; physics advances at the scene's 2 ms timestep.
-`envs/pid.py` contains the controller and centroid extraction, while
-`scripts/line_follower.py` handles simulation and evaluation.
+## What this is
 
-## Run
+This is the "no neural network" way to make the simulated rover follow a black line: a classic
+PID controller looks at a strip of pixels from the onboard camera, finds where the dark line is,
+and steers to keep it centered. It exists as a baseline — later, the reinforcement-learning line
+followers in this repo get compared against how well this simple controller does.
 
-From `rover_mujoco`, with the workspace environment installed:
+## Before you start
+
+You should already have the workspace set up (see [workspace-setup.md](workspace-setup.md)). All
+commands below are run from inside `rover_mujoco/`.
+
+## Step 1: Watch it drive
+
+The simplest way to see it working is to open the MuJoCo viewer with the camera diagnostic
+window turned on:
 
 ```sh
-# Watch the rover and the exact camera pixels used for steering.
 uv run scripts/line_follower.py --track figure8 --camera
-
-# Evaluate fresh initial offsets without opening a viewer.
-MUJOCO_GL=egl uv run scripts/line_follower.py --headless --track all --episodes 20 --seed 100
 ```
 
-`MUJOCO_GL=egl` selects offscreen rendering on supported Linux systems; headless
-execution still renders the onboard camera.
-Available tracks are `circle`, `figure8`, `oval`, and `s_curve`.
-The runner generates continuous black lines of width **0.0508 m (2 inches)**
-from shared waypoints, including the figure-eight crossing.
-These generated paths replace the old mesh-based baseline tracks.
-The runner constructs its scene in memory without writing the shared RL asset files.
+A MuJoCo window pops up showing the rover driving a figure-eight track, plus a second small
+window showing exactly what the onboard camera sees.
 
-The default output folder is `artifacts/pid/<timestamp>` and contains the exact
-controller configuration, JSON episode outcomes, CSV trajectories, initial camera
-overlays, and a trajectory comparison plot.
-Use a fresh `--output` directory for each experiment to preserve previous results.
+## Step 2: See exactly what the camera sees
 
-## Shared track assets
+That second window looks like this:
+
+![PID camera overlay](images/pid_circle_camera_overlay.png)
+
+The controller only ever looks at the bottom strip of one camera frame — everything above it is
+ignored. Red pixels are the dark line pixels it detected; green is the single column it computed
+as the line's center. The gray line down the middle is the image's true center — the controller's
+whole job is to steer until the green line lands on top of it.
+
+## Step 3: Run it headlessly and check the results
+
+For actually evaluating how good the controller is (not just watching it), run without a viewer.
+This is faster and works on machines with no display:
+
+```sh
+MUJOCO_GL=egl uv run scripts/line_follower.py --headless --track circle --episodes 1 --seed 0
+```
+
+`MUJOCO_GL=egl` tells MuJoCo to render off-screen instead of opening a window — the run still
+produces the same camera-overlay image and a results folder under `artifacts/pid/<timestamp>/`,
+it just doesn't show anything live.
+
+Every run saves a trajectory plot like this one:
+
+![PID circle trajectory](images/pid_circle_trajectory.png)
+
+The dashed black circle is the track's centerline; the solid blue line is the path the rover
+actually drove. The title reports what fraction of the track it completed. A good run hugs the
+dashed line closely and finishes near 100%; a controller that's not tuned well will drift wide on
+turns or lose the line entirely partway around.
+
+## How the controller works
+
+Two small pieces do all the work, both in `envs/pid.py`.
+
+First, turn one camera frame into a single number: how far left or right the line is from center,
+from -1 (line at the far left) to +1 (far right), or `None` if no line is visible at all.
+
+```python
+mask[top:] = np.all(image[top:] < threshold, axis=-1)
+center = (width - 1) / 2
+error = (float(np.arange(width) @ weights / weights.sum()) - center) / center
+```
+
+Second, turn that error into a steering correction. This is the actual PID formula: proportional
+(react to how wrong you are right now), integral (react to how wrong you've been over time), and
+derivative (react to how fast the error is changing) — added together and clamped so it can't spin
+the wheels arbitrarily fast.
+
+```python
+raw = self.kp * error + self.ki * self.integral + self.kd * derivative
+return -float(np.clip(raw, -self.limit, self.limit))
+```
+
+## Tuning it yourself
+
+The defaults (`--kp 2 --ki 0 --kd 0.1 --speed 3`) already pass every closed track. To see the
+effect of each term, try changing one at a time and re-running Step 1:
+
+- Higher `--kp` reacts more aggressively to being off-center, but too high starts to oscillate.
+- `--kd` damps that oscillation by reacting to how fast the error is changing.
+- `--ki` corrects a steady sideways bias over time; the default leaves it off (a "PD" controller).
+- `--speed` is the forward wheel speed in rad/s — faster is harder to control accurately.
+
+`--controller bang_bang` swaps in a simpler "turn hard left or hard right, no in-between"
+controller for comparison.
+
+---
+
+## Implementation details
+
+The sections below are reference material for extending or re-validating this baseline — not
+required reading to just run it.
+
+### Shared track assets
 
 `scripts/line_follower.py` builds its scene through `gen_track.py`'s `build_track_xml`
 and `envs/tracks.py`'s waypoint functions, both shared with the RL environments.
@@ -62,31 +132,25 @@ Both this runner and the current `LineFollowerPPO-v0` environment pass 0.0508 m
 `gen_track.py`'s default for standalone assets remains 0.03 m, but those narrower
 assets are not the track geometry used for the reported PPO comparisons.
 
-## Controller and measurements
+### Controller and measurement details
 
 The controller samples the bottom 15% of a 64×64 RGB image, thresholds dark pixels,
 and normalizes the horizontal centroid around the true pixel center.
 A missing line is represented by `None`, distinct from a centered line with zero error.
 Detections require at least six dark pixels, rejecting an isolated caster pixel that
 otherwise made a blank floor appear to contain a centered line.
-Red pixels in the diagnostic view are the detections; green marks the centroid.
 
-Defaults are `--kp 2 --ki 0 --kd 0.1 --speed 3`, where speed is the forward
-wheel-speed command in rad/s (about 0.10 m/s from the wheel radius).
 The PID uses elapsed seconds for both integral and derivative, suppresses derivative
 kick on initialization/reacquisition, and freezes integration when error drives further
 into saturation.
-The default is a **PD setting of the PID controller** because its integral gain
-is zero; use the integral term to investigate measured persistent bias.
 Steering is limited so both wheel commands remain within ±10 rad/s.
 For the CAD joint signs, forward motion is `[-speed, +speed]` and the same steering
 correction is added to both commands.
 
 The last steering command is held through brief camera dropouts; 0.5 seconds of
 consecutive missing detections stops the command and fails the episode.
-`--controller bang_bang` retains a simple comparison controller.
 
-## Camera assumptions
+### Camera assumptions
 
 The existing XML camera settles approximately 15.4 cm above the ground.
 For this PID experiment, the runner sets a **45-degree tilt from straight down**
@@ -105,7 +169,7 @@ inferred from the approximate physical measurements.
 it does not model the physical mount's movement when tilted.
 These runs establish a simulation baseline, not a calibrated hardware camera model.
 
-## Evaluation contract
+### Evaluation contract
 
 Each seed adds an initial lateral offset uniformly within ±1 cm and heading offset
 within ±5 degrees, then lets the chassis settle for one simulated second.
@@ -137,7 +201,7 @@ tape before the base reaches the 3 cm finish tolerance.
 Endpoint recognition remains unresolved, so the initial benchmark uses the
 closed circle, figure eight, and oval tracks.
 
-## Measured baseline (2026-09-09)
+### Measured baseline (2026-09-09)
 
 Validation used seeds 100–119, the defaults above, and 6 cm maximum base deviation.
 Results and raw trajectories are in `artifacts/pid/validation`; the no-steering control
@@ -160,7 +224,7 @@ These empirical results cover small initial perturbations under fixed simulation
 Seven regression tests, Ruff lint/format, and ty passed; the viewer and camera windows
 also passed a short smoke run under Xvfb.
 
-## Verification
+### Verification
 
 ```sh
 # Check control timing math, saturation, missing detections, crossing projection, and scene geometry.

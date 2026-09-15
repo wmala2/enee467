@@ -2,10 +2,10 @@
 This folder contains the higher-level control code for driving the STEM rovers. It builds on `ArUco_detector`, `YOLO_agent`, and `depth_anything_server` to provide a simple high-level API plus a set of runnable example scripts.
 
 ## Setup
-If you have already run `pip install -e .` from the repository root, all dependencies (including `pynput` for keyboard control) are already installed. Simply activate the conda environment:
+If you have already run `uv sync` from the repository root, all dependencies (including `pynput` for keyboard control) are already installed — run any example with `uv run`, e.g.:
 
 ```bash
-conda activate rover_high_level
+uv run rover_control/examples/simple_api_demo.py
 ```
 
 ## Simple API
@@ -57,6 +57,12 @@ finally:
 | [RL Line Follower](examples/rl_line_follower.py) | Run the qualified DR/BAM PPO policy, successfully demonstrated on the physical rover, with firmware encoder defaults and optional camera/observation recording; see the [Zero to Hero tutorial](<../rover_mujoco/docs/Deploying a Mini Claw Rover Policy _ Zero to Hero.md>) for the experiment and deployment steps. |
 | [DA3 Object Follower](examples/da3_object_movement.py) | Follows a named COCO object (default: person) in real time using GPU depth + PID control. |
 | [Rover Mission Dashboard](examples/rover_yolo_estimator.py) | Side-by-side live camera + depth view with YOLO overlays; press S to save a depth histogram. |
+
+Every one of these opens a viewer window like this one — this is [ArUco Tag Tracker](examples/aruco_tag_tracker.py)
+locked onto tag 1, 0.66 m away, printing its measured range (R), heading offset (Y), and
+reprojection error (E, how well the estimated pose actually matches the pixels — lower is better):
+
+![ArUco Tag Tracker viewer window](../images/aruco_tag_tracker.png)
 
 ---
 

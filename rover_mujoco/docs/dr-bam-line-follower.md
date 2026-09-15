@@ -1,20 +1,137 @@
 # DR and BAM line follower
 
-The training and evaluation scripts support three dynamics modes:
+## What this is
 
-- `--dynamics nominal`: the qualified velocity-servo baseline.
-- `--dynamics bam`: fixed BAM/DC motor parameters and the firmware speed envelope.
-- `--dynamics dr`: BAM with motor, contact, camera, noise, and command-delay
-  parameters sampled at every reset.
+Real motors are messier than the perfect velocity servos the nominal simulation uses — friction
+varies, voltage sags, cameras aren't mounted in exactly the same spot every time. This guide
+fine-tunes the nominal PPO line-follower checkpoint (from [the nominal bringup](ppo-line-follower.md))
+under a more realistic, randomized motor model (BAM) so the policy has already seen "imperfect
+physics" before it ever meets a real rover, then checks whether that harder training actually
+produced a policy that survives the jump to hardware.
 
-All three use the CAD rover, 64×64 camera, eleven sensor inputs, normalized
-forward/steering actions, and 10 Hz policy rate described in
-[the nominal bringup](ppo-line-follower.md).
-Completion still requires a full lap within the existing 3 cm finish tolerance,
-at most 6 cm chassis deviation, less than 0.5 seconds of continuous line loss,
-and at most 120 seconds of simulated time.
+Don't want to train it yourself? See [Download and run saved policies](policy-downloads.md) to
+grab the already-trained checkpoint instead.
 
-## Motor integration and parameter ranges
+## Step 1: Pick a dynamics mode
+
+The training and evaluation scripts support three levels of realism, from easiest to hardest:
+
+- `--dynamics nominal`: the qualified velocity-servo baseline, no motor imperfections.
+- `--dynamics bam`: fixed, realistic DC-motor parameters and the firmware's speed limits.
+- `--dynamics dr`: BAM plus randomized motor, contact, camera, noise, and command-delay
+  parameters, resampled every episode — this is "domain randomization" (DR): training against a
+  spread of slightly-wrong physics so the policy doesn't overfit to one exact simulation.
+
+All three still use the same CAD rover, 64×64 camera, eleven sensor inputs, normalized
+forward/steering actions, and 10 Hz policy rate as the nominal bringup, and completion still means
+a full lap within 3 cm, at most 6 cm deviation, under 0.5 s of continuous line loss, in under 120
+simulated seconds.
+
+## Step 2: Fine-tune under harder dynamics
+
+Commands below run from `rover_mujoco` and use EGL for headless rendering. This starts from an
+already-trained nominal checkpoint and keeps training it, but now under randomized BAM dynamics:
+
+```bash
+# Fine-tune a qualified nominal checkpoint under randomized BAM dynamics.
+MUJOCO_GL=egl uv run scripts/train_ppo.py \
+  --resume runs/ppo-continued-seed0/best_model.zip \
+  --dynamics dr --tracks circle figure8 oval \
+  --timesteps 100000 --eval-episodes 5 --test-episodes 20 \
+  --wandb-group dr-bam-bringup --output runs/ppo-dr-new
+```
+
+## Step 3: Evaluate the result
+
+Run the fine-tuned policy back through both a randomized (DR) and a fixed (BAM) evaluation, so you
+can see how much of the improvement is real versus how much is just luck on one set of parameters:
+
+```bash
+# Evaluate fresh randomized episodes with the saved training distribution.
+MUJOCO_GL=egl uv run scripts/evaluate_ppo.py runs/ppo-dr-new/best_model.zip \
+  --dynamics dr --tracks circle figure8 oval --episodes 50 --seed 40000 \
+  --output runs/ppo-dr-new/evaluation-dr
+
+# Evaluate the same weights under fixed BAM parameters.
+MUJOCO_GL=egl uv run scripts/evaluate_ppo.py runs/ppo-dr-new/best_model.zip \
+  --dynamics bam --tracks circle figure8 oval --episodes 20 --seed 40000 \
+  --output runs/ppo-dr-new/evaluation-bam
+```
+
+Evaluation automatically recovers dynamics, reward mode, selected tracks, and resolved DR bounds
+from the checkpoint's run configuration unless overridden. It writes per-episode CSV trajectories,
+`evaluation.json`, a trajectory plot, and `evaluation_metadata.json`; `--video` adds camera footage
+and `--viewer` runs the MuJoCo viewer in real time. To tune the randomization ranges themselves,
+supply `--dr-ranges ranges.json` with a subset of parameter bounds, e.g.
+`{"command_delay_steps": [0, 0], "kp_scale": [0.9, 1.1]}`.
+
+## Step 4: Read the results
+
+Before fine-tuning, the nominal policy already handled the circle and oval tracks but completely
+failed the figure eight (0/5) — a real transfer gap, since it had qualified fine under nominal
+physics. After 100,000 additional steps of DR fine-tuning, it clears all three tracks, including
+figure eight, 5/5.
+
+![DR training and validation curves](images/Resources/ppo_dr_training.png)
+
+Same idea as the nominal training curves: reward climbing and settling means the policy is
+learning something and not just thrashing. Watch the validation line in particular — it's scored
+against the harder, randomized dynamics, so a validation curve that keeps climbing means the
+policy is actually getting more robust, not just memorizing one easy case.
+
+![Completion and tracking before and after DR fine-tuning](images/Resources/ppo_dr_comparison.png)
+
+This is the direct before/after: the same policy, same tracks, before DR fine-tuning versus after.
+Higher completion and tighter tracking on the right side is the improvement DR training bought you.
+(The pre-training figure-eight traces cut off early in this plot — that's the policy failing
+partway through the lap, not genuinely tighter tracking.)
+
+![All 150 fresh DR trajectories](images/Resources/ppo_dr_trajectories.png)
+
+Every one of the 150 independent evaluation episodes plotted together. A tight bundle of lines
+hugging the track center means the policy is consistent across many random dynamics draws, not
+just lucky on a couple of them.
+
+The fine-tuned policy went on to run successfully on the physical rover — see Step 6 below and
+the [Zero to Hero tutorial](<Deploying a Mini Claw Rover Policy _ Zero to Hero.md#8-deploy-the-selected-policy-on-the-physical-rover>)
+for that hardware stage in full.
+
+## Step 5: Check it's actually safe to deploy
+
+Before trusting any policy on the physical rover, run this offline gate. It re-checks the exact
+model file (by hash) against its saved evaluation results and requires at least 90% completion on
+every original track for both the DR and BAM evaluations:
+
+```bash
+# Require at least 90% completion on every original track for both RL variants.
+uv run python -m rover_control.ppo_deployment \
+  rover_mujoco/runs/dr-bam-bringup/ppo-dr-seed0/best_model.zip \
+  --nominal-model rover_mujoco/runs/ppo-continued-seed0/best_model.zip \
+  --nominal-evaluation rover_mujoco/runs/dr-bam-bringup/evaluation-nominal-20 \
+  --bam-evaluation rover_mujoco/runs/dr-bam-bringup/evaluation-bam-20 \
+  --dr-evaluation rover_mujoco/runs/dr-bam-bringup/evaluation-dr-50 \
+  --output rover_mujoco/runs/dr-bam-bringup/deployment.json
+```
+
+If that passes, run the same checkpoint on the real rover from the workspace root with:
+
+```bash
+uv run python -m rover_control.examples.rl_line_follower MODEL MANIFEST
+```
+
+That entry point defaults to the firmware's 680 encoder counts per wheel revolution; use
+`--wheel-radius-m`, `--camera-addr`, `--rover-addr`, `--counts-per-revolution`, and
+`--encoder-signs` to match your specific rover, and `--record DIRECTORY` to save the camera
+overlay and observation CSV from the run.
+
+---
+
+## Implementation details
+
+The sections below are reference material — full numeric results, motor-model assumptions, and
+verification records — not required reading to just run the pipeline above.
+
+### Motor integration and parameter ranges
 
 `envs/line_dynamics.py` defines the resolved parameter ranges stored in every DR
 run's `config.json` and W&B configuration.
@@ -82,47 +199,7 @@ default.
 The envelope remains fixed pending measurements of the motor dead zone and
 wheel radius.
 
-## Training and independent evaluation
-
-Commands below run from `rover_mujoco` and use EGL for headless rendering.
-The original three tracks are explicit so adding another registered track does
-not silently change the experiment.
-
-```bash
-# Fine-tune a qualified nominal checkpoint under randomized BAM dynamics.
-MUJOCO_GL=egl uv run scripts/train_ppo.py \
-  --resume runs/ppo-continued-seed0/best_model.zip \
-  --dynamics dr --tracks circle figure8 oval \
-  --timesteps 100000 --eval-episodes 5 --test-episodes 20 \
-  --wandb-group dr-bam-bringup --output runs/ppo-dr-new
-
-# Evaluate fresh randomized episodes with the saved training distribution.
-MUJOCO_GL=egl uv run scripts/evaluate_ppo.py runs/ppo-dr-new/best_model.zip \
-  --dynamics dr --tracks circle figure8 oval --episodes 50 --seed 40000 \
-  --output runs/ppo-dr-new/evaluation-dr
-
-# Evaluate the same weights under fixed BAM parameters.
-MUJOCO_GL=egl uv run scripts/evaluate_ppo.py runs/ppo-dr-new/best_model.zip \
-  --dynamics bam --tracks circle figure8 oval --episodes 20 --seed 40000 \
-  --output runs/ppo-dr-new/evaluation-bam
-```
-
-Evaluation automatically recovers dynamics, reward mode, selected tracks, and
-resolved DR bounds from the checkpoint's run configuration unless overridden.
-It writes per-episode CSV trajectories, `evaluation.json`, a trajectory plot,
-and `evaluation_metadata.json` containing the checkpoint SHA-256 and test settings;
-`--video` adds camera footage and `--viewer` runs the MuJoCo viewer in real time.
-W&B training logs include optimization curves, per-track completion and deviation,
-the resolved hyperparameters, and the selected model artifact.
-
-To tune ranges, supply `--dr-ranges ranges.json` with a subset of parameter bounds,
-for example `{"command_delay_steps": [0, 0], "kp_scale": [0.9, 1.1]}`.
-The run saves the merged ranges, preserving its evaluation distribution if the
-input file changes later.
-Compare candidates on fixed validation seeds and reserve fresh seeds for final
-testing; any test set used to guide training becomes part of selection.
-
-## First DR training result
+### First DR training result, full numbers
 
 The experiment is saved under `runs/dr-bam-bringup`, with a frozen source and
 asset snapshot and SHA-256 manifest for the training run.
@@ -153,8 +230,6 @@ The [W&B training run](https://wandb.ai/cursedrock17-university-of-maryland/rove
 contains the corresponding hyperparameters, learning curves, test summaries,
 and model artifact.
 
-![DR training and validation curves](images/Resources/ppo_dr_training.png)
-
 The final tests below use seeds 40000 onward on the original tracks and
 50000–50019 on Goomba, with deterministic policy actions and no further selection.
 
@@ -176,14 +251,7 @@ the DR policy also passes the held-out Goomba test.
 DR produces longer laps under harder dynamics, with lower mean figure-eight
 deviation but no uniform improvement across tracks.
 These measurements cover one training seed and a provisional simulation
-distribution; the physical demonstration is described below.
-
-![Completion and tracking before and after DR fine-tuning](images/Resources/ppo_dr_comparison.png)
-
-The pre-training figure-eight traces terminate early, so their lower mean error
-is not evidence of better tracking over a complete lap.
-
-![All 150 fresh DR trajectories](images/Resources/ppo_dr_trajectories.png)
+distribution.
 
 The selected model is `runs/dr-bam-bringup/ppo-dr-seed0/best_model.zip`, SHA-256
 `06f837b4cfafbd756c62ae0f97875e6832431da1616b3c2006a64d5fbb2d01bf`.
@@ -194,7 +262,7 @@ The [W&B qualification run](https://wandb.ai/cursedrock17-university-of-maryland
 contains the final comparison table, trajectory plots, checkpoint, configuration,
 and simulation evidence as the `rover-dr-bam-qualified-seed0` model artifact.
 
-## Preparing physical rollout
+### Preparing physical rollout
 
 `rover_control.rl_rover` takes a local checkpoint and deployment manifest;
 it does not download the old image-based policy.
@@ -206,22 +274,8 @@ revolution, and explicitly supplied encoder signs.
 Camera frames are resized to 64×64 and converted from BGR to RGB before the same
 feature extraction used in simulation.
 
-From the workspace root, the following offline command checks the exact model
-hashes and per-episode results before writing a manifest:
-
-```bash
-# Require at least 90% completion on every original track for both RL variants.
-uv run python -m rover_control.ppo_deployment \
-  rover_mujoco/runs/dr-bam-bringup/ppo-dr-seed0/best_model.zip \
-  --nominal-model rover_mujoco/runs/ppo-continued-seed0/best_model.zip \
-  --nominal-evaluation rover_mujoco/runs/dr-bam-bringup/evaluation-nominal-20 \
-  --bam-evaluation rover_mujoco/runs/dr-bam-bringup/evaluation-bam-20 \
-  --dr-evaluation rover_mujoco/runs/dr-bam-bringup/evaluation-dr-50 \
-  --output rover_mujoco/runs/dr-bam-bringup/deployment.json
-```
-
-The gate checks geometric completion over at least 20 distinct seeds per original
-track; pooled rewards or reported aggregate rates do not satisfy it.
+The gate command in Step 5 checks geometric completion over at least 20 distinct
+seeds per original track; pooled rewards or reported aggregate rates do not satisfy it.
 It checks the nominal reference under nominal physics and the exact deployment
 checkpoint in both BAM modes.
 Goomba is reported separately from this three-track gate.
@@ -230,12 +284,6 @@ The manifest is local evidence, not a cryptographic attestation of hardware safe
 The selected policy subsequently ran successfully on the physical rover, as
 reported by the experimenter; the [Zero to Hero tutorial](<Deploying a Mini Claw Rover Policy _ Zero to Hero.md#8-deploy-the-selected-policy-on-the-physical-rover>)
 records the hardware stage and its differences from simulation.
-The entry point is `uv run python -m rover_control.examples.rl_line_follower MODEL MANIFEST`.
-It defaults to the firmware profile's 680 encoder counts per wheel revolution
-and signs `(1, 1)`, with `--counts-per-revolution` and `--encoder-signs` overrides
-for a different profile or calibration.
-Use `--wheel-radius-m`, `--camera-addr`, and `--rover-addr` for the physical setup,
-and `--record DIRECTORY` to save the camera overlay and observation CSV.
 
 The current runner polls the camera at 12.5 Hz, sends zero during sensor startup,
 and stops on sensor data older than 1.0 s or 15 consecutive missing-line
@@ -246,7 +294,7 @@ line-loss limits after physical bringup; simulation still uses 0.5 s of line los
 The successful physical demonstration does not establish a hardware lap-success
 rate or make the provisional motor parameters a measured fit.
 
-## Verification
+### Verification
 
 At DR bringup, the full simulation suite passed 42 tests plus a targeted
 runtime-parity test, covering nominal behavior, seeded DR replay after intervening
@@ -262,7 +310,7 @@ The new modules, runner, environment, training/evaluation scripts, and tests
 passed scoped `ty` checks.
 These counts record the bringup checks; rerun the commands for the current checkout.
 
-## Downloading the saved policy
+### Downloading the saved policy
 
 See [Download and run saved policies](policy-downloads.md) for the Hugging Face
 checkpoint and configuration downloads, a 3D viewer command, and optional Python

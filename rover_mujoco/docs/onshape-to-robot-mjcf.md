@@ -1,20 +1,24 @@
 # CAD → MJCF with onshape-to-robot
 
-This is the intended workflow for getting a new robot (or prop) from OnShape into
-`assets/robots/<name>/`: export **straight to MJCF**, not through URDF. `onshape-to-robot`
-has a native MuJoCo exporter, and it handles things we otherwise had to patch by hand when we
-bootstrapped the rover from a pre-existing URDF, like free-floating bases, actuators, and
-visual/collision splitting.
+## What this is
 
-Sections 1 to 6 are the path that works. Section 7 collects every failure we actually hit,
-indexed by the error message you see, because none of them say what is really wrong.
+If you design a new robot or prop in OnShape (the CAD tool), it doesn't start out usable in
+MuJoCo — you have to export its shape, joints, and motors into MJCF, the XML format MuJoCo
+reads. This guide is that export pipeline: a tool called `onshape-to-robot` pulls the design
+straight out of OnShape and writes MJCF for you, so you don't have to build the file by hand.
+
+Sections 1 to 6 below are the steps that get you from a finished OnShape assembly to a working
+`assets/robots/<name>/` folder. Section 7 is a troubleshooting reference, indexed by the exact
+error message you'll see — you don't need to read it up front, just come back to it if
+something breaks.
 
 ## 1. Install
 
 `onshape-to-robot` is already a project dependency (see `pyproject.toml`), so a plain
-`uv sync` (see `docs/workspace-setup.md`) is all you need. Nothing extra to install here.
+`uv sync` (see [workspace-setup.md](workspace-setup.md)) is all you need. Nothing extra to install here.
 
-You'll also need an OnShape API key and secret. Sign in, open **My account** from the
+The exporter needs to prove to OnShape's servers that it's allowed to read your CAD file, and it
+does that with an API key instead of your normal password. Sign in, open **My account** from the
 top-right menu, pick **Developer** in the left sidebar, then the **API keys** tab, name the key
 and grant it permissions:
 
@@ -55,11 +59,11 @@ elements and check the one you want is not empty:
 ```shell
 curl -s -u "$ONSHAPE_ACCESS_KEY:$ONSHAPE_SECRET_KEY" -H "Accept: application/json" \
   "https://cad.onshape.com/api/documents/d/<did>/w/<wid>/elements" \
-| python3 -c "import json,sys; [print(e['elementType'], e['id'], e['name']) for e in json.load(sys.stdin)]"
+| uv run python -c "import json,sys; [print(e['elementType'], e['id'], e['name']) for e in json.load(sys.stdin)]"
 
 curl -s -u "$ONSHAPE_ACCESS_KEY:$ONSHAPE_SECRET_KEY" -H "Accept: application/json" \
   "https://cad.onshape.com/api/assemblies/d/<did>/w/<wid>/e/<assembly eid>" \
-| python3 -c "import json,sys; print(len(json.load(sys.stdin)['rootAssembly']['instances']), 'instances')"
+| uv run python -c "import json,sys; print(len(json.load(sys.stdin)['rootAssembly']['instances']), 'instances')"
 ```
 
 ## 3. Props with no joints: skip the exporter
@@ -85,6 +89,10 @@ thick is degenerate under MuJoCo's volume-based inertia, and `contype="0" conaff
 the geom, because paint on the floor is not something to drive into.
 
 ## 4. config.json
+
+Everything about how the export should behave — which assembly to pull, which joints get
+motors, what to name the robot — lives in one file, `config.json`, that you write by hand
+before running the exporter:
 
 ```jsonc
 {
@@ -155,6 +163,10 @@ Read that warning rather than skipping past it. See section 7.
 
 ## 6. Quick validation checklist
 
+A successful export doesn't guarantee a *correct* one — it's easy to get a robot that loads
+fine but is the wrong size or has a joint pointing the wrong way. Load it in Python and check
+the basics before you trust it:
+
 ```python
 import mujoco
 
@@ -174,7 +186,7 @@ Also check scale. OnShape units, if the assembly wasn't authored in metres, can 
 robot a few orders of magnitude off, which shows up as either a robot floating away instantly
 or barely moving under normal-looking actuator commands.
 
-## 7. Troubleshooting
+## 7. Troubleshooting (reference — read only if something breaks)
 
 Every entry here is something we hit. They are grouped by the message you actually see,
 because in each case the message names something other than the real cause.

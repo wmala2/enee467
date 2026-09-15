@@ -1,3 +1,10 @@
+"""Proof of concept: an LLM watches the camera and decides how the rover should drive.
+
+Instead of a control loop built from geometry and PID math, this asks a vision LLM one simple
+question every frame -- "do you see the target, and is it left, center, or right?" -- and turns
+that plain-English answer straight into a wheel-speed command.
+"""
+
 # External Libraries
 import json
 import os
@@ -9,6 +16,8 @@ import ollama
 
 
 class LLMDriver:
+    """Uses a vision LLM's left/center/right judgment to steer the rover toward a target."""
+
     # Speeds (m/s) used when the LLM decides to drive - well under the rover's 0.35 max
     CRUISE_SPEED = 0.20
     SLOW_SPEED = 0.10
@@ -40,9 +49,7 @@ class LLMDriver:
             ollama.pull(self.model)
 
     def ask_llm_where_target_is(self, frame):
-        """
-        Show the LLM one camera frame and get back {"target_seen": ..., "position": ...}.
-        """
+        """Shows the LLM one frame and returns {"target_seen": ..., "position": ...}."""
         # Hand ollama the frame as raw JPEG bytes
         ok, buffer = cv2.imencode(".jpg", frame)
         if not ok:
@@ -70,10 +77,7 @@ class LLMDriver:
         return json.loads(response.message.content)
 
     def get_velocity_message(self, frame):
-        """
-        Turn one camera frame into the same velocity JSON we always send to the rover:
-        {"command": "m", "left_mps": ..., "right_mps": ...}
-        """
+        """Turns one frame into the usual rover velocity JSON: {"command": "m", ...}."""
         decision = self.ask_llm_where_target_is(frame)
 
         # No target in sight means the rover should hold still

@@ -1,4 +1,10 @@
-"""Run a qualified local PPO checkpoint with measured encoder calibration."""
+"""Runs a PPO policy trained in rover_mujoco on the real, physical rover.
+
+The policy has only ever seen simulated camera frames and simulated encoder counts, so this
+script's job is to feed it the same shape of observations from the real hardware, and to convert
+real encoder counts into the units the policy expects using this specific rover's measured
+calibration (counts per wheel revolution, which direction counts up, and the actual wheel size).
+"""
 
 import argparse
 
@@ -8,6 +14,8 @@ from rover_control.rover import Rover
 
 
 def main():
+    # Every flag below has a sensible default already baked into the firmware/rover classes;
+    # you only need to override one if your rover was built or calibrated differently.
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("model")
     parser.add_argument("manifest")

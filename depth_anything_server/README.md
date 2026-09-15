@@ -22,12 +22,12 @@ Once the server machine is set up (see Requirements above), two terminals are al
 
 **Terminal 1 — desktop (GPU machine):**
 ```bash
-python depth_anything_server/depth_server.py
+uv run --extra cu121 depth_anything_server/depth_server.py
 ```
 
 **Terminal 2 — any laptop on the same network:**
 ```bash
-python depth_anything_server/depth_client.py --server http://<DESKTOP_IP>:5000
+uv run depth_anything_server/depth_client.py --server http://<DESKTOP_IP>:5000
 ```
 
 The client sends one frame and opens a side-by-side window showing the original image and its depth map.

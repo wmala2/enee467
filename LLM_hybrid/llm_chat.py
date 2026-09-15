@@ -1,8 +1,16 @@
+"""Lets you type prompts to a local LLM and read its replies in the terminal.
+
+Ollama runs the model on your own machine -- no API key, no network call, no per-token cost --
+and this class just wraps its chat API so the conversation is remembered across turns.
+"""
+
 # External Libraries
 import ollama
 
 
 class LLMChat:
+    """A terminal chat session with one local Ollama model, with memory across turns."""
+
     def __init__(self, model="llama3.2:3b", keep_alive="10m"):
         # The ollama model tag we want to talk to (llama3.2:3b is a good ~3B default)
         self.model = model
@@ -24,9 +32,7 @@ class LLMChat:
             ollama.pull(self.model)
 
     def prompt(self, text):
-        """
-        Send one prompt to the model and return its reply as a string.
-        """
+        """Sends one prompt to the model and returns its reply as a string."""
         # Add the user's words to the running conversation
         self.messages.append({"role": "user", "content": text})
 

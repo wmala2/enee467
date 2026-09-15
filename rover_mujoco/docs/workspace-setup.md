@@ -1,7 +1,10 @@
 # Workspace setup
 
-Getting this repo running, verifying MuJoCo actually works on your machine, and extending
-the dependency set with whatever else you end up needing.
+## What this is
+
+This is the checklist for getting `rover_mujoco` (the simulator) running on your machine from
+nothing: installing the tools, syncing the shared environment, and confirming MuJoCo can actually
+open a window before you try to debug anything more interesting.
 
 ## 1. Prerequisites
 

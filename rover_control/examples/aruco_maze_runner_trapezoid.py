@@ -1,3 +1,12 @@
+"""Drives a list of ArUco tags in order, using a planned speed curve instead of a live PID.
+
+This is the same maze goal as aruco_maze_runner.py, but a different control idea: instead of
+reacting to every (laggy) camera frame while driving, this rover looks once, plans a whole speed
+curve to cover the measured distance, and only drives -- taking no pictures at all until it stops
+to check its work. That makes it immune to motion blur, at the cost of not being able to correct
+mid-drive if something's off.
+"""
+
 # External Libraries
 import time
 from typing import ClassVar
@@ -72,6 +81,7 @@ class ArucoTrapezoidRunner(Rover):
         self._look_stats = {}
 
     def _enc(self):
+        """Wheel encoder counts, formatted for the CSV logger; empty if nothing's arrived yet."""
         # Return encoder columns as a dict for log() calls; empty dict if no reply yet
         data = self.poller.latest()
         if data is None:
@@ -80,6 +90,7 @@ class ArucoTrapezoidRunner(Rover):
         return {"enc_left": l, "enc_right": r, "enc_left_delta": dl, "enc_right_delta": dr}
 
     def _lidar(self):
+        """Lidar distance readings, formatted for the CSV logger; empty if nothing's arrived yet."""
         # Return lidar distance columns for log() calls; empty dict if no reply yet
         data = self.poller.lidar_latest()
         if data is None:
@@ -88,6 +99,7 @@ class ArucoTrapezoidRunner(Rover):
         return {"lidar_left_mm": l, "lidar_center_mm": c, "lidar_right_mm": r}
 
     def _show(self, frame):
+        """Pops up the camera preview window and raises to quit if the user presses Q."""
         # Draw the camera frame and quit the whole run if the user presses Q
         if frame is not None:
             cv2.imshow("Aruco Trapezoid", frame)
@@ -95,9 +107,11 @@ class ArucoTrapezoidRunner(Rover):
             raise KeyboardInterrupt
 
     def turn_in_place(self, direction, degrees, target_id=None):
-        # Spin the rover on the spot by a number of degrees (open-loop, timed at the stall-floor
-        # speed)
-        # direction: +1 turns toward the tag's right (+X), -1 turns left
+        """Spins in place by roughly `degrees`, timed rather than measured (open-loop)."""
+        # We don't have a gyroscope, so we can't measure the turn as it happens -- instead we
+        # compute how long a turn at our slowest safe speed should take to cover that angle, then
+        # just run the motors for that long. direction: +1 turns toward the tag's right (+X), -1
+        # turns left.
         omega = 2.0 * self.MIN_VELOCITY / self.wheel_separation
         spin_time = np.radians(degrees) / omega
         spin = conversions.convert_linear_vel_to_angular_vel(
@@ -133,10 +147,11 @@ class ArucoTrapezoidRunner(Rover):
             )
 
     def look(self, target_id):
-        # Stop-and-stare measurement, hardened: trust a reading only when several fresh frames
-        # AGREE.
-        # next_frame() only returns frames captured AFTER `since`, so the stale, laggy frames from
-        # while we were moving are skipped deterministically - no frame-count guessing.
+        """Stops and samples fresh frames until it gets a trustworthy tag reading, or gives up."""
+        # A single frame could be a fluke, so we sample several and only trust the result if
+        # enough of them saw the tag AND agree with each other. next_frame() only returns frames
+        # captured AFTER `since`, so the stale, laggy frames from while we were moving are
+        # skipped deterministically - no frame-count guessing.
         total_sampled = total_with_tag = 0
 
         for _ in range(self.MAX_LOOK_TRIES):
@@ -174,6 +189,7 @@ class ArucoTrapezoidRunner(Rover):
         return None
 
     def approach_tag(self, target_id):
+        """Alternates look()/turn_in_place() until centered, then returns the tag's distance."""
         # Turn-look-turn until the tag is centered on a CONFIRMED reading, then return its distance.
         # Every decision is made while stopped, so the camera lag can't trick us into over-rotating.
         while True:
@@ -228,8 +244,11 @@ class ArucoTrapezoidRunner(Rover):
             return distance_m
 
     def drive_straight(self, distance_m, target_id=None):
-        # Play back a trapezoidal speed curve over time to cover distance_m, both wheels equal
-        # (straight)
+        """Drives straight for `distance_m` on a planned speed curve, without using the camera."""
+        # A "trapezoidal" speed curve looks like a trapezoid if you plot speed vs. time: ramp up,
+        # cruise at top speed, ramp down -- exactly like a car accelerating, cruising, then
+        # braking to a stop. We work out that whole curve's timing up front, then just play it
+        # back; both wheels get the same speed since we're driving straight.
         v_min = self.MIN_VELOCITY  # motors stall below this, so the ramps start/end here, not at 0
         v_cruise = self.CRUISE_VELOCITY
         a = self.ACCEL
@@ -285,6 +304,7 @@ class ArucoTrapezoidRunner(Rover):
         self.stop()
 
     def reach_tag(self, target_id):
+        """Centers, drives the planned distance, then re-checks and corrects if it's off."""
         # Center, drive, then VERIFY we arrived. We drive open-loop (no encoders), so one trapezoid
         # can
         # under/overshoot - take fresh captures afterward and re-drive the re-measured gap if we
@@ -356,6 +376,7 @@ class ArucoTrapezoidRunner(Rover):
         return False  # ran out of tries without confirming
 
     def update(self):
+        """The main loop: for each tag in order, center on it, drive to it, then verify."""
         print(
             f"Trapezoidal maze run over tags {self.MARKER_ID_LIST} - press Q in the window or "
             f"Ctrl-C to quit"

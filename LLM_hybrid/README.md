@@ -1,7 +1,13 @@
 # LLM Hybrid
-This folder connects the rover to Large Language Models running locally through [Ollama](https://docs.ollama.com/api/introduction). Instead of a purpose-built network like YOLO, these examples use general-purpose models that can answer open-ended questions about what the camera sees — and even decide how the rover should drive.
+
+## What this is
+
+This folder connects the rover to Large Language Models running locally through [Ollama](https://docs.ollama.com/api/introduction). Instead of a purpose-built network like YOLO that only recognizes a fixed list of trained classes, these examples use general-purpose models that can answer open-ended questions about what the camera sees — and even decide how the rover should drive.
 
 ## Setup
+
+Ollama is the local server that actually runs the model; the Python code below just talks to it.
+
 1) Install the Ollama server (one time). The recommended method is the official one-line installer, which always fetches the latest release:
 ```bash
 curl -fsSL https://ollama.com/install.sh | sh
@@ -20,7 +26,7 @@ ollama serve                        # if installed via the official installer
 ~/.local/ollama/bin/ollama serve
 ```
 
-3) The Python client is installed with the main project (`pip install -e .`). The classes below download their models automatically on first use.
+3) The Python client is installed with the main project (`uv sync` from the repository root). The classes below download their models automatically on first use.
 
 ## Example Executables
 
@@ -29,6 +35,16 @@ ollama serve                        # if installed via the official installer
 | [LLM Chat](llm_chat.py) | Lets you type prompts into a local llama3.2:3b model and read its answers, with conversation memory. |
 | [Object Identifier](object_identifier.py) | Scans one camera image and returns a structured JSON response naming the main object in frame, like a YOLO detection. |
 | [LLM Driver](llm_driver.py) | Proof of concept where the LLM watches the camera stream and outputs the rover's velocity JSON message, so the LLM drives the rover. |
+
+`object_identifier.py` prints one timed line per scan, for example (illustrative, not a captured
+real run):
+
+```
+(6.8s) {"object": "water bottle"}
+```
+
+<!-- TODO: screenshot needed -- a terminal session running llm_chat.py or object_identifier.py
+     against a live camera frame, once Ollama and a model are available to capture one. -->
 
 ## Choosing a Model
 The vision classes default to **moondream** (1.8B), because it is the only vision model that answers in roughly 5–10 seconds per frame on a laptop CPU (measured ~10–13 s on a power-throttled laptop; faster on wall power). The larger **qwen2.5vl:3b** gives noticeably better answers ("water bottle" instead of "bottle") but takes about 2 minutes per new frame on CPU — fine for a one-off photo, not for a control loop. If you have a GPU, pass `model="qwen2.5vl:3b"` to either class and enjoy both speed and accuracy.

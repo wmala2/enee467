@@ -1,3 +1,9 @@
+"""Runs YOLOv8n object detection on JPEG stills polled from the rover's ESP32 camera.
+
+Same idea as the local-camera example, but the frames come over WiFi from the rover instead of a
+laptop webcam, so a bad or slow frame shouldn't be allowed to crash the loop.
+"""
+
 # External Libraries
 from pathlib import Path
 
@@ -19,32 +25,34 @@ TARGET_FPS = 5.0
 
 def main():
     # Create the detector once, outside the main loop (imgsz=960 finds smaller objects, ~9 Hz on
-    # CPU)
+    # CPU).
     extractor = YOLOExtractor(model_path=MODEL_PATH, imgsz=640, verbose=True)
 
     print("YOLOv8n ESP32 camera demo - press Q in the window to quit")
     while True:
-        # Grab one JPEG still from the ESP32 camera, just like the ArUco tracker does
+        # Grab one JPEG still from the ESP32 camera, just like the ArUco tracker does. A single
+        # dropped or corrupted frame over WiFi shouldn't end the whole demo, so we catch it,
+        # print what went wrong, and just try again next loop.
         try:
             frame = extractor.get_frame_from_http(HTTP_ADDR)
         except Exception as error:  # noqa: BLE001 -- one bad frame should not end the demo loop
             print(f"Camera error: {error}")
             continue
 
-        # Run object detection on the frame
+        # Run object detection on the frame.
         annotated, detections = extractor.process(frame)
 
-        # Print what the network found this frame
+        # Print what the network found this frame.
         for detection in detections:
             print(f"{detection['name']} ({detection['confidence']:.2f}) at {detection['center']}")
 
-        # Show the annotated image with boxes and the frame rate
+        # Show the annotated image with boxes and the frame rate.
         if annotated is not None:
             cv2.imshow("YOLOv8n ESP32", annotated)
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
 
-        # Sleep only the leftover time so the loop holds the target rate
+        # Sleep only the leftover time so the loop holds the target rate.
         extractor.sleep_to_fps(TARGET_FPS)
 
     cv2.destroyAllWindows()

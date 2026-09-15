@@ -38,11 +38,24 @@ cd ~/Documents/matrix_lab_rover_above
 code .
 ```
 
-From the project root, sync the environment. Pick the extra that matches your machine. To do this we need to open a terminal. If you're in VSCode either type `Ctrl + "`"` (Control plus Backtick) or go to `View` > `Terminal`.
+**Reading the docs:** every `.md` file in this repo links to the others by relative path, and
+VSCode understands those links directly — no need to open GitHub in a browser tab. `Ctrl+Click`
+(`Cmd+Click` on macOS) any link to jump straight to that file. To read a doc rendered instead of
+as raw text, open **Open Preview** (`Ctrl+Shift+V`, or the preview icon in the top-right of the
+editor) — clicking a link inside the preview opens that file's preview too, so you can hop from
+doc to doc without ever leaving the rendered view.
+
+From the project root, sync the environment. To do this we need to open a terminal. If you're in VSCode either type `Ctrl + "`"` (Control plus Backtick) or go to `View` > `Terminal`.
 
 ```bash
 uv sync --extra cpu     # no NVIDIA GPU (saves ~6 GB)
 ```
+
+If you have an NVIDIA GPU, follow [docs/gpu-setup.md](docs/gpu-setup.md) instead of the command
+above — it walks through checking your driver's CUDA version with `nvidia-smi` and picking the
+torch build that actually matches your hardware, rather than assuming one CUDA version works on
+every machine. (The repo's built-in `cu121` extra is the quick first thing that doc has you try,
+since it already works out of the box on most NVIDIA drivers.)
 
 This reads `pyproject.toml`/`uv.lock` and builds a single `.venv/` on Python 3.12 containing every
 package in the repo. It is a [uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/):
@@ -51,12 +64,19 @@ the high-level folders (`ArUco_detector`, `YOLO_agent`, `LLM_hybrid`, `depth_any
 that one environment — no `PYTHONPATH`, no second env to activate, and a policy trained in sim is
 importable from the real-rover code without leaving the venv.
 
-Run anything in the repo through `uv run`, which uses that environment automatically:
-    
+`uv run` re-resolves `--extra` on every single invocation — it does **not** remember whichever
+extra you last synced with. Running `uv run some_script.py` with no `--extra` flag silently
+reinstalls the CPU/no-extra build of torch, even after a GPU machine has already synced `cu121`, so
+GPU-dependent scripts need `--extra cu121` repeated on the command line every time. For instance, the
+easiest way to see if your repository is setup, is to run the top [rover_mujoco example](rover_mujoco/)
+
 ```bash
-uv run rover_control/examples/aruco_pose_movement.py
 uv run rover_mujoco/scripts/teleop_rover.py
 ```
+
+This should spit out a MuJoCo window with a CAD model of the your rover:
+
+![Rover MuJoCo Teleop Control](images/rover_mujoco_teleop_control.png)
 
 Before committing, lint, format, and type-check everything in one pass:
 ```bash

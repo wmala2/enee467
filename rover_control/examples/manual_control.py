@@ -1,3 +1,9 @@
+"""Drives the rover live from your keyboard: WASD/arrow keys to move, +/- to change speed.
+
+Instead of reading a sensor and deciding what to do (like the ArUco examples), this rover just
+turns whichever keys are currently held down into wheel speeds, every tick, forever.
+"""
+
 # External Libraries
 from pynput import keyboard as kb
 
@@ -7,20 +13,25 @@ from rover_control.rover import Rover
 
 
 class ManualRover(Rover):
+    """A rover whose wheel speeds come directly from whatever keys you're holding down."""
+
     def __init__(self):
         super().__init__()
         # Track which keyboard keys are currently held down
         self.pressed_keys = set()
 
     def _on_press(self, key):
+        # pynput calls this the instant any key goes down; just remember it's held.
         self.pressed_keys.add(key)
 
     def _on_release(self, key):
+        # And this the instant a key comes back up; Esc additionally stops the whole listener.
         self.pressed_keys.discard(key)
         if key == kb.Key.esc:
             return False  # stops the listener
 
     def compute_wheel_speeds(self):
+        """Reads whichever keys are currently held and turns them into [left, right] speeds."""
         speed = [0, 0]
 
         # Allow user to drive the rover around
@@ -65,9 +76,11 @@ class ManualRover(Rover):
         return speed
 
     def update(self):
+        """The main loop: read the keyboard, send wheel speeds, repeat until Esc."""
         print("Rover control - WASD to drive, = / - to adjust speed, ESC to quit")
 
-        # Running with the keyboard being listened to
+        # pynput's Listener runs in the background and calls _on_press/_on_release for us; we
+        # just keep sending whatever compute_wheel_speeds() says while it's still running.
         with kb.Listener(on_press=self._on_press, on_release=self._on_release) as listener:
             while listener.running:
                 wheel_speeds = self.compute_wheel_speeds()

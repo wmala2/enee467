@@ -1,21 +1,40 @@
 # Download and run saved policies
 
-The saved policies are available in the private
-[Hugging Face backup](https://huggingface.co/CursedRock17/rover-line-follower-ppo/tree/main/backups/2026-09-10).
-Download the checkpoint and its adjacent `config.json`, then pass the local ZIP
-path to the training or evaluation script.
-Keep both files together: the configuration selects the dynamics mode, DR ranges,
-reward mode, and tracks needed to rebuild the simulation.
+## What this is
 
-Run from `rover_mujoco`.
-If needed, authenticate with `uv run hf auth login` using an account with access
-to the private repository.
+Training a good policy from scratch takes hours. Instead of always starting over, you can
+download one of the already-trained, already-verified policies from this project's private
+Hugging Face backup and drop it straight into the simulator (or the real rover). This doc covers
+picking a checkpoint, downloading it, and loading it back up.
+
+All commands below are run from `rover_mujoco`.
+
+## Step 1: Log in to Hugging Face
+
+The backup repository is private, so you need an account with access before you can download
+anything:
+
+```bash
+uv run hf auth login
+```
+
+## Step 2: Pick a policy
+
+Each row below is a different trained policy, checked in at the same
+[Hugging Face backup](https://huggingface.co/CursedRock17/rover-line-follower-ppo/tree/main/backups/2026-09-10).
 
 | Policy | `HF_POLICY_RUN` |
 | --- | --- |
 | Qualified DR/BAM policy | `dr-bam-bringup/ppo-dr-seed0` |
 | Qualified nominal reference | `ppo-continued-seed0` |
 | Nominal sweep's selected policy | `ppo-hparam-sweep-seed0/reference` |
+
+## Step 3: Download it and watch it run
+
+Every checkpoint (`best_model.zip`) has an adjacent `config.json` that records exactly how it was
+trained — the dynamics mode, domain-randomization ranges, reward mode, and tracks. Download both
+together and keep them side by side; the evaluation script needs the config to rebuild a matching
+simulation.
 
 ```bash
 # Select a saved run and pin its download to the verified backup commit.
@@ -32,22 +51,22 @@ MUJOCO_GL=glfw uv run scripts/evaluate_ppo.py \
   --tracks figure8 --episodes 1 --seed 40000 --viewer
 ```
 
-Change `HF_POLICY_RUN` to another row before downloading to use its checkpoint;
-change `--tracks` or `--seed` to explore other tracks or episode conditions.
-For headless evaluation, use `MUJOCO_GL=egl` and omit `--viewer`.
-The same local ZIP path works with `train_ppo.py --resume`, with the desired
-training dynamics selected explicitly through that script's options.
-The CLI preserves the repository's nested directory structure under `runs/hf`.
+A MuJoCo window should open and show the rover driving the figure-eight track using the
+downloaded policy. From here:
 
-## Loading from Python
+- Swap `HF_POLICY_RUN` for another row in the table to try a different policy.
+- Change `--tracks` or `--seed` to see it handle a different track or starting condition.
+- Drop `--viewer` and set `MUJOCO_GL=egl` to evaluate headlessly (no window, faster, works
+  without a display).
+- The same downloaded ZIP also works as a starting point for more training, via
+  `train_ppo.py --resume` (pick the matching training dynamics through that script's own flags).
 
-Python can download on demand using `hf_hub_download` or `snapshot_download`,
-then give the returned local path to `PPO.load`.
-Hugging Face handles authentication, versioned caching, and downloads.
-SB3 loads the resulting ZIP; it does not accept a Hub repository ID directly.
-[Hugging Face download documentation](https://huggingface.co/docs/huggingface_hub/guides/download)
-and [SB3 checkpoint format](https://stable-baselines3.readthedocs.io/en/master/guide/save_format.html)
-describe those two parts of the process.
+## Loading a policy from Python
+
+If you're writing your own script instead of using `evaluate_ppo.py`, you can download and load a
+policy in a few lines: `snapshot_download` fetches (and caches) the files from Hugging Face, and
+`PPO.load` from Stable-Baselines3 reads the resulting ZIP directly — it doesn't understand Hub
+repository IDs on its own, so the download step always comes first.
 
 ```python
 from pathlib import Path
@@ -69,12 +88,18 @@ snapshot = Path(
 model = PPO.load(snapshot / subdir / "best_model.zip", device="cpu")
 ```
 
-After the files are cached, `snapshot_download(..., local_files_only=True)` can
-resolve them without network access.
-Use an explicit output directory outside the shared HF cache if passing a cached
-path to `evaluate_ppo.py`, because that script otherwise writes results beside
-the checkpoint.
-The archive also contains historical policies with older interfaces; the table
-above identifies checkpoints compatible with the current PPO evaluation script.
-Physical deployment additionally requires the matching `deployment.json` and
-measured encoder calibration described in the [DR/BAM guide](dr-bam-line-follower.md#preparing-physical-rollout).
+See the [Hugging Face download docs](https://huggingface.co/docs/huggingface_hub/guides/download)
+and the [SB3 checkpoint format docs](https://stable-baselines3.readthedocs.io/en/master/guide/save_format.html)
+for more on how those two pieces work.
+
+## Good to know
+
+- Once a checkpoint is cached, `snapshot_download(..., local_files_only=True)` reloads it without
+  hitting the network again.
+- If you pass a cached path straight to `evaluate_ppo.py`, point it at an output directory outside
+  the shared Hugging Face cache — otherwise it writes its results right next to the checkpoint.
+- The backup repository also holds older, incompatible policy formats from earlier in the
+  project; only the checkpoints listed in the table above match the current evaluation script.
+- Deploying a policy on the physical rover needs one more file beyond the checkpoint and config:
+  a `deployment.json` with measured encoder calibration, described in the
+  [DR/BAM guide](dr-bam-line-follower.md#preparing-physical-rollout).

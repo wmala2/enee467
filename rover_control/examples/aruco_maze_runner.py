@@ -1,3 +1,11 @@
+"""Drives a list of ArUco tags in order, using a continuous PID for the final approach.
+
+The ESP32 camera's picture lags the rover's real position by 1-2 frames, so deciding to turn
+based on a live video feed over-rotates. This script solves that by never trusting a frame taken
+while moving: for each tag it first stops completely and confirms where the tag is (see `look`
+and `center`), then only drives with the PID once it's confident the tag is centered.
+"""
+
 # External Libraries
 import time
 from typing import ClassVar
@@ -89,6 +97,7 @@ class ArucoRunner(Rover):
         self._look_stats = {}
 
     def _enc(self):
+        """Wheel encoder counts, formatted for the CSV logger; empty if nothing's arrived yet."""
         # Return encoder columns as a dict for log() calls; empty dict if no reply yet
         data = self.poller.latest()
         if data is None:
@@ -97,6 +106,7 @@ class ArucoRunner(Rover):
         return {"enc_left": l, "enc_right": r, "enc_left_delta": dl, "enc_right_delta": dr}
 
     def _lidar(self):
+        """Lidar distance readings, formatted for the CSV logger; empty if nothing's arrived yet."""
         # Return lidar distance columns for log() calls; empty dict if no reply yet
         data = self.poller.lidar_latest()
         if data is None:
@@ -105,6 +115,7 @@ class ArucoRunner(Rover):
         return {"lidar_left_mm": l, "lidar_center_mm": c, "lidar_right_mm": r}
 
     def _show(self, frame):
+        """Pops up the camera preview window and raises to quit if the user presses Q."""
         # Draw the camera frame and quit the whole run if the user presses Q
         if frame is not None:
             cv2.imshow("Aruco", frame)
@@ -112,9 +123,11 @@ class ArucoRunner(Rover):
             raise KeyboardInterrupt
 
     def turn_in_place(self, direction, degrees, target_id=None):
-        # Spin the rover on the spot by a number of degrees (open-loop, timed at the stall-floor
-        # speed)
-        # direction: +1 turns toward the tag's right (+X), -1 turns left
+        """Spins in place by roughly `degrees`, timed rather than measured (open-loop)."""
+        # We don't have a gyroscope, so we can't measure the turn as it happens -- instead we
+        # compute how long a turn at our slowest safe speed should take to cover that angle, then
+        # just run the motors for that long. direction: +1 turns toward the tag's right (+X), -1
+        # turns left.
         omega = 2.0 * self.MIN_VELOCITY / self.wheel_separation
         spin_time = np.radians(degrees * self.TURN_SCALE) / omega
         spin = conversions.convert_linear_vel_to_angular_vel(
@@ -150,10 +163,11 @@ class ArucoRunner(Rover):
             )
 
     def look(self, target_id):
-        # Stop-and-stare measurement, hardened: trust a reading only when several fresh frames
-        # AGREE.
-        # next_frame() only returns frames captured AFTER `since`, so the stale, laggy frames from
-        # while we were moving are skipped deterministically - no frame-count guessing.
+        """Stops and samples fresh frames until it gets a trustworthy tag reading, or gives up."""
+        # A single frame could be a fluke, so we sample several and only trust the result if
+        # enough of them saw the tag AND agree with each other. next_frame() only returns frames
+        # captured AFTER `since`, so the stale, laggy frames from while we were moving are
+        # skipped deterministically - no frame-count guessing.
         total_sampled = total_with_tag = 0
 
         for _ in range(self.MAX_LOOK_TRIES):
@@ -191,6 +205,7 @@ class ArucoRunner(Rover):
         return None
 
     def center(self, target_id):
+        """Alternates look()/turn_in_place() until the tag sits in front of the rover."""
         # Turn-look-turn until the tag is centered on a CONFIRMED reading.
         # Every decision is made while stopped, so the camera lag can't trick us into over-rotating.
         while True:
@@ -245,6 +260,7 @@ class ArucoRunner(Rover):
             return
 
     def wheel_speeds_for(self, position):
+        """Turns one tag position reading into a pair of [left, right] wheel speeds."""
         # Measure the time since the last control step for the PID math
         now = time.perf_counter()
         dt = now - self._last_pid_time
@@ -296,6 +312,7 @@ class ArucoRunner(Rover):
         return speed
 
     def drive_to_tag(self, tag_id, stop_distance_m=None):
+        """Drives straight at an already-centered tag with the PID, frame by frame."""
         # Continuous PID approach toward an already-centered tag. Returns "arrived" once we're
         # within the stop tolerance, or "recenter" if the tag drifts off-center or drops out of
         # view.
@@ -332,7 +349,9 @@ class ArucoRunner(Rover):
                 np.degrees(np.arctan2(raw["position"][0], raw["position"][2])) if seen else None  # ty: ignore[not-subscriptable]
             )
 
-            # Smooth the pose in place - this EMA pose is what the heading PID actually acts on
+            # A single frame's reading can be noisy, so we blend it with recent readings
+            # (an exponential moving average) before steering on it -- this EMA pose is what
+            # the heading PID actually acts on.
             self.estimator._smooth(poses)
             position = poses[tag_id]["position"] if seen else None
             bearing_smoothed = np.degrees(np.arctan2(position[0], position[2])) if seen else None  # ty: ignore[not-subscriptable]
@@ -444,6 +463,7 @@ class ArucoRunner(Rover):
             self.sleep_to_command_rate()
 
     def update(self):
+        """The main loop: for each tag in order, center on it, then drive up to it."""
         print(
             f"Driving ArUco tags {self.MARKER_ID_LIST}, stopping {self.stop_tolerance_m} m away - "
             f"press Q in the window or Ctrl-C to quit"

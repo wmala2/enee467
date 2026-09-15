@@ -1,3 +1,10 @@
+"""Summarizes a maze-runner CSV log into plain numbers: loop rate, heading accuracy, turn accuracy.
+
+This script never talks to a rover -- it just reads the CSV that `run_logger.py` already wrote
+during a real (or simulated) run, and prints statistics that answer questions like "was the
+camera loop keeping up?" and "does the rover actually turn as far as it's told to?"
+"""
+
 # External Libraries
 from collections import Counter
 import csv
@@ -11,12 +18,13 @@ LOG_DIR = Path(__file__).resolve().parents[2] / "logs"
 
 
 def load(path):
+    """Reads one logged run's CSV into a list of {column_name: value} dicts."""
     with open(path, newline="", encoding="utf-8") as f:
         return list(csv.DictReader(f))
 
 
 def nums(rows, name, where=None):
-    # Pull a numeric column, optionally filtered by a predicate on the row
+    """Pulls one numeric column out of the log, skipping blanks and non-numeric junk."""
     out = []
     for r in rows:
         if where and not where(r):
@@ -31,6 +39,7 @@ def nums(rows, name, where=None):
 
 
 def describe(values):
+    """Turns an array of numbers into one readable summary line."""
     if len(values) == 0:
         return "n/a"
     return (
@@ -40,6 +49,7 @@ def describe(values):
 
 
 def fraction_true(rows, name, where=None):
+    """Returns what fraction of rows had a True/1 in the given column, or None if there are none."""
     flags = [r.get(name, "") for r in rows if (not where or where(r))]
     flags = [f for f in flags if f != ""]
     if not flags:
@@ -48,7 +58,7 @@ def fraction_true(rows, name, where=None):
 
 
 def main():
-    # Use the file given on the command line, else the newest maze_*.csv in logs/
+    # Use the file given on the command line, else the newest maze_*.csv in logs/.
     if len(sys.argv) > 1:
         path = Path(sys.argv[1])
     else:
@@ -61,11 +71,13 @@ def main():
     rows = load(path)
     print(f"Analyzing {path}  ({len(rows)} rows)\n")
 
-    # What happened, at a glance
+    # First, the broadest possible view: how many rows happened in each phase of the run
+    # (e.g. "drive", "turn"), and what named events fired (e.g. "recenter", "re-aim").
     print("Rows by phase:", dict(Counter(r["phase"] for r in rows)))
     print("Events:", dict(Counter(r["event"] for r in rows if r["event"])))
 
-    # The continuous-drive ticks are the rows with phase 'drive' and no event text
+    # "Ticks" are the ordinary continuous-drive rows -- phase is 'drive' and no special event
+    # fired on them. These are what tell us how smoothly the control loop was actually running.
     is_tick = lambda r: r["phase"] == "drive" and r["event"] == ""
     ticks = [r for r in rows if is_tick(r)]
 
@@ -79,7 +91,9 @@ def main():
     print("bearing_raw (deg):    ", describe(nums(ticks, "bearing_raw")))
     print("bearing_smoothed(deg):", describe(nums(ticks, "bearing_smoothed")))
 
-    # EMA lag: how far the smoothed bearing trails the raw one (a likely instability source)
+    # The smoothed bearing is an EMA (exponential moving average) of the raw one, which trades
+    # noise for lag. Comparing the two shows how much of that lag the smoothing is costing us --
+    # a likely source of instability if the rover has to react quickly.
     raw = nums(ticks, "bearing_raw")
     smooth = nums(ticks, "bearing_smoothed")
     if len(raw) == len(smooth) and len(raw) > 0:
@@ -93,11 +107,14 @@ def main():
     if sat is not None:
         print(f"speed saturated:       {sat * 100:.0f}% of ticks")
 
-    # Thrash: how often it bailed the drive to re-center
+    # A "recenter" event means the rover gave up on a smooth drive and stopped to re-find the
+    # tag -- counting these tells you how often the run was thrashing instead of driving cleanly.
     recenters = sum(1 for r in rows if r["event"].startswith("recenter"))
     print(f"\nre-center bailouts:    {recenters}")
 
-    # Open-loop turn accuracy: pair each commanded turn with the bearing measured right after it
+    # Open-loop turns (like the trapezoid maze runner's) don't measure while turning, only
+    # before and after. Pairing each commanded turn with the bearing measured right after it is
+    # the only way to check whether the rover actually turned as far as it was told to.
     print("\n--- turn accuracy (commanded vs achieved) ---")
     pairs = []
     pending = None

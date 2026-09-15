@@ -10,6 +10,7 @@ readme = "README.md"
 # Pinned to 3.12 by rover_mujoco (MuJoCo/onshape-to-robot); the whole workspace shares one interpreter.
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "depth-anything-3",
     "huggingface_hub",
     "numpy",
     "ollama",

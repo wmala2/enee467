@@ -29,7 +29,7 @@ class Rover:
     TURN_SCALE = 1.0
 
     # --- Settings for the simple one-line behaviors (drive_to_tag, run_maze, ...) ---
-    DEFAULT_CAMERA_ADDR = "http://192.168.50.123:80/capture"
+    DEFAULT_CAMERA_ADDR = "http://192.168.50.124:80/capture"
     CRUISE_VELOCITY = 0.20  # top speed of the trapezoidal drive (m/s)
     ACCEL = 0.20  # how fast forward() ramps up and down (m/s^2)
     CENTER_TOLERANCE_DEG = 8.0  # "centered enough" on a tag to drive straight at it

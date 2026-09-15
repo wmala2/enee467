@@ -1,3 +1,10 @@
+"""Asks a local vision LLM what object is in one camera frame.
+
+This is a lighter-weight alternative to a trained detector like YOLO: instead of a model built
+to recognize a fixed list of classes, a general vision-language model looks at the picture and
+answers in plain words, which we force into a small structured JSON reply.
+"""
+
 # External Libraries
 import json
 import os
@@ -10,6 +17,8 @@ import ollama
 
 
 class ObjectIdentifier:
+    """Asks a vision model to name the main object in one image, YOLO-detection style."""
+
     # The exact JSON shape we force the model to reply with
     RESPONSE_SCHEMA: ClassVar[dict] = {
         "type": "object",
@@ -55,10 +64,7 @@ class ObjectIdentifier:
         )
 
     def identify(self, image):
-        """
-        Scan one image and return a structured dictionary like {"object": "bottle"}
-        stating the main object in frame, similar to a YOLO detection name.
-        """
+        """Scans one image and returns a dict like {"object": "bottle"}, YOLO-style."""
         # Ask the vision model one short question, forcing a JSON answer
         response = ollama.chat(
             model=self.model,

@@ -2,6 +2,7 @@
 This is a MuJoCo environment which will fascilitate the simulation and training of our differential drive, Mini Claw STEM rovers in a easy to setup, fast, simple, yet robust training environments
 
 ## Prerequisites
+You should have already installed these items one level up, but just in case.
 This environment should be system-agnostic since we're using dedicated Python virtual environments without (for now) requiring access to a GPU, so it should work on Linux, Mac, and Windows.
 Prior to starting, we recommend installing the following software:
 - **[uv](https://docs.astral.sh/uv/getting-started/installation/)**, which manages the Python virtual environment and dependencies. It installs Python 3.12 (see `requires-python` in `pyproject.toml`) for you.
@@ -14,14 +15,40 @@ All of the development for creating scripts will occur in Python, thus we'll be 
 
 This directory is a member of the parent repo's [uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/):
 it keeps its own `pyproject.toml`, but shares one `uv.lock` and one `.venv/` with the high-level
-rover code. So clone and sync from the **repository root**, not from here:
+rover code. So clone and sync from the **repository root**, not from here. This of course should've already be done based on the high level documentation. But in case you have to do it again, you can do it here.
 
-```shell
-cd ~/Documents
+Clone this repository locally. If your using VSCode, simply open VSCode and reveal the command prompt at the top of the screen (1) using `Ctrl + Shift + P`. Then type `Git: Clone` (2) and press `Enter`. You should be able to paste the URL of this repository and press `Enter`. Save this repository a desired directory like "~/Documents" and you should be good.
+
+![VSCode Command Palette](images/clean_vscode_clone.png)
+
+Otherwise, you can do it via the terminal:
+```bash
+# Navigate to where you want to install this package
+cd ~/Documents/
 git clone https://github.com/CursedRock17/matrix_lab_rover_above.git
-cd matrix_lab_rover_above
-uv sync --extra cpu   # or --extra cu121 on an NVIDIA machine
 ```
+
+### Repository Setup
+
+Open the project up in VSCode (optional, but recommended). This can be done very simply through VSCode via `File` > `Open Folder`, then going to the location that you cloned the repository.
+
+Alternatively, navigate to the location of the project using the terminal
+
+```bash
+# If you cloned the repo to a different path, use that one.
+cd ~/Documents/matrix_lab_rover_above
+code .
+```
+
+From the project root, sync the environment. Pick the extra that matches your machine. To do this we need to open a terminal. If you're in VSCode either type `Ctrl + "`"` (Control plus Backtick) or go to `View` > `Terminal`.
+
+```bash
+uv sync --extra cpu     # no NVIDIA GPU (saves ~6 GB)
+```
+
+This reads `pyproject.toml`/`uv.lock` and builds a single `.venv/` on Python 3.12 containing every
+package in the repo.
+
 
 That single sync installs MuJoCo, Gymnasium, and stable-baselines3 alongside the ArUco/YOLO/LLM
 packages, so a policy trained here is importable from `rover_control/` without switching
@@ -39,6 +66,9 @@ In a `uv sync`'d shell, run:
 cd ~/Documents/matrix_lab_rover_above
 uv run rover_mujoco/scripts/teleop_rover.py
 ```
+
+![Rover MuJoCo Teleop Control](../images/rover_mujoco_teleop_control.png)
+
 You should be able to use WASD/Arrow Key controls to drive a rover around following differential drive characteristics.
 
 **Going Further**

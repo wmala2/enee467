@@ -1,3 +1,10 @@
+"""Runs YOLOv8n object detection and adds a real-world (X, Y, Z) position to every detection.
+
+A plain YOLO detection only tells you where something is on the 2D image (which pixels). Pairing
+it with a monocular depth model lets us also estimate how far away it is, so we get a real 3D
+position in meters instead of just a box on the screen.
+"""
+
 # External Libraries
 from pathlib import Path
 
@@ -15,26 +22,28 @@ TARGET_FPS = 2.0
 
 
 def main():
-    # Create the pose estimator once (imgsz=960 finds smaller/farther objects, see YOLO_extractor)
+    # Create the pose estimator once (imgsz=960 finds smaller/farther objects, see
+    # YOLO_extractor). This wraps a YOLO detector and a depth model together.
     estimator = YOLOPoseEstimator(model_path=MODEL_PATH, imgsz=960, verbose=True)
 
-    # Open the laptop's own camera (video port 0)
+    # Open the laptop's own camera (video port 0).
     camera = cv2.VideoCapture(0)
     if not camera.isOpened():
         raise RuntimeError("Could not open local camera on port 0")
 
     print("YOLOv8n 3D pose demo - press Q in the window to quit")
     while True:
-        # Grab one frame from the local camera
+        # Grab one frame from the local camera.
         ok, frame = camera.read()
         if not ok:
             print("Camera read failed")
             continue
 
-        # Detect objects and give each one a real-world (X, Y, Z) position in meters
+        # Detect objects and give each one a real-world (X, Y, Z) position in meters, using the
+        # same right-handed frame (+X right, +Y up, +Z forward) as the rest of this repo.
         annotated, detections = estimator.process(frame)
 
-        # Print what the network found this frame and where it is in 3D
+        # Print what the network found this frame and where it is in 3D.
         for detection in detections:
             x, y, z = detection["position"]
             print(
@@ -42,13 +51,13 @@ def main():
                 f"at X:{x:+.2f} Y:{y:+.2f} Z:{z:.2f} m"
             )
 
-        # Show the annotated image with boxes and the frame rate
+        # Show the annotated image with boxes and the frame rate.
         if annotated is not None:
             cv2.imshow("YOLOv8n 3D Pose", annotated)
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
 
-        # Sleep only the leftover time so the loop holds the target rate
+        # Sleep only the leftover time so the loop holds the target rate.
         estimator.detector.sleep_to_fps(TARGET_FPS)
 
     camera.release()

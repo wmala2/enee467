@@ -1,4 +1,9 @@
-# The whole program a student writes - no control loops, no PID, no estimator wiring.
+"""The whole program a student writes to drive the rover through a maze of ArUco tags.
+
+Every control loop, PID, and camera detail lives inside the `Rover` class already -- this script
+just calls its high-level methods, the same way you'd call any other library.
+"""
+
 from rover_control.rover import Rover
 
 if __name__ == "__main__":

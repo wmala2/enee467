@@ -1,5 +1,11 @@
 # ArUco Detector
-This folder contains the ArUco marker pose estimator, which returns the position and orientation of a marker as seen from the rover's camera.
+
+## What this is
+
+This folder finds ArUco markers (a kind of QR-code-like tag) in a camera image and turns each one
+into a real-world position: how far forward, left/right, and vertical it is from the rover's
+camera, in meters. `ArucoPoseEstimator` is the class that does this — point it at a camera stream,
+and it hands you tag positions your control code can drive toward.
 
 ArUco markers are *fiducial markers* made up of evenly-sized squares that are either filled black or left white. The pattern of filled squares encodes a unique integer ID. The design and detection algorithm is described in the foundational 2014 paper [Automatic generation and detection of highly reliable fiducial markers under occlusion](https://www.sciencedirect.com/science/article/abs/pii/S0031320314000235).
 
@@ -96,7 +102,11 @@ print(pos)  # [x, y, z] or None if not seen
 ## Troubleshooting
 
 **Can't reach the camera stream**
-Each rover's IP address is written on it. Cameras are in the `.123` range; the rover's UDP control endpoint is in the `.223` range (example: `192.168.50.123` camera, `192.168.50.223` rover). Confirm you are on the same WiFi network and ping the camera first: `ping 192.168.50.123`.
+Each rover's IP address is written on it. Cameras are in the `.123` range; the rover's UDP control endpoint is in the `.223` range (example: `192.168.50.123` camera, `192.168.50.223` rover). Confirm you are on the same WiFi network and ping the camera first: `ping 192.168.50.123`. If this works, you'll get a response similar to the following: `64 bytes from 192.168.50.123: icmp_seq=1 ttl=64 time=18.5 ms`.
+
+Next, you should have the capability to view the current camera feed on the rover using a Web Browser. Since we've confirmed that we're on the same WiFi network as our rover and that the camera's IP exists. Enter the IP address of your camera into a web browser in a similar format: `http://192.168.50.123:80`, which should return the following page:
+
+![Default Camera Page](../images/default_camera_page.png)
 
 **Camera endpoints**
 The ESP32 camera exposes two endpoints on port 80:

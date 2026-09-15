@@ -1,3 +1,10 @@
+"""Keeps one ArUco tag at a fixed distance in front of the rover, even if the tag moves.
+
+Unlike aruco_pose_movement.py (which drives to a tag once and stops), this rover treats the tag
+as a moving target: every loop it re-measures the tag and adjusts its own speed to hold a
+constant standoff distance, so it can follow a tag someone is carrying around.
+"""
+
 # External Libraries
 import time
 
@@ -13,6 +20,8 @@ from rover_control.rover import Rover
 
 
 class ArucoTracker(Rover):
+    """A rover that follows one ArUco tag around, holding a fixed standoff distance."""
+
     MARKER_ID = 0  # the ArUco tag ID we keep tracking
     STANDOFF_M = 0.40  # the distance (m) the rover tries to hold from a moving tag
     DEADBAND_M = 0.05  # don't bother driving while we're within this much of the standoff
@@ -22,7 +31,7 @@ class ArucoTracker(Rover):
         super().__init__()
 
         # Camera Stream Address
-        img_addr = "http://192.168.50.123:80/capture"
+        img_addr = "http://192.168.50.114:80/capture"
 
         # Create our ArUco Marker Pose Estimator
         self.estimator = ArucoPoseEstimator(
@@ -44,6 +53,7 @@ class ArucoTracker(Rover):
         self.frames_without_tag = 0
 
     def wheel_speeds_for(self, position):
+        """Turns one tag position reading into a pair of [left, right] wheel speeds."""
         # Measure the time since the last control step for the PID math
         now = time.perf_counter()
         dt = now - self._last_pid_time
@@ -82,6 +92,7 @@ class ArucoTracker(Rover):
         return speed
 
     def search_speeds(self):
+        """Wheel speeds for a slow in-place spin, used to hunt for a tag we've lost."""
         # Spin slowly in place to bring a lost tag back into view (left wheel back, right wheel
         # forward)
         spin = conversions.convert_linear_vel_to_angular_vel(
@@ -90,12 +101,13 @@ class ArucoTracker(Rover):
         return [-spin, spin]
 
     def update(self):
+        """The main loop: look, adjust speed to hold the standoff distance, repeat forever."""
         print(
             f"Tracking ArUco tag {self.MARKER_ID}, holding {self.STANDOFF_M} m - press Q in the "
             f"window to quit"
         )
 
-        # Running Constantly
+        # Keep tracking until the user quits (there's no "arrived" state, unlike a one-shot drive)
         while True:
             # Get the pose from our estimator
             frame, poses = self.estimator.process()
