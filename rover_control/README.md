@@ -56,6 +56,7 @@ finally:
 | [Encoder Readout](examples/encoder_readout.py) | Poll the rover for its wheel encoder counts over UDP and print the replies. |
 | [RL Line Follower](examples/rl_line_follower.py) | Run the qualified DR/BAM PPO policy, successfully demonstrated on the physical rover, with firmware encoder defaults and optional camera/observation recording; see the [Zero to Hero tutorial](<../rover_mujoco/docs/Deploying a Mini Claw Rover Policy _ Zero to Hero.md>) for the experiment and deployment steps. |
 | [DA3 Object Follower](examples/da3_object_movement.py) | Follows a named COCO object (default: person) in real time using GPU depth + PID control. |
+| [DA3 Person Picker](examples/da3_person_picker.py) | Shows every visible person on a depth-colored view; click one to choose who the rover follows. See [docs/da3-person-picker.md](docs/da3-person-picker.md) for a full walkthrough. |
 | [Rover Mission Dashboard](examples/rover_yolo_estimator.py) | Side-by-side live camera + depth view with YOLO overlays; press S to save a depth histogram. |
 
 Every one of these opens a viewer window like this one — this is [ArUco Tag Tracker](examples/aruco_tag_tracker.py)

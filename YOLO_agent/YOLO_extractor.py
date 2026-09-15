@@ -86,6 +86,40 @@ class YOLOExtractor:
 
         return annotated, detections
 
+    def track(self, frame, classes=None):
+        """
+        Like process(), but asks the tracker to assign each detection a persistent ID: the
+        same physical person/object keeps the same ID from one call to the next (until the
+        tracker loses it), instead of being "whichever box happens to be there this frame."
+        Pass `classes` (a list of COCO class indices, e.g. [0] for "person") to only track
+        one kind of object.
+        """
+        if frame is None:
+            return []
+
+        results = self.model.track(
+            frame,
+            persist=True,  # remember previous frames' tracks instead of starting fresh each call
+            conf=self.confidence,
+            imgsz=self.imgsz,
+            classes=classes,
+            verbose=False,
+        )[0]
+
+        detections = []
+        for box in results.boxes:
+            if box.id is None:  # detected this frame, but not yet assigned a stable track ID
+                continue
+            x1, y1, x2, y2 = [float(v) for v in box.xyxy[0]]
+            detections.append({
+                "id": int(box.id),  # stable across frames - this is what makes it "tracking"
+                "name": results.names[int(box.cls)],
+                "confidence": float(box.conf),
+                "box": [x1, y1, x2, y2],
+                "center": [(x1 + x2) / 2.0, (y1 + y2) / 2.0],
+            })
+        return detections
+
     def get_fps(self):
         """
         Standalone getter: returns the measured frame rate (Hz) of the process() loop.
