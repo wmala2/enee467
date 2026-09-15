@@ -20,6 +20,8 @@ MUJOCO_GL=egl uv run rover_mujoco/scripts/line_follower.py --headless --track al
 
 With `--camera`, a MuJoCo viewer opens showing the rover on the track plus a second OpenCV window showing the raw camera image with detected line pixels in red and the steering centroid in green; the run finishes by writing episode outcomes, trajectory CSVs, and a comparison plot under `artifacts/pid/<timestamp>`.
 
+![The rover starting on a generated circle track](images/sim_line_follower_pid.png)
+
 ## How it works
 
 Each episode needs to start the rover at a slightly randomized, but track-relative, position and heading. `rng.uniform` picks a small lateral offset and yaw jitter around the track's starting tangent so consecutive episodes aren't identical.
