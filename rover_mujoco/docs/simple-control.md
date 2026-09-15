@@ -37,7 +37,9 @@ you may need to drop that sign flip.
 
 ## Controls
 
-- **Arrow keys** (not WASD): forward/backward and turn left/right.
+- **Arrow keys** (not WASD): forward/backward and turn left/right. Hold a key down to
+  keep driving - the rover only moves while a key is (recently) pressed, same as the real
+  rover only drives for as long as it keeps receiving fresh commands.
 - `+` and `-` raise or lower the top speed, in 0.5 rad/s steps.
 - Space stops the rover.
 - Esc exits the viewer.
@@ -52,27 +54,31 @@ keys aren't bound to anything in MuJoCo's shortcut tables, so they don't have th
 ## Speed limits come from the real motors, not guesses
 
 The rover's JGA25-371 gearmotors are rated for 463 RPM at the wheel shaft. Converted to
-rad/s and capped well under that rating to leave room for the acceleration limiting below,
-that sets `teleop_rover.py`'s adjustable top speed range. There's also a floor: a rough
-placeholder for the minimum wheel speed needed to actually overcome static friction and roll,
-rather than just stall the motor against the floor. That floor is an estimate, not a measured
-value, and getting the real number is future work once the motors are being modeled with BAM
-(a later tutorial).
+rad/s and capped well under that rating, that sets `teleop_rover.py`'s adjustable top speed
+range. There's also a floor: a rough placeholder for the minimum wheel speed needed to
+actually overcome static friction and roll, rather than just stall the motor against the
+floor. That floor is an estimate, not a measured value, and getting the real number is
+future work once the motors are being modeled with BAM (a later tutorial).
 
-## Why speed changes ramp instead of snapping
+## One command per loop tick, just like the real rover
 
-Early on, we found that punching a direction key (or now, `+`) straight to full speed could
-pop the rover into a wheelie: MuJoCo instantly commanding a large wheel torque pitches the
-chassis. `teleop_rover.py` ramps the actually-applied speed toward whatever the arrow
-keys/`+`/`-` are asking for, at a capped rate (`MAX_ACCEL`, in rad/s²), rather than jumping to
-it in one step. That rate is tuned by feel in simulation, not derived from a measured motor
-acceleration curve. Like the friction floor above, that's real-hardware work for later.
+`teleop_rover.py` runs its own loop at `COMMAND_RATE_HZ` (10 Hz, matching the real rover
+firmware's `rover_control/rover.py`), sending one wheel-speed command per tick and holding it
+for that tick's duration - it doesn't ramp up to a target speed. A key press is only
+remembered for one tick, so a direction key has to keep getting re-pressed (which is what
+holding it down does, via keyboard auto-repeat) to keep the rover moving. This mirrors how
+the real rover's control loop works: no smoothing in the loop itself, just a steady stream of
+fresh commands.
 
 ## Running it
 
 ```shell
 uv run python scripts/teleop_rover.py
 ```
+
+This should open a MuJoCo viewer with the rover model loaded:
+
+![Rover loaded in the MuJoCo viewer](images/rover_in_mujoco.png)
 
 If the viewer opens and arrow keys drive the rover without the floor flickering into a grid,
 everything's wired up correctly.
