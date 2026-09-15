@@ -98,7 +98,7 @@ class PersonPicker(Rover):
             Path(__file__).resolve().parents[2] / "YOLO_agent" / "models" / "yolov8n.pt"
         )
         self.extractor = YOLOExtractor(model_path=yolo_model_path, imgsz=640, verbose=False)
-        self.client = RoverNavigationClient(server_url="http://" + server_ip, verbose=False)
+        self.client = RoverNavigationClient(server_url="http://" + server_ip, verbose=True)
         self._depth_worker = DepthWorker(self.client, rover_camera_ip)
 
         # A PID controller is a small feedback loop: measure how wrong you are (the error), and
