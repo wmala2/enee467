@@ -1,6 +1,6 @@
 # Sim Manual Control
 
-This example opens the simulated rover in the MuJoCo 3D viewer and lets you drive it around with the arrow keys, so you can confirm your simulation setup works and see how differential-drive steering behaves before writing any control code of your own.
+This example opens the simulated rover in the MuJoCo 3D viewer and lets you drive it around with the arrow keys. It's built the same way the real rover is controlled: differential-drive kinematics (turning a forward/turn speed into left/right wheel speeds) feeding a fixed-rate, 10 Hz command loop, matching `rover_control/rover.py`'s `COMMAND_RATE_HZ` on the physical firmware. Because the sim is driven through that identical command interface, steering logic you get working here should behave the same way on the real rover - that symmetry is the whole point of testing in sim first, rather than debugging kinematics directly on hardware.
 
 ## Prerequisites
 
@@ -14,103 +14,83 @@ This example opens the simulated rover in the MuJoCo 3D viewer and lets you driv
 uv run rover_mujoco/scripts/teleop_rover.py
 ```
 
-A MuJoCo viewer window opens with the rover sitting on the floor; arrow keys drive it, `+`/`-` change the top speed, Space stops it, and Esc closes the window.
+A MuJoCo viewer window opens with the rover sitting on the floor. **Hold** an arrow key to drive - the rover only moves while a key was (recently) pressed, same as the real rover only drives for as long as it keeps receiving fresh commands. `+`/`-` change the top speed, Space stops it, and Esc closes the window.
 
 ![The simulated rover sitting on the floor of the default scene](images/sim_manual_control.png)
 
 ## How it works
 
-The script keeps three small dictionaries of mutable state (`drive_state`, `speed_state`, `applied_state`) instead of a class, since everything here runs in one process on one thread — the key callback just writes into them and the render loop reads them back out.
+### One command per loop tick, just like the real rover
+
+The whole script runs one loop at `COMMAND_RATE_HZ` (10 Hz), sending one wheel-speed command per tick and holding it for that tick's duration - there's no ramping or smoothing in the loop itself:
 
 ```python
-# Target drive direction (-1/0/1 per axis), set by the arrow keys/space
-drive_state = {"linear_dir": 0, "angular_dir": 0}
-# Adjustable top speed (rad/s), set by '+'/'-', clamped to what the real motors can do
-speed_state = {"speed": 5.0}
-# Actual, ramped ctrl values the render loop drives toward the target above (see MAX_ACCEL)
-applied_state = {"linear": 0.0, "angular": 0.0}
+COMMAND_RATE_HZ = 10.0
+COMMAND_PERIOD_S = 1.0 / COMMAND_RATE_HZ
 ```
 
-Why arrow keys and not WASD? MuJoCo's own viewer already binds every letter to a built-in rendering toggle (`W` for wireframe, `S` for shadows, and so on) and runs those bindings on every keypress no matter what your own callback does — so driving with WASD would silently flip rendering settings while you drive. The GLFW key codes below are just the numeric codes for the arrow keys, space, and `+`/`-`, since MuJoCo's callback hands you raw keycodes rather than names.
+A key press is only remembered for one tick, so a direction key has to keep getting re-pressed - which is what holding it down does, via keyboard auto-repeat - to keep the rover moving:
 
 ```python
-GLFW_KEY_RIGHT, GLFW_KEY_LEFT, GLFW_KEY_DOWN, GLFW_KEY_UP = 262, 263, 264, 265
-GLFW_KEY_SPACE = 32
-GLFW_KEY_EQUAL, GLFW_KEY_MINUS = 61, 45  # '+' is shift+'=' on most layouts; GLFW reports
-# the unshifted physical key, so '=' is what arrives
+def held(last_press_time, now):
+    return now - last_press_time <= COMMAND_PERIOD_S
 ```
 
-`on_key` is the callback MuJoCo calls on every keypress. It doesn't move the rover directly — it only updates the *target* direction and speed, which is what lets the render loop below smoothly ramp toward it instead of snapping.
+### Reading the keyboard
+
+`on_key` is the callback MuJoCo calls on every keypress. It doesn't drive the rover directly - it just stamps the current time into that key's `last_*` variable, which `held()` (and so the main loop) reads back out:
 
 ```python
 def on_key(keycode):
+    global speed, last_up, last_down, last_left, last_right
+    now = time.perf_counter()
     if keycode == GLFW_KEY_UP:
-        drive_state["linear_dir"] = 1
+        last_up = now
     elif keycode == GLFW_KEY_DOWN:
-        drive_state["linear_dir"] = -1
+        last_down = now
     elif keycode == GLFW_KEY_LEFT:
-        drive_state["angular_dir"] = 1
+        last_left = now
     elif keycode == GLFW_KEY_RIGHT:
-        drive_state["angular_dir"] = -1
-    elif keycode == GLFW_KEY_SPACE:  # Space bar stops the rover
-        drive_state["linear_dir"] = 0
-        drive_state["angular_dir"] = 0
+        last_right = now
+    elif keycode == GLFW_KEY_SPACE:
+        last_up = last_down = last_left = last_right = -1.0
+    elif keycode == GLFW_KEY_EQUAL:
+        speed = min(speed + SPEED_STEP, MAX_SPEED)
+        print(f"speed: {speed:.1f} rad/s")
+    elif keycode == GLFW_KEY_MINUS:
+        speed = max(speed - SPEED_STEP, MIN_SPEED)
+        print(f"speed: {speed:.1f} rad/s")
 ```
 
-Real motors can't jump from stopped to full speed instantly — and neither can MuJoCo's physics without looking wrong. Commanding a big torque change in a single simulation step used to pop the rover into a wheelie. `ramp_toward` is the fix: it nudges a value toward its target by at most `max_delta` per call, so speed and direction changes glide instead of snap.
+`global` is required to assign to `speed`/`last_up`/etc. here - without it, `speed = ...` would create a new local variable instead of updating the module-level one `main()`'s loop reads.
+
+Arrow keys, not WASD: MuJoCo's own viewer already binds every letter to a built-in rendering toggle (`W` for wireframe, `S` for shadows, and so on) and runs those bindings on every keypress no matter what this callback does, so WASD would silently flip rendering settings while you drive.
+
+### Kinematics: turning speed into wheel commands
+
+Each loop tick, the script works out how fast to go straight and how fast to turn, then mixes those into a left/right wheel speed - the same differential-drive math every two-wheeled robot uses:
 
 ```python
-def ramp_toward(current, target, max_delta):
-    if target > current:
-        return min(current + max_delta, target)
-    return max(current - max_delta, target)
+linear = speed * (held(last_up, tick_start) - held(last_down, tick_start))
+turn = held(last_left, tick_start) - held(last_right, tick_start)
+angular = speed * ANGULAR_RATIO * turn
+left_speed = -linear + angular
+right_speed = linear + angular
 ```
 
-`main` builds the Gymnasium environment, grabs MuJoCo's underlying `model`/`data` objects directly (useful for reading the physics timestep), and opens the viewer with `on_key` wired in as the keyboard handler.
+The leading `-` on the left wheel isn't textbook differential-drive math - it's because this rover's CAD wheel meshes are mirrored, so the two wheel joints spin in opposite senses for the same physical rolling direction (the same sign convention `rover_control/rover.py`'s `ENCODER_SIGNS` documents on the real hardware).
+
+### Sending the command and staying in real time
+
+The computed wheel speeds go straight to the sim, then the loop sleeps just long enough to keep the whole thing running at `COMMAND_RATE_HZ`, not as fast as the CPU can go:
 
 ```python
-def main():
-    env = gym.make("Rover-v0")
-    env.reset()
+env.step(np.array([left_speed, right_speed], dtype=np.float32))
+viewer.sync()
 
-    # Access underlying MuJoCo model and data structures
-    model = env.unwrapped.model  # ty: ignore[unresolved-attribute]
-    data = env.unwrapped.data  # ty: ignore[unresolved-attribute]
-
-    print("Arrow keys to drive, +/- to adjust speed, Space to stop, Esc to exit.")
-
-    # Launch native OpenGL GUI viewer, routing keyboard input through on_key
-    with mujoco.viewer.launch_passive(model, data, key_callback=on_key) as viewer:
-```
-
-Each pass through the loop ramps the applied speed toward the target, then mixes the linear/angular drive state into left/right wheel commands. The leading `-` on the left wheel isn't textbook differential-drive math — it's because this rover's CAD wheel meshes are mirrored, so the two wheel joints spin in opposite senses for the same physical rolling direction.
-
-```python
-            max_delta = MAX_ACCEL * model.opt.timestep
-            speed = speed_state["speed"]
-            target_linear = drive_state["linear_dir"] * speed
-            target_angular = drive_state["angular_dir"] * speed * ANGULAR_RATIO
-            applied_state["linear"] = ramp_toward(applied_state["linear"], target_linear, max_delta)
-            applied_state["angular"] = ramp_toward(
-                applied_state["angular"], target_angular, max_delta
-            )
-
-            # Mix linear/angular drive state into left/right wheel velocity targets
-            linear, angular = applied_state["linear"], applied_state["angular"]
-            action = np.array([-linear + angular, linear + angular], dtype=np.float32)
-            env.step(action)
-```
-
-Finally, the loop syncs the 3D viewer to the new physics state and sleeps just long enough to keep the simulation running at real-time speed, rather than as fast as the CPU can go.
-
-```python
-            # Synchronize 3D graphics state with physics data
-            viewer.sync()
-
-            # Maintain real-time wall clock rate based on model timestep
-            time_until_next_step = model.opt.timestep - (time.time() - step_start)
-            if time_until_next_step > 0:
-                time.sleep(time_until_next_step)
+elapsed = time.perf_counter() - tick_start
+if elapsed < COMMAND_PERIOD_S:
+    time.sleep(COMMAND_PERIOD_S - elapsed)
 ```
 
 ## See also

@@ -1,3 +1,13 @@
+"""Drive the simulated rover by hand with the arrow keys.
+
+This is the same layered structure the real rover uses: differential-drive kinematics (turning
+a desired forward/turn speed into left/right wheel speeds) feeding a fixed-rate, 10 Hz command
+loop (matching rover_control/rover.py's COMMAND_RATE_HZ on the physical firmware). Because the
+sim is driven through that identical command interface, steering logic you get working here
+should behave the same way once you point it at the real rover - that's the whole point of
+testing in sim first.
+"""
+
 import time
 
 import envs  # noqa: F401  (imported for its side effect: registers Rover-v0)

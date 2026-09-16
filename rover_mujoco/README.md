@@ -82,7 +82,7 @@ The following table denotes the out of box capabilites of the current environmen
 
 | Task | Script | Descriptions |
 |------|--------|--------------|
-| Manual Control | [`scripts/teleop_rover.py`](scripts/teleop_rover.py) | Use WASD/Arrow Keys to manually drive around the rover in a realistic manner following differential drive kinematics ([docs](docs/simple-control.md)) |
+| Manual Control | [`scripts/teleop_rover.py`](scripts/teleop_rover.py) | Use the arrow keys to manually drive around the rover, following differential drive kinematics through the same fixed-rate command loop the real rover uses ([docs](../docs/examples/sim-manual-control.md)) |
 | Track Generation | [`scripts/gen_track.py`](scripts/gen_track.py) | Build a black line track as an MJCF fragment from a list of (x, y) waypoints. Called by `envs/line_scene.py` at scene-build time, so no track files are written to disk |
 | Track from CAD | [`scripts/extract_centerline.py`](scripts/extract_centerline.py) | Turn a flat CAD track mesh into the centreline polyline the environments need, scaling it and rounding cusps the rover cannot drive ([docs](docs/onshape-to-robot-mjcf.md)) |
 | Line Following (Classical) | [`scripts/line_follower.py`](scripts/line_follower.py) | Follow a track using only the onboard camera with a PID or bang-bang controller, with a tiltable camera mount, the classical-control baseline ([docs](docs/pid-line-follower.md)) |
