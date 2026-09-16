@@ -86,6 +86,14 @@ class PersonPicker(Rover):
     PICKER_WINDOW = "Choose a person to follow (click their box)"
     FOLLOW_WINDOW = "Following"
 
+    # A fixed lateral drift swings a much bigger angle in-frame the closer the rover gets (the
+    # same few cm of drift is a tiny angle at 2 m but a huge one at 0.5 m) - see
+    # docs/examples/da3-person-picker.md's "Hardening the final approach" section. Easing off
+    # forward speed inside this zone, without touching turn speed, gives heading correction more
+    # relative effect right when it matters most.
+    SLOWDOWN_ZONE_M = 0.75  # start easing off this far before the stop distance
+    MIN_APPROACH_SCALE = 0.35  # never drop below this fraction of full approach speed
+
     def __init__(
         self,
         server_ip=SERVER_IP,
@@ -180,6 +188,13 @@ class PersonPicker(Rover):
 
         forward = self.distance_pid.update(distance_error, dt)
         turn = self.heading_pid.update(pseudo_pose[0], dt)
+
+        # Ease off forward speed as we near the stop distance - turn keeps its full authority,
+        # so heading correction has proportionally more effect per unit of distance travelled.
+        approach_scale = distance_error / self.SLOWDOWN_ZONE_M
+        approach_scale = max(self.MIN_APPROACH_SCALE, min(1.0, approach_scale))
+        forward *= approach_scale
+
         speed = [forward + turn, forward - turn]
 
         max_pos = conversions.convert_linear_vel_to_angular_vel(

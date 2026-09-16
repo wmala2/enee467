@@ -134,6 +134,14 @@ if match is None:
 
 This is deliberately the simple option: no fallback state, no re-showing the picker. The trade-off is that Ultralytics' tracker doesn't always hand back the *same* ID after a real occlusion or someone leaving and re-entering frame - if that happens, this script just waits indefinitely at that spot until you restart it and pick again. Worth knowing if the rover seems to "give up" on someone who's clearly still in the room; not yet stress-tested how reliably re-acquisition works in practice.
 
+### Hardening the final approach
+
+A real run showed *why* people get lost: a fixed lateral drift swings a much bigger angle in-frame the closer the rover gets, so drift that's easily correctable at 2 m becomes unrecoverable right as the rover nears its stop distance. Here the person is already drifting left of center at 1.02 m, with the rover actively correcting (`V: 0.125 0.250` - asymmetric wheel speeds), right before the track was lost for good:
+
+![Person drifting left of frame just before track loss](../../images/da3_drift_before_lost.png)
+
+`wheel_speeds_for()` now eases off *forward* speed (not turn) inside `SLOWDOWN_ZONE_M` (0.75 m) of the stop distance, down to `MIN_APPROACH_SCALE` (35%) - giving heading correction proportionally more effect per unit of distance travelled during the final approach, right when framing is most fragile.
+
 ### Two environment issues worth knowing about
 
 Getting this running for real surfaced two non-obvious gotchas:
