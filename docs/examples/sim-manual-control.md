@@ -16,6 +16,8 @@ uv run rover_mujoco/scripts/teleop_rover.py
 
 A MuJoCo viewer window opens with the rover sitting on the floor; arrow keys drive it, `+`/`-` change the top speed, Space stops it, and Esc closes the window.
 
+![The simulated rover sitting on the floor of the default scene](images/sim_manual_control.png)
+
 ## How it works
 
 The script keeps three small dictionaries of mutable state (`drive_state`, `speed_state`, `applied_state`) instead of a class, since everything here runs in one process on one thread — the key callback just writes into them and the render loop reads them back out.
