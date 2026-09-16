@@ -1,3 +1,13 @@
+"""Drive the simulated rover by hand with the arrow keys.
+
+This is the same layered structure the real rover uses: differential-drive kinematics (turning
+a desired forward/turn speed into left/right wheel speeds) feeding a fixed-rate, 10 Hz command
+loop (matching rover_control/rover.py's COMMAND_RATE_HZ on the physical firmware). Because the
+sim is driven through that identical command interface, steering logic you get working here
+should behave the same way once you point it at the real rover - that's the whole point of
+testing in sim first.
+"""
+
 import time
 
 import envs  # noqa: F401  (imported for its side effect: registers Rover-v0)
@@ -5,23 +15,14 @@ import gymnasium as gym
 import mujoco.viewer
 import numpy as np
 
-# --- Physical limits (see docs/onshape-to-robot-mjcf.md's sibling tutorials for context) ---
-# Rated speed of the real rover's JGA25-371 gearmotors, assumed to be the wheel-shaft output
-# (no extra external gearing between motor and wheel). This is the hard ceiling: commanding
-# more than this is asking for something the real hardware can't do.
-MOTOR_RATED_RPM = 463
+# Physical limits, in rad/s (see docs/onshape-to-robot-mjcf.md for where these come from)
+MOTOR_RATED_RPM = 463  # real motor's rated speed - the hard ceiling for a commanded wheel speed
 MOTOR_MAX_RAD_S = MOTOR_RATED_RPM * 2 * np.pi / 60  # ~48.5 rad/s
-
-# Usable max kept well under the rated (no-load) speed - loaded speed runs lower in practice.
-MAX_SPEED = MOTOR_MAX_RAD_S * 0.5
-# Rough placeholder for the minimum wheel speed needed to overcome static friction and
-# actually roll instead of just stalling against the floor. Not measured on real hardware yet
-# (that's the BAM/friction-modeling tutorial's job) - treat this as a starting estimate.
-MIN_SPEED = 0.5
+MAX_SPEED = MOTOR_MAX_RAD_S * 0.5  # stay well under the rated (no-load) speed
+MIN_SPEED = 0.5  # rough floor so the wheels roll instead of stalling; not yet measured
 SPEED_STEP = 0.5  # rad/s adjusted per '+'/'-' press
 
-# Keep the turn-in-place speed gentler than straight-line driving.
-ANGULAR_RATIO = 3.0 / 5.0
+ANGULAR_RATIO = 3.0 / 5.0  # turning in place is gentler than driving straight
 
 # The real rover's firmware listens for commands at about this rate (see rover_control/
 # rover.py's COMMAND_RATE_HZ) - matching it here means driving in sim behaves like the
@@ -29,24 +30,26 @@ ANGULAR_RATIO = 3.0 / 5.0
 COMMAND_RATE_HZ = 10.0
 COMMAND_PERIOD_S = 1.0 / COMMAND_RATE_HZ
 
-# Arrow keys, not WASD: MuJoCo's viewer binds every letter of the alphabet to a built-in
-# render/visualization toggle (e.g. "W" is Wireframe, "S" is Shadow) and processes those
-# on every keypress regardless of our own key_callback below, so WASD would flip one of
-# those every time you drive. GLFW arrow-key and +/- codes (standard, not in either table).
+# Arrow keys, not WASD - MuJoCo's viewer already binds every letter key to its own shortcuts
+# (e.g. "W" toggles Wireframe), so WASD would fight with it. These are GLFW's key codes.
 GLFW_KEY_RIGHT, GLFW_KEY_LEFT, GLFW_KEY_DOWN, GLFW_KEY_UP = 262, 263, 264, 265
 GLFW_KEY_SPACE = 32
-GLFW_KEY_EQUAL, GLFW_KEY_MINUS = 61, 45  # '+' is shift+'=' on most layouts; GLFW reports
-# the unshifted physical key, so '=' is what arrives
+GLFW_KEY_EQUAL, GLFW_KEY_MINUS = 61, 45  # '+' is shift+'=', but GLFW reports the physical '='
 
 speed = 5.0  # top speed (rad/s), adjustable at runtime with +/-
 
-# Timestamp of the most recent press for each direction key. A key counts as "held" if
-# it was pressed within the last command period - GLFW re-fires the press while a key
-# stays down, so holding a key keeps refreshing its timestamp every tick.
-last_up = last_down = last_left = last_right = -1.0
+last_up = last_down = last_left = last_right = -1.0  # timestamp of each key's last press
 
 
 def on_key(keycode):
+    """MuJoCo's viewer calls this once every time a key is pressed.
+
+    It doesn't drive the rover directly - it just records *that* a key was pressed, by
+    stamping the current time into that key's `last_*` variable. `main()`'s loop is what
+    actually reads those timestamps and turns them into wheel speeds.
+    """
+    # `global` is required to assign to these - without it, `speed = ...` below would create
+    # a new local variable instead of updating the module-level one everything else reads.
     global speed, last_up, last_down, last_left, last_right
     now = time.perf_counter()
     if keycode == GLFW_KEY_UP:
@@ -57,10 +60,11 @@ def on_key(keycode):
         last_left = now
     elif keycode == GLFW_KEY_RIGHT:
         last_right = now
-    elif keycode == GLFW_KEY_SPACE:  # Space bar stops the rover
+    elif keycode == GLFW_KEY_SPACE:
+        # Stop: forget every direction at once, same as if no key had ever been pressed.
         last_up = last_down = last_left = last_right = -1.0
     elif keycode == GLFW_KEY_EQUAL:
-        speed = min(speed + SPEED_STEP, MAX_SPEED)
+        speed = min(speed + SPEED_STEP, MAX_SPEED)  # clamp so +/- can't exceed the motor limits
         print(f"speed: {speed:.1f} rad/s")
     elif keycode == GLFW_KEY_MINUS:
         speed = max(speed - SPEED_STEP, MIN_SPEED)
@@ -68,6 +72,13 @@ def on_key(keycode):
 
 
 def held(last_press_time, now):
+    """Was this key pressed recently enough to still count as "held down"?
+
+    GLFW keeps calling on_key() over and over for as long as a key stays down (keyboard
+    auto-repeat), which keeps refreshing that key's timestamp. So "held" just means "the
+    timestamp is fresher than one command period" - if you let go, the timestamp stops
+    updating and quickly falls outside that window.
+    """
     return now - last_press_time <= COMMAND_PERIOD_S
 
 
