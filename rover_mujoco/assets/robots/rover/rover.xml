@@ -1,128 +1,424 @@
-<mujoco model="rover_project">
-  <!-- Auto-generated from rover.urdf via mj_saveLastXML; base_link pos/freejoint hand-adjusted, see rover_env.py -->
-  <compiler angle="radian"/>
-
-  <!-- STL meshes exported from OnShape by onshape-to-robot, one per rover part -->
-  <asset>
-    <mesh name="left_motor" content_type="model/stl" file="meshes/left_motor.stl"/>
-    <mesh name="base_plate" content_type="model/stl" file="meshes/base_plate.stl"/>
-    <mesh name="front_wheel_upper_joint" content_type="model/stl" file="meshes/front_wheel_upper_joint.stl"/>
-    <mesh name="front_wheel_bracket" content_type="model/stl" file="meshes/front_wheel_bracket.stl"/>
-    <mesh name="left_motor_bracket" content_type="model/stl" file="meshes/left_motor_bracket.stl"/>
-    <mesh name="battery" content_type="model/stl" file="meshes/battery.stl"/>
-    <mesh name="esp32" content_type="model/stl" file="meshes/esp32.stl"/>
-    <mesh name="motor_controller" content_type="model/stl" file="meshes/motor_controller.stl"/>
-    <mesh name="right_motor" content_type="model/stl" file="meshes/right_motor.stl"/>
-    <mesh name="voltage_regulator" content_type="model/stl" file="meshes/voltage_regulator.stl"/>
-    <mesh name="right_motor_bracket" content_type="model/stl" file="meshes/right_motor_bracket.stl"/>
-    <mesh name="left_wheel" content_type="model/stl" file="meshes/left_wheel.stl"/>
-    <mesh name="right_wheel" content_type="model/stl" file="meshes/right_wheel.stl"/>
-    <mesh name="front_wheel_lower_joint" content_type="model/stl" file="meshes/front_wheel_lower_joint.stl"/>
-    <mesh name="front_wheel" content_type="model/stl" file="meshes/front_wheel.stl"/>
-  </asset>
-
+<?xml version="1.0" ?>
+<!-- Generated using onshape-to-robot -->
+<!-- Onshape https://cad.onshape.com/documents/b96fba38d2ae45c4cf890061/w/5fb0397f3be015e9540849c1/e/012331fafbc1f855042645e5 -->
+<mujoco model="C:\Users\rapan\OneDrive\Documents\mujoco\rover">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <default>
+    <default class="C:\Users\rapan\OneDrive\Documents\mujoco\rover">
+      <joint frictionloss="0.1" armature="0.005"/>
+      <position kp="50" dampratio="1"/>
+      <default class="visual">
+        <geom type="mesh" contype="0" conaffinity="0" group="2"/>
+      </default>
+      <default class="collision">
+        <geom group="3"/>
+      </default>
+    </default>
+  </default>
   <worldbody>
-    <!-- Rover chassis: free-floating base (6-DOF) so the whole rover can drive around the world -->
-    <body name="base_link" pos="0 0 0.1">
-      <inertial pos="-0.00237104 0.0277886 -0.0201836" quat="0.477074 0.524947 -0.508382 0.48824" mass="0.353116" diaginertia="0.00183094 0.00151404 0.000358957"/>
-      <joint name="base_floating_joint" type="free"/>
-      <!-- Adjustable-tilt camera, mounted directly above the front_wheel caster and tilted
-           forward along the direction of travel; centered/straight-down would just see the
-           chassis itself.
-
-           This used to sit at y=+0.12, the opposite end of the chassis from the caster, and
-           the drive convention in scripts/line_follower.py was inverted to match, so the rover
-           drove caster-trailing. Two errors that cancelled: the sim was self-consistent (the
-           camera led the direction of travel either way) which is why the line follower
-           trained and evaluated fine, but the geometry did not match the real rover, whose
-           camera sits over the caster. teleop_rover.py always had it right.
-           Default tilt is 60 deg from straight-down, not the 15.2 it was at the old mount.
-           Sitting above the caster, a shallow tilt looks straight at the rover's own chassis
-           -- 13.2% of the frame is its own body -- and the track is simply not in view.
-           Measured with line_follower.py's own line_error() over 12 poses on each track:
-           45 deg finds the line 0/12 times, 55 deg 9/12 and 7/12, 60 deg 12/12 on both.
-           (quat, not axisangle: this
-           file's compiler angle="radian" makes axisangle degrees a common footgun, and an
-           earlier version of this line was actually "-50 radians" by that mistake, not
-           "-50 deg" as its comment claimed.) This quat is the only place the tilt is set --
-           quat="0 0 sin(t/2) cos(t/2)" for a tilt of t up from straight-down. Once the
-           camera mount is CADed in with its own rotational joint, the tilt becomes that
-           joint's position and this becomes the mount's rest pose.
-           See docs/pid-line-follower.md. -->
-      <camera name="top_cam" pos="0 -0.098 0.07" quat="0 0 0.50000000 0.86602540" fovy="60"/>
-      <!-- Massless reference frame for the base velocimeter sensor. -->
-      <site name="base_imu" pos="0 0 0" size="0.005"/>
-      <geom pos="0.0160863 -0.0852797 0.272765" quat="0.707105 0 0.707108 0" type="mesh" contype="0" conaffinity="0" rgba="0.647059 0.647059 0.647059 1" mesh="left_motor"/>
-      <geom pos="-0.0886915 -0.18808 -0.0273587" quat="0.707105 0 0 -0.707108" type="mesh" contype="0" conaffinity="0" rgba="0.917647 0.917647 0.917647 1" mesh="base_plate"/>
-      <geom pos="-0.473714 0.0946882 -0.0468587" quat="1.76043e-12 1.32679e-06 -1 -1.32679e-06" type="mesh" contype="0" conaffinity="0" rgba="0.498039 0.498039 0.498039 1" mesh="front_wheel_upper_joint"/>
-      <geom pos="-0.472714 -0.220152 -0.0468587" quat="1.32679e-06 0 0 -1" type="mesh" contype="0" conaffinity="0" rgba="0.101961 0.101961 0.101961 1" mesh="front_wheel_bracket"/>
-      <geom pos="-0.148629 0.205404 -0.0273587" quat="1.32679e-06 1 0 0" type="mesh" contype="0" conaffinity="0" rgba="0.352941 0.34902 0.34902 1" mesh="left_motor_bracket"/>
-      <geom pos="-0.124871 0.0875749 -0.0243587" quat="0.707105 0 0 -0.707108" type="mesh" contype="0" conaffinity="0" rgba="0.0117647 0.505882 0.905882 1" mesh="battery"/>
-      <geom pos="0.119292 0.0944044 -0.0213587" quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" rgba="0.262745 0.282353 0.301961 1" mesh="esp32"/>
-      <geom pos="0.20396 0.300238 -0.0213587" quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" rgba="1 0 0 1" mesh="motor_controller"/>
-      <geom pos="-0.0190726 0.115532 0.272765" quat="9.38184e-07 0.707105 9.38187e-07 -0.707108" type="mesh" contype="0" conaffinity="0" rgba="0.647059 0.647059 0.647059 1" mesh="right_motor"/>
-      <geom pos="0.26251 0.228404 -0.0213587" quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" rgba="0.0862745 0.317647 0.690196 1" mesh="voltage_regulator"/>
-      <geom pos="0.145642 0.00584812 -0.0273587" quat="1.76037e-12 1.32679e-06 -1 -1.32679e-06" type="mesh" contype="0" conaffinity="0" rgba="0.352941 0.34902 0.34902 1" mesh="right_motor_bracket"/>
-      <!-- Driven left wheel: hinge joint actuated by the left_wheel_motor in rover_scene.xml -->
-      <body name="left_wheel" pos="0.0797863 0.0611262 -0.0504087" quat="0.499998 0.5 -0.500002 -0.5">
-        <inertial pos="0 0 -0.01325" quat="0.5 0.5 -0.5 0.5" mass="0.034" diaginertia="2.00404e-05 1.20063e-05 1.20063e-05"/>
-        <joint name="left_axle"/>
-        <!-- Visual-only detailed mesh (collision handled by the cylinder primitive below) -->
-        <geom pos="0.464529 -0.127654 -0.0265" quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" rgba="0.176471 0.654902 0.937255 1" mesh="left_wheel"/>
-        <!-- Cylinder collision primitive matching the wheel mesh's radius/width. Its quat is
-             derived from the MESH's *compiled* geom_quat (MuJoCo re-centers/re-orients mesh
-             assets at compile time, so this is not the identity-ish value in the mesh geom's
-             own XML `quat` above) composed with a -90 deg rotation about Y, which maps the
-             cylinder's default symmetry axis onto the mesh's measured thin axis (mesh-local X).
-             An earlier version of this file used the *uncompiled* mesh quat by mistake, which
-             put the cylinder's rolling axis 90 deg off the wheel's true axle direction — it
-             still produced roughly-correct net motion (tumbling nets forward progress) but
-             visibly rough/tilted motion, which is what this fixes. -->
-        <geom type="cylinder" size="0.03435 0.01325" quat="0 0.707107 -0.707107 0"/>
+    <!-- Link tt_motor -->
+    <body name="tt_motor" pos="0 0 0" quat="1 0 0 0" childclass="C:\Users\rapan\OneDrive\Documents\mujoco\rover">
+      <freejoint name="tt_motor_freejoint"/>
+      <inertial pos="-0.121228 -0.032057 0.105597" mass="0.130393" fullinertia="0.000131571 5.33375e-05 0.000170509 1.35524e-07 1.6807e-08 -9.70242e-06"/>
+      <!-- Part bracket -->
+      <geom name="bracket_visual" type="mesh" class="visual" pos="-0.151412 0.03104 0.081501" quat="0.707107 0.707107 0.000612456 0.000612456" mesh="bracket" material="bracket_material"/>
+      <!-- <geom name="bracket_collision" type="mesh" class="collision" pos="-0.151412 0.03104 0.081501" quat="0.707107 0.707107 0.000612456 0.000612456" mesh="bracket" material="bracket_material"/> -->
+      <!-- Part battery_pack -->
+      <geom name="battery_pack_visual" type="mesh" class="visual" pos="-0.0878099 0.015028 0.166514" quat="0.500433 -0.499567 -0.500433 -0.499567" mesh="battery_pack" material="battery_pack_material"/>
+      <!-- <geom name="battery_pack_collision" type="mesh" class="collision" pos="-0.0878099 0.015028 0.166514" quat="0.500433 -0.499567 -0.500433 -0.499567" mesh="battery_pack" material="battery_pack_material"/> -->
+      <!-- Part bracket_2 -->
+      <geom name="bracket_2_visual" type="mesh" class="visual" pos="-0.0911337 -0.0440308 0.081501" quat="0.000612456 0.000612456 -0.707107 -0.707107" mesh="bracket" material="bracket_material"/>
+      <!-- <geom name="bracket_2_collision" type="mesh" class="collision" pos="-0.0911337 -0.0440308 0.081501" quat="0.000612456 0.000612456 -0.707107 -0.707107" mesh="bracket" material="bracket_material"/> -->
+      <!-- Part camera_stand -->
+      <geom name="camera_stand_visual" type="mesh" class="visual" pos="-0.163787 -0.135933 0.087601" quat="0.707107 -0.707107 -0.000612456 0.000612456" mesh="camera_stand" material="camera_stand_material"/>
+      <!-- <geom name="camera_stand_collision" type="mesh" class="collision" pos="-0.163787 -0.135933 0.087601" quat="0.707107 -0.707107 -0.000612456 0.000612456" mesh="camera_stand" material="camera_stand_material"/> -->
+      <!-- Part acrylic_body -->
+      <geom name="acrylic_body_visual" type="mesh" class="visual" pos="-0.121212 -0.0414953 0.081501" quat="0.000866143 -0 -0 -1" mesh="acrylic_body" material="acrylic_body_material"/>
+      <!-- <geom name="acrylic_body_collision" type="mesh" class="collision" pos="-0.121212 -0.0414953 0.081501" quat="0.000866143 -0 -0 -1" mesh="acrylic_body" material="acrylic_body_material"/> -->
+      <!-- Part motor_driver -->
+      <geom name="motor_driver_visual" type="mesh" class="visual" pos="-0.160759 0.0612642 0.104987" quat="1 -0 -0 0.000866143" mesh="motor_driver" material="pcb_1__body1_material"/>
+      <!-- <geom name="motor_driver_collision" type="mesh" class="collision" pos="-0.160759 0.0612642 0.104987" quat="1 -0 -0 0.000866143" mesh="motor_driver" material="motor_driver_material"/> -->
+      <!-- Part caster_block -->
+      <geom name="caster_block_visual" type="mesh" class="visual" pos="-0.230802 -0.113432 0.081501" quat="0.707107 0.707107 0.000612456 0.000612456" mesh="caster_block" material="caster_block_material"/>
+      <!-- <geom name="caster_block_collision" type="mesh" class="collision" pos="-0.230802 -0.113432 0.081501" quat="0.707107 0.707107 0.000612456 0.000612456" mesh="caster_block" material="caster_block_material"/> -->
+      <!-- Part caster_wheel_base -->
+      <geom name="caster_wheel_base_visual" type="mesh" class="visual" pos="-0.16218 -0.197783 0.063401" quat="0.707107 0.707107 0.000612456 0.000612456" mesh="caster_wheel_base" material="caster_wheel_base_material"/>
+      <!-- <geom name="caster_wheel_base_collision" type="mesh" class="collision" pos="-0.16218 -0.197783 0.063401" quat="0.707107 0.707107 0.000612456 0.000612456" mesh="caster_wheel_base" material="caster_wheel_base_material"/> -->
+      <!-- Part battery_holder -->
+      <geom name="battery_holder_visual" type="mesh" class="visual" pos="-0.158349 0.00955964 0.094501" quat="0.500433 -0.500433 0.499567 -0.499567" mesh="battery_holder" material="battery_holder_material"/>
+      <!-- <geom name="battery_holder_collision" type="mesh" class="collision" pos="-0.158349 0.00955964 0.094501" quat="0.500433 -0.500433 0.499567 -0.499567" mesh="battery_holder" material="battery_holder_material"/> -->
+      <!-- Part microchip_2 -->
+      <geom name="microchip_2_visual" type="mesh" class="visual" pos="-0.122066 -0.0966969 0.084449" quat="0.499567 0.499567 0.500433 0.500433" mesh="microchip_2" material="microchip_2_material"/>
+      <!-- <geom name="microchip_2_collision" type="mesh" class="collision" pos="-0.122066 -0.0966969 0.084449" quat="0.499567 0.499567 0.500433 0.500433" mesh="microchip_2" material="microchip_2_material"/> -->
+      <!-- Part transistor_3_leg2_2 -->
+      <geom name="transistor_3_leg2_2_visual" type="mesh" class="visual" pos="-0.105827 -0.113829 0.084449" quat="0.000612456 0.000612456 -0.707107 -0.707107" mesh="transistor_3_leg2_2" material="transistor_3_leg2_2_material"/>
+      <!-- <geom name="transistor_3_leg2_2_collision" type="mesh" class="collision" pos="-0.105827 -0.113829 0.084449" quat="0.000612456 0.000612456 -0.707107 -0.707107" mesh="transistor_3_leg2_2" material="transistor_3_leg2_2_material"/> -->
+      <!-- Part resistor1_2 -->
+      <geom name="resistor1_2_visual" type="mesh" class="visual" pos="-0.118302 -0.10514 0.08445" quat="0.499567 0.499567 0.500433 0.500433" mesh="resistor1_2" material="resistor1_2_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.118302 -0.10514 0.08445" quat="0.499567 0.499567 0.500433 0.500433" mesh="resistor1_2" material="resistor1_2_material"/> -->
+      <!-- Part resistor2_32_2 -->
+      <geom name="resistor2_32_2_visual" type="mesh" class="visual" pos="-0.126596 -0.108205 0.08445" quat="0.499567 0.499567 0.500433 0.500433" mesh="resistor2_32_2" material="resistor2_32_2_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.126596 -0.108205 0.08445" quat="0.499567 0.499567 0.500433 0.500433" mesh="resistor2_32_2" material="resistor2_32_2_material"/> -->
+      <!-- Part resistor1_2_2 -->
+      <geom name="resistor1_2_2_visual" type="mesh" class="visual" pos="-0.118328 -0.0899404 0.08445" quat="0.499567 0.499567 0.500433 0.500433" mesh="resistor1_2" material="resistor1_2_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.118328 -0.0899404 0.08445" quat="0.499567 0.499567 0.500433 0.500433" mesh="resistor1_2" material="resistor1_2_material"/> -->
+      <!-- Part tanchip_2 -->
+      <geom name="tanchip_2_visual" type="mesh" class="visual" pos="-0.105955 -0.103219 0.084449" quat="0.707107 0.707107 0.000612456 0.000612456" mesh="tanchip_2" material="tanchip_2_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.105955 -0.103219 0.084449" quat="0.707107 0.707107 0.000612456 0.000612456" mesh="tanchip_2" material="tanchip_2_material"/> -->
+      <!-- Part resistor1_2_3 -->
+      <geom name="resistor1_2_3_visual" type="mesh" class="visual" pos="-0.121308 -0.101396 0.08445" quat="0.000612456 0.000612456 -0.707107 -0.707107" mesh="resistor1_2" material="resistor1_2_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.121308 -0.101396 0.08445" quat="0.000612456 0.000612456 -0.707107 -0.707107" mesh="resistor1_2" material="resistor1_2_material"/> -->
+      <!-- Part resistor1_2_4 -->
+      <geom name="resistor1_2_4_visual" type="mesh" class="visual" pos="-0.121299 -0.106646 0.08445" quat="0.000612456 0.000612456 -0.707107 -0.707107" mesh="resistor1_2" material="resistor1_2_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.121299 -0.106646 0.08445" quat="0.000612456 0.000612456 -0.707107 -0.707107" mesh="resistor1_2" material="resistor1_2_material"/> -->
+      <!-- Part resistor1_2_5 -->
+      <geom name="resistor1_2_5_visual" type="mesh" class="visual" pos="-0.121302 -0.104896 0.08445" quat="0.000612456 0.000612456 -0.707107 -0.707107" mesh="resistor1_2" material="resistor1_2_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.121302 -0.104896 0.08445" quat="0.000612456 0.000612456 -0.707107 -0.707107" mesh="resistor1_2" material="resistor1_2_material"/> -->
+      <!-- Part resistor2_32_2_2 -->
+      <geom name="resistor2_32_2_2_visual" type="mesh" class="visual" pos="-0.126615 -0.0977048 0.08445" quat="0.499567 0.499567 0.500433 0.500433" mesh="resistor2_32_2" material="resistor2_32_2_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.126615 -0.0977048 0.08445" quat="0.499567 0.499567 0.500433 0.500433" mesh="resistor2_32_2" material="resistor2_32_2_material"/> -->
+      <!-- Part resistor1_2_6 -->
+      <geom name="resistor1_2_6_visual" type="mesh" class="visual" pos="-0.117221 -0.0941385 0.08445" quat="0.000612456 0.000612456 -0.707107 -0.707107" mesh="resistor1_2" material="resistor1_2_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.117221 -0.0941385 0.08445" quat="0.000612456 0.000612456 -0.707107 -0.707107" mesh="resistor1_2" material="resistor1_2_material"/> -->
+      <!-- Part pcb -->
+      <geom name="pcb_visual" type="mesh" class="visual" pos="-0.0953081 -0.101476 0.084501" quat="0.500433 -0.499567 -0.500433 -0.499567" mesh="pcb" material="green_pcb"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.0953081 -0.101476 0.084501" quat="0.500433 -0.499567 -0.500433 -0.499567" mesh="pcb" material="pcb_material"/> -->
+      <!-- Part resistor1_2_7 -->
+      <geom name="resistor1_2_7_visual" type="mesh" class="visual" pos="-0.119502 -0.105142 0.08445" quat="0.499567 0.499567 0.500433 0.500433" mesh="resistor1_2" material="resistor1_2_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.119502 -0.105142 0.08445" quat="0.499567 0.499567 0.500433 0.500433" mesh="resistor1_2" material="resistor1_2_material"/> -->
+      <!-- Part resistor1_2_8 -->
+      <geom name="resistor1_2_8_visual" type="mesh" class="visual" pos="-0.121305 -0.103146 0.08445" quat="0.000612456 0.000612456 -0.707107 -0.707107" mesh="resistor1_2" material="resistor1_2_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.121305 -0.103146 0.08445" quat="0.000612456 0.000612456 -0.707107 -0.707107" mesh="resistor1_2" material="resistor1_2_material"/> -->
+      <!-- Part transistor_3_leg_2 -->
+      <geom name="transistor_3_leg_2_visual" type="mesh" class="visual" pos="-0.105808 -0.101469 0.084449" quat="0.000612456 0.000612456 -0.707107 -0.707107" mesh="transistor_3_leg_2" material="transistor_3_leg_2_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.105808 -0.101469 0.084449" quat="0.000612456 0.000612456 -0.707107 -0.707107" mesh="transistor_3_leg_2" material="transistor_3_leg_2_material"/> -->
+      <!-- Part rectangularchip_2 -->
+      <geom name="rectangularchip_2_visual" type="mesh" class="visual" pos="-0.103651 -0.105315 0.08445" quat="0.500433 0.500433 -0.499567 -0.499567" mesh="rectangularchip_2" material="rectangularchip_2_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.103651 -0.105315 0.08445" quat="0.500433 0.500433 -0.499567 -0.499567" mesh="rectangularchip_2" material="rectangularchip_2_material"/> -->
+      <!-- Part resistor1_2_9 -->
+      <geom name="resistor1_2_9_visual" type="mesh" class="visual" pos="-0.121311 -0.0996456 0.08445" quat="0.000612456 0.000612456 -0.707107 -0.707107" mesh="resistor1_2" material="resistor1_2_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.121311 -0.0996456 0.08445" quat="0.000612456 0.000612456 -0.707107 -0.707107" mesh="resistor1_2" material="resistor1_2_material"/> -->
+      <!-- Part resistor1_2_10 -->
+      <geom name="resistor1_2_10_visual" type="mesh" class="visual" pos="-0.117202 -0.104888 0.08445" quat="0.000612456 0.000612456 -0.707107 -0.707107" mesh="resistor1_2" material="resistor1_2_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.117202 -0.104888 0.08445" quat="0.000612456 0.000612456 -0.707107 -0.707107" mesh="resistor1_2" material="resistor1_2_material"/> -->
+      <!-- Part wifi_card_2 -->
+      <geom name="wifi_card_2_visual" type="mesh" class="visual" pos="-0.122483 -0.101523 0.084446" quat="0.499567 0.499567 0.500433 0.500433" mesh="wifi_card_2" material="wifi_card_2_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.122483 -0.101523 0.084446" quat="0.499567 0.499567 0.500433 0.500433" mesh="wifi_card_2" material="wifi_card_2_material"/> -->
+      <!-- Part resistor1_2_11 -->
+      <geom name="resistor1_2_11_visual" type="mesh" class="visual" pos="-0.119528 -0.0899425 0.08445" quat="0.499567 0.499567 0.500433 0.500433" mesh="resistor1_2" material="resistor1_2_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.119528 -0.0899425 0.08445" quat="0.499567 0.499567 0.500433 0.500433" mesh="resistor1_2" material="resistor1_2_material"/> -->
+      <!-- Part 3_digit_7_segment_display__lm2596_buck_converter_4_0_40_to_1_3_37v__lpattern3 -->
+      <geom name="3_digit_7_segment_display__lm2596_buck_converter_4_0_40_to_1_3_37v__lpattern3_visual" type="mesh" class="visual" pos="-0.0912555 0.0485567 0.093301" quat="0.000612456 0.000612456 -0.707107 -0.707107" mesh="3_digit_7_segment_display__lm2596_buck_converter_4_0_40_to_1_3_37v__lpattern3" material="3_digit_7_segment_display__lm2596_buck_converter_4_0_40_to_1_3_37v__lpattern3_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.0912555 0.0485567 0.093301" quat="0.000612456 0.000612456 -0.707107 -0.707107" mesh="3_digit_7_segment_display__lm2596_buck_converter_4_0_40_to_1_3_37v__lpattern3" material="3_digit_7_segment_display__lm2596_buck_converter_4_0_40_to_1_3_37v__lpattern3_material"/> -->
+      <!-- Part trimpot_3296w__lm2596_buck_converter_4_0_40_to_1_3_37v_valor_predeterminado__ressalto_extruso3 -->
+      <geom name="trimpot_3296w__lm2596_buck_converter_4_0_40_to_1_3_37v_valor_predeterminado__ressalto_extruso3_visual" type="mesh" class="visual" pos="-0.0964444 0.0219627 0.086101" quat="1 0 -0 0.000866143" mesh="trimpot_3296w__lm2596_buck_converter_4_0_40_to_1_3_37v_valor_predeterminado__ressalto_extruso3" material="trimpot_3296w__lm2596_buck_converter_4_0_40_to_1_3_37v_valor_predeterminado__ressalto_extruso3_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.0964444 0.0219627 0.086101" quat="1 0 -0 0.000866143" mesh="trimpot_3296w__lm2596_buck_converter_4_0_40_to_1_3_37v_valor_predeterminado__ressalto_extruso3" material="trimpot_3296w__lm2596_buck_converter_4_0_40_to_1_3_37v_valor_predeterminado__ressalto_extruso3_material"/> -->
+      <!-- Part base___lm2596_buck_converter_4_0_40_to_1_3_37v__mirror2 -->
+      <geom name="base___lm2596_buck_converter_4_0_40_to_1_3_37v__mirror2_visual" type="mesh" class="visual" pos="-0.0912364 0.0375567 0.084501" quat="0.000612456 0.000612456 -0.707107 -0.707107" mesh="base___lm2596_buck_converter_4_0_40_to_1_3_37v__mirror2" material="base___lm2596_buck_converter_4_0_40_to_1_3_37v__mirror2_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.0912364 0.0375567 0.084501" quat="0.000612456 0.000612456 -0.707107 -0.707107" mesh="base___lm2596_buck_converter_4_0_40_to_1_3_37v__mirror2" material="base___lm2596_buck_converter_4_0_40_to_1_3_37v__mirror2_material"/> -->
+      <!-- Part gear_box_bottom_1__body1 -->
+      <geom name="gear_box_bottom_1__body1_visual" type="mesh" class="visual" pos="-0.147035 -0.00654 0.061151" quat="0.000612456 0.707107 0.000612456 -0.707107" mesh="gear_box_bottom_1__body1" material="gear_box_bottom_1__body1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.147035 -0.00654 0.061151" quat="0.000612456 0.707107 0.000612456 -0.707107" mesh="gear_box_bottom_1__body1" material="gear_box_bottom_1__body1_material"/> -->
+      <!-- Part pcb_1__body1 -->
+      <geom name="pcb_1__body1_visual" type="mesh" class="visual" pos="-0.148535 -0.0065426 0.061151" quat="0.000612456 0.707107 0.000612456 -0.707107" mesh="pcb_1__body1" material="pcb_1__body1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.148535 -0.0065426 0.061151" quat="0.000612456 0.707107 0.000612456 -0.707107" mesh="pcb_1__body1" material="pcb_1__body1_material"/> -->
+      <!-- Part gear_box_top_1__body1 -->
+      <geom name="gear_box_top_1__body1_visual" type="mesh" class="visual" pos="-0.147035 -0.00654 0.061151" quat="0.000612456 0.707107 0.000612456 -0.707107" mesh="gear_box_top_1__body1" material="gear_box_top_1__body1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.147035 -0.00654 0.061151" quat="0.000612456 0.707107 0.000612456 -0.707107" mesh="gear_box_top_1__body1" material="gear_box_top_1__body1_material"/> -->
+      <!-- Part shaft_1__body1 -->
+      <geom name="shaft_1__body1_visual" type="mesh" class="visual" pos="-0.148635 -0.00654278 0.061151" quat="0.000612456 0.707107 0.000612456 -0.707107" mesh="shaft_1__body1" material="shaft_1__body1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.148635 -0.00654278 0.061151" quat="0.000612456 0.707107 0.000612456 -0.707107" mesh="shaft_1__body1" material="shaft_1__body1_material"/> -->
+      <!-- Part magnet_1__body1 -->
+      <geom name="magnet_1__body1_visual" type="mesh" class="visual" pos="-0.148935 -0.0065433 0.061151" quat="0.000612456 0.707107 0.000612456 -0.707107" mesh="magnet_1__body1" material="magnet_1__body1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.148935 -0.0065433 0.061151" quat="0.000612456 0.707107 0.000612456 -0.707107" mesh="magnet_1__body1" material="magnet_1__body1_material"/> -->
+      <!-- Part 92000a001_passivated_18_8_stainless_steel_pan_head_phillips_screws_1__body1 -->
+      <geom name="92000a001_passivated_18_8_stainless_steel_pan_head_phillips_screws_1__body1_visual" type="mesh" class="visual" pos="-0.192788 0.00154075 0.061171" quat="0.000612456 0.707107 0.000612456 -0.707107" mesh="92000a001_passivated_18_8_stainless_steel_pan_head_phillips_screws_1__body1" material="92000a001_passivated_18_8_stainless_steel_pan_head_phillips_screws_1__body1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.192788 0.00154075 0.061171" quat="0.000612456 0.707107 0.000612456 -0.707107" mesh="92000a001_passivated_18_8_stainless_steel_pan_head_phillips_screws_1__body1" material="92000a001_passivated_18_8_stainless_steel_pan_head_phillips_screws_1__body1_material"/> -->
+      <!-- Part rotor_holding_1__body1 -->
+      <geom name="rotor_holding_1__body1_visual" type="mesh" class="visual" pos="-0.147035 -0.00654 0.061151" quat="0.000612456 0.707107 0.000612456 -0.707107" mesh="rotor_holding_1__body1" material="rotor_holding_1__body1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.147035 -0.00654 0.061151" quat="0.000612456 0.707107 0.000612456 -0.707107" mesh="rotor_holding_1__body1" material="rotor_holding_1__body1_material"/> -->
+      <!-- Part motor_1__body1 -->
+      <geom name="motor_1__body1_visual" type="mesh" class="visual" pos="-0.147035 -0.00654 0.061151" quat="0.000612456 0.707107 0.000612456 -0.707107" mesh="motor_1__body1" material="motor_1__body1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.147035 -0.00654 0.061151" quat="0.000612456 0.707107 0.000612456 -0.707107" mesh="motor_1__body1" material="motor_1__body1_material"/> -->
+      <!-- Part gear_box_center_1__body1 -->
+      <geom name="gear_box_center_1__body1_visual" type="mesh" class="visual" pos="-0.147035 -0.00654 0.061151" quat="0.000612456 0.707107 0.000612456 -0.707107" mesh="gear_box_center_1__body1" material="gear_box_center_1__body1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.147035 -0.00654 0.061151" quat="0.000612456 0.707107 0.000612456 -0.707107" mesh="gear_box_center_1__body1" material="gear_box_center_1__body1_material"/> -->
+      <!-- Part 92000a001_passivated_18_8_stainless_steel_pan_head_phillips_screws_1__body1_2 -->
+      <geom name="92000a001_passivated_18_8_stainless_steel_pan_head_phillips_screws_1__body1_2_visual" type="mesh" class="visual" pos="-0.192721 -0.0147792 0.061151" quat="0.000612456 0.707107 0.000612456 -0.707107" mesh="92000a001_passivated_18_8_stainless_steel_pan_head_phillips_screws_1__body1" material="92000a001_passivated_18_8_stainless_steel_pan_head_phillips_screws_1__body1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.192721 -0.0147792 0.061151" quat="0.000612456 0.707107 0.000612456 -0.707107" mesh="92000a001_passivated_18_8_stainless_steel_pan_head_phillips_screws_1__body1" material="92000a001_passivated_18_8_stainless_steel_pan_head_phillips_screws_1__body1_material"/> -->
+      <!-- Part rotor_1__body1 -->
+      <geom name="rotor_1__body1_visual" type="mesh" class="visual" pos="-0.150196 -0.00628548 0.061151" quat="0.000612456 0.707107 0.000612456 -0.707107" mesh="rotor_1__body1" material="rotor_1__body1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.150196 -0.00628548 0.061151" quat="0.000612456 0.707107 0.000612456 -0.707107" mesh="rotor_1__body1" material="rotor_1__body1_material"/> -->
+      <!-- Part gear_box_bottom_1__body1_2 -->
+      <geom name="gear_box_bottom_1__body1_2_visual" type="mesh" class="visual" pos="-0.0955102 -0.00645075 0.061151" quat="0.000612456 -0.707107 -0.000612456 -0.707107" mesh="gear_box_bottom_1__body1" material="gear_box_bottom_1__body1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.0955102 -0.00645075 0.061151" quat="0.000612456 -0.707107 -0.000612456 -0.707107" mesh="gear_box_bottom_1__body1" material="gear_box_bottom_1__body1_material"/> -->
+      <!-- Part pcb_1__body1_2 -->
+      <geom name="pcb_1__body1_2_visual" type="mesh" class="visual" pos="-0.0940102 -0.00644815 0.061151" quat="0.000612456 -0.707107 -0.000612456 -0.707107" mesh="pcb_1__body1" material="pcb_1__body1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.0940102 -0.00644815 0.061151" quat="0.000612456 -0.707107 -0.000612456 -0.707107" mesh="pcb_1__body1" material="pcb_1__body1_material"/> -->
+      <!-- Part gear_box_top_1__body1_2 -->
+      <geom name="gear_box_top_1__body1_2_visual" type="mesh" class="visual" pos="-0.0955102 -0.00645075 0.061151" quat="0.000612456 -0.707107 -0.000612456 -0.707107" mesh="gear_box_top_1__body1" material="gear_box_top_1__body1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.0955102 -0.00645075 0.061151" quat="0.000612456 -0.707107 -0.000612456 -0.707107" mesh="gear_box_top_1__body1" material="gear_box_top_1__body1_material"/> -->
+      <!-- Part shaft_1__body1_2 -->
+      <geom name="shaft_1__body1_2_visual" type="mesh" class="visual" pos="-0.0939102 -0.00644798 0.061151" quat="0.000612456 -0.707107 -0.000612456 -0.707107" mesh="shaft_1__body1" material="shaft_1__body1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.0939102 -0.00644798 0.061151" quat="0.000612456 -0.707107 -0.000612456 -0.707107" mesh="shaft_1__body1" material="shaft_1__body1_material"/> -->
+      <!-- Part magnet_1__body1_2 -->
+      <geom name="magnet_1__body1_2_visual" type="mesh" class="visual" pos="-0.0936102 -0.00644746 0.061151" quat="0.000612456 -0.707107 -0.000612456 -0.707107" mesh="magnet_1__body1" material="magnet_1__body1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.0936102 -0.00644746 0.061151" quat="0.000612456 -0.707107 -0.000612456 -0.707107" mesh="magnet_1__body1" material="magnet_1__body1_material"/> -->
+      <!-- Part 92000a001_passivated_18_8_stainless_steel_pan_head_phillips_screws_1__body1_3 -->
+      <geom name="92000a001_passivated_18_8_stainless_steel_pan_head_phillips_screws_1__body1_3_visual" type="mesh" class="visual" pos="-0.0497851 0.00178847 0.061131" quat="0.000612456 -0.707107 -0.000612456 -0.707107" mesh="92000a001_passivated_18_8_stainless_steel_pan_head_phillips_screws_1__body1" material="92000a001_passivated_18_8_stainless_steel_pan_head_phillips_screws_1__body1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.0497851 0.00178847 0.061131" quat="0.000612456 -0.707107 -0.000612456 -0.707107" mesh="92000a001_passivated_18_8_stainless_steel_pan_head_phillips_screws_1__body1" material="92000a001_passivated_18_8_stainless_steel_pan_head_phillips_screws_1__body1_material"/> -->
+      <!-- Part rotor_holding_1__body1_2 -->
+      <geom name="rotor_holding_1__body1_2_visual" type="mesh" class="visual" pos="-0.0955102 -0.00645075 0.061151" quat="0.000612456 -0.707107 -0.000612456 -0.707107" mesh="rotor_holding_1__body1" material="rotor_holding_1__body1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.0955102 -0.00645075 0.061151" quat="0.000612456 -0.707107 -0.000612456 -0.707107" mesh="rotor_holding_1__body1" material="rotor_holding_1__body1_material"/> -->
+      <!-- Part motor_1__body1_2 -->
+      <geom name="motor_1__body1_2_visual" type="mesh" class="visual" pos="-0.0955102 -0.00645075 0.061151" quat="0.000612456 -0.707107 -0.000612456 -0.707107" mesh="motor_1__body1" material="motor_1__body1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.0955102 -0.00645075 0.061151" quat="0.000612456 -0.707107 -0.000612456 -0.707107" mesh="motor_1__body1" material="motor_1__body1_material"/> -->
+      <!-- Part gear_box_center_1__body1_2 -->
+      <geom name="gear_box_center_1__body1_2_visual" type="mesh" class="visual" pos="-0.0955102 -0.00645075 0.061151" quat="0.000612456 -0.707107 -0.000612456 -0.707107" mesh="gear_box_center_1__body1" material="gear_box_center_1__body1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.0955102 -0.00645075 0.061151" quat="0.000612456 -0.707107 -0.000612456 -0.707107" mesh="gear_box_center_1__body1" material="gear_box_center_1__body1_material"/> -->
+      <!-- Part 92000a001_passivated_18_8_stainless_steel_pan_head_phillips_screws_1__body1_4 -->
+      <geom name="92000a001_passivated_18_8_stainless_steel_pan_head_phillips_screws_1__body1_4_visual" type="mesh" class="visual" pos="-0.0497961 -0.0145316 0.061151" quat="0.000612456 -0.707107 -0.000612456 -0.707107" mesh="92000a001_passivated_18_8_stainless_steel_pan_head_phillips_screws_1__body1" material="92000a001_passivated_18_8_stainless_steel_pan_head_phillips_screws_1__body1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.0497961 -0.0145316 0.061151" quat="0.000612456 -0.707107 -0.000612456 -0.707107" mesh="92000a001_passivated_18_8_stainless_steel_pan_head_phillips_screws_1__body1" material="92000a001_passivated_18_8_stainless_steel_pan_head_phillips_screws_1__body1_material"/> -->
+      <!-- Part rotor_1__body1_2 -->
+      <geom name="rotor_1__body1_2_visual" type="mesh" class="visual" pos="-0.0923506 -0.00618528 0.061151" quat="0.000612456 -0.707107 -0.000612456 -0.707107" mesh="rotor_1__body1" material="rotor_1__body1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.0923506 -0.00618528 0.061151" quat="0.000612456 -0.707107 -0.000612456 -0.707107" mesh="rotor_1__body1" material="rotor_1__body1_material"/> -->
+      <!-- Part usb_socket_2 -->
+      <geom name="usb_socket_2_visual" type="mesh" class="visual" pos="-0.119718 -0.101518 0.084441" quat="0.499567 0.499567 0.500433 0.500433" mesh="usb_socket_2" material="usb_socket_2_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.119718 -0.101518 0.084441" quat="0.499567 0.499567 0.500433 0.500433" mesh="usb_socket_2" material="usb_socket_2_material"/> -->
+      <!-- Part usb_socket_2_2 -->
+      <geom name="usb_socket_2_2_visual" type="mesh" class="visual" pos="-0.119718 -0.101518 0.084441" quat="0.499567 0.499567 0.500433 0.500433" mesh="usb_socket_2__2" material="usb_socket_2__2_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.119718 -0.101518 0.084441" quat="0.499567 0.499567 0.500433 0.500433" mesh="usb_socket_2__2" material="usb_socket_2__2_material"/> -->
+      <!-- Part usb_socket_2_3 -->
+      <geom name="usb_socket_2_3_visual" type="mesh" class="visual" pos="-0.119718 -0.101518 0.084441" quat="0.499567 0.499567 0.500433 0.500433" mesh="usb_socket_2__3" material="usb_socket_2__3_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.119718 -0.101518 0.084441" quat="0.499567 0.499567 0.500433 0.500433" mesh="usb_socket_2__3" material="usb_socket_2__3_material"/> -->
+      <!-- Part buttonflash_13_2 -->
+      <geom name="buttonflash_13_2_visual" type="mesh" class="visual" pos="-0.119683 -0.115843 0.084501" quat="0.499567 0.499567 0.500433 0.500433" mesh="buttonflash_13_2" material="buttonflash_13_2_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.119683 -0.115843 0.084501" quat="0.499567 0.499567 0.500433 0.500433" mesh="buttonflash_13_2" material="buttonflash_13_2_material"/> -->
+      <!-- Part buttonflash_14_2 -->
+      <geom name="buttonflash_14_2_visual" type="mesh" class="visual" pos="-0.119683 -0.115843 0.084501" quat="0.499567 0.499567 0.500433 0.500433" mesh="buttonflash_14_2" material="buttonflash_14_2_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.119683 -0.115843 0.084501" quat="0.499567 0.499567 0.500433 0.500433" mesh="buttonflash_14_2" material="buttonflash_14_2_material"/> -->
+      <!-- Part buttonflash_13_2_2 -->
+      <geom name="buttonflash_13_2_2_visual" type="mesh" class="visual" pos="-0.119711 -0.0996928 0.084501" quat="0.499567 0.499567 0.500433 0.500433" mesh="buttonflash_13_2" material="buttonflash_13_2_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.119711 -0.0996928 0.084501" quat="0.499567 0.499567 0.500433 0.500433" mesh="buttonflash_13_2" material="buttonflash_13_2_material"/> -->
+      <!-- Part buttonflash_14_2_2 -->
+      <geom name="buttonflash_14_2_2_visual" type="mesh" class="visual" pos="-0.119711 -0.0996928 0.084501" quat="0.499567 0.499567 0.500433 0.500433" mesh="buttonflash_14_2" material="buttonflash_14_2_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.119711 -0.0996928 0.084501" quat="0.499567 0.499567 0.500433 0.500433" mesh="buttonflash_14_2" material="buttonflash_14_2_material"/> -->
+      <!-- Part dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_3_2_solid1 -->
+      <geom name="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_3_2_solid1_visual" type="mesh" class="visual" pos="-0.0613321 0.0351085 0.086101" quat="0.706494 -0 0 0.707719" mesh="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_3_2_solid1" material="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_3_2_solid1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.0613321 0.0351085 0.086101" quat="0.706494 -0 0 0.707719" mesh="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_3_2_solid1" material="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_3_2_solid1_material"/> -->
+      <!-- Part dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_3_1_solid1 -->
+      <geom name="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_3_1_solid1_visual" type="mesh" class="visual" pos="-0.0613321 0.0351085 0.086101" quat="0.706494 -0 0 0.707719" mesh="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_3_1_solid1" material="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_3_1_solid1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.0613321 0.0351085 0.086101" quat="0.706494 -0 0 0.707719" mesh="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_3_1_solid1" material="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_3_1_solid1_material"/> -->
+      <!-- Part dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_4_2_solid1 -->
+      <geom name="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_4_2_solid1_visual" type="mesh" class="visual" pos="-0.0613321 0.0351085 0.086101" quat="0.706494 -0 0 0.707719" mesh="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_4_2_solid1" material="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_4_2_solid1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.0613321 0.0351085 0.086101" quat="0.706494 -0 0 0.707719" mesh="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_4_2_solid1" material="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_4_2_solid1_material"/> -->
+      <!-- Part dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_2_2_solid1 -->
+      <geom name="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_2_2_solid1_visual" type="mesh" class="visual" pos="-0.0613321 0.0351085 0.086101" quat="0.706494 -0 0 0.707719" mesh="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_2_2_solid1" material="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_2_2_solid1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.0613321 0.0351085 0.086101" quat="0.706494 -0 0 0.707719" mesh="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_2_2_solid1" material="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_2_2_solid1_material"/> -->
+      <!-- Part dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_1_solid1 -->
+      <geom name="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_1_solid1_visual" type="mesh" class="visual" pos="-0.0613321 0.0351085 0.086101" quat="0.706494 -0 0 0.707719" mesh="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_1_solid1" material="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_1_solid1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.0613321 0.0351085 0.086101" quat="0.706494 -0 0 0.707719" mesh="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_1_solid1" material="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_1_solid1_material"/> -->
+      <!-- Part dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_2_1_solid1 -->
+      <geom name="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_2_1_solid1_visual" type="mesh" class="visual" pos="-0.0613321 0.0351085 0.086101" quat="0.706494 -0 0 0.707719" mesh="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_2_1_solid1" material="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_2_1_solid1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.0613321 0.0351085 0.086101" quat="0.706494 -0 0 0.707719" mesh="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_2_1_solid1" material="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_2_1_solid1_material"/> -->
+      <!-- Part dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_4_1_solid1 -->
+      <geom name="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_4_1_solid1_visual" type="mesh" class="visual" pos="-0.0613321 0.0351085 0.086101" quat="0.706494 -0 0 0.707719" mesh="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_4_1_solid1" material="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_4_1_solid1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.0613321 0.0351085 0.086101" quat="0.706494 -0 0 0.707719" mesh="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_4_1_solid1" material="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_4_1_solid1_material"/> -->
+      <!-- Part 220_35v_capacitor__lm2596_buck_converter_4_0_40_to_1_3_37v__chamfer1 -->
+      <geom name="220_35v_capacitor__lm2596_buck_converter_4_0_40_to_1_3_37v__chamfer1_visual" type="mesh" class="visual" pos="-0.109475 0.0306751 0.086101" quat="0.000612456 0.000612456 -0.707107 -0.707107" mesh="220_35v_capacitor__lm2596_buck_converter_4_0_40_to_1_3_37v__chamfer1" material="220_35v_capacitor__lm2596_buck_converter_4_0_40_to_1_3_37v__chamfer1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.109475 0.0306751 0.086101" quat="0.000612456 0.000612456 -0.707107 -0.707107" mesh="220_35v_capacitor__lm2596_buck_converter_4_0_40_to_1_3_37v__chamfer1" material="220_35v_capacitor__lm2596_buck_converter_4_0_40_to_1_3_37v__chamfer1_material"/> -->
+      <!-- Part 220_35v_capacitor__lm2596_buck_converter_4_0_40_to_1_3_37v__fillet2 -->
+      <geom name="220_35v_capacitor__lm2596_buck_converter_4_0_40_to_1_3_37v__fillet2_visual" type="mesh" class="visual" pos="-0.109475 0.0306751 0.086101" quat="0.000612456 0.000612456 -0.707107 -0.707107" mesh="220_35v_capacitor__lm2596_buck_converter_4_0_40_to_1_3_37v__fillet2" material="220_35v_capacitor__lm2596_buck_converter_4_0_40_to_1_3_37v__fillet2_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.109475 0.0306751 0.086101" quat="0.000612456 0.000612456 -0.707107 -0.707107" mesh="220_35v_capacitor__lm2596_buck_converter_4_0_40_to_1_3_37v__fillet2" material="220_35v_capacitor__lm2596_buck_converter_4_0_40_to_1_3_37v__fillet2_material"/> -->
+      <!-- Part 220_35v_capacitor__lm2596_buck_converter_4_0_40_to_1_3_37v__chamfer1_2 -->
+      <geom name="220_35v_capacitor__lm2596_buck_converter_4_0_40_to_1_3_37v__chamfer1_2_visual" type="mesh" class="visual" pos="-0.0713729 0.0297411 0.086101" quat="0.000612456 0.000612456 -0.707107 -0.707107" mesh="220_35v_capacitor__lm2596_buck_converter_4_0_40_to_1_3_37v__chamfer1" material="220_35v_capacitor__lm2596_buck_converter_4_0_40_to_1_3_37v__chamfer1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.0713729 0.0297411 0.086101" quat="0.000612456 0.000612456 -0.707107 -0.707107" mesh="220_35v_capacitor__lm2596_buck_converter_4_0_40_to_1_3_37v__chamfer1" material="220_35v_capacitor__lm2596_buck_converter_4_0_40_to_1_3_37v__chamfer1_material"/> -->
+      <!-- Part 220_35v_capacitor__lm2596_buck_converter_4_0_40_to_1_3_37v__fillet2_2 -->
+      <geom name="220_35v_capacitor__lm2596_buck_converter_4_0_40_to_1_3_37v__fillet2_2_visual" type="mesh" class="visual" pos="-0.0713729 0.0297411 0.086101" quat="0.000612456 0.000612456 -0.707107 -0.707107" mesh="220_35v_capacitor__lm2596_buck_converter_4_0_40_to_1_3_37v__fillet2" material="220_35v_capacitor__lm2596_buck_converter_4_0_40_to_1_3_37v__fillet2_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.0713729 0.0297411 0.086101" quat="0.000612456 0.000612456 -0.707107 -0.707107" mesh="220_35v_capacitor__lm2596_buck_converter_4_0_40_to_1_3_37v__fillet2" material="220_35v_capacitor__lm2596_buck_converter_4_0_40_to_1_3_37v__fillet2_material"/> -->
+      <!-- Part dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_3_2_solid1_2 -->
+      <geom name="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_3_2_solid1_2_visual" type="mesh" class="visual" pos="-0.121141 0.0400049 0.086101" quat="0.707719 0 0 -0.706494" mesh="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_3_2_solid1" material="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_3_2_solid1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.121141 0.0400049 0.086101" quat="0.707719 0 0 -0.706494" mesh="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_3_2_solid1" material="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_3_2_solid1_material"/> -->
+      <!-- Part dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_3_1_solid1_2 -->
+      <geom name="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_3_1_solid1_2_visual" type="mesh" class="visual" pos="-0.121141 0.0400049 0.086101" quat="0.707719 0 0 -0.706494" mesh="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_3_1_solid1" material="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_3_1_solid1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.121141 0.0400049 0.086101" quat="0.707719 0 0 -0.706494" mesh="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_3_1_solid1" material="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_3_1_solid1_material"/> -->
+      <!-- Part dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_4_2_solid1_2 -->
+      <geom name="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_4_2_solid1_2_visual" type="mesh" class="visual" pos="-0.121141 0.0400049 0.086101" quat="0.707719 0 0 -0.706494" mesh="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_4_2_solid1" material="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_4_2_solid1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.121141 0.0400049 0.086101" quat="0.707719 0 0 -0.706494" mesh="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_4_2_solid1" material="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_4_2_solid1_material"/> -->
+      <!-- Part dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_2_2_solid1_2 -->
+      <geom name="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_2_2_solid1_2_visual" type="mesh" class="visual" pos="-0.121141 0.0400049 0.086101" quat="0.707719 0 0 -0.706494" mesh="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_2_2_solid1" material="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_2_2_solid1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.121141 0.0400049 0.086101" quat="0.707719 0 0 -0.706494" mesh="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_2_2_solid1" material="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_2_2_solid1_material"/> -->
+      <!-- Part dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_1_solid1_2 -->
+      <geom name="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_1_solid1_2_visual" type="mesh" class="visual" pos="-0.121141 0.0400049 0.086101" quat="0.707719 0 0 -0.706494" mesh="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_1_solid1" material="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_1_solid1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.121141 0.0400049 0.086101" quat="0.707719 0 0 -0.706494" mesh="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_1_solid1" material="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_1_solid1_material"/> -->
+      <!-- Part dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_2_1_solid1_2 -->
+      <geom name="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_2_1_solid1_2_visual" type="mesh" class="visual" pos="-0.121141 0.0400049 0.086101" quat="0.707719 0 0 -0.706494" mesh="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_2_1_solid1" material="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_2_1_solid1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.121141 0.0400049 0.086101" quat="0.707719 0 0 -0.706494" mesh="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_2_1_solid1" material="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_2_1_solid1_material"/> -->
+      <!-- Part dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_4_1_solid1_2 -->
+      <geom name="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_4_1_solid1_2_visual" type="mesh" class="visual" pos="-0.121141 0.0400049 0.086101" quat="0.707719 0 0 -0.706494" mesh="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_4_1_solid1" material="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_4_1_solid1_material"/>
+      <!-- <geom type="mesh" class="collision" pos="-0.121141 0.0400049 0.086101" quat="0.707719 0 0 -0.706494" mesh="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_4_1_solid1" material="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_4_1_solid1_material"/> -->
+      <!-- Link tire -->
+      <body name="tire" pos="-0.0341205 -0.00622479 0.061151" quat="0.707107 0.000612456 -0.707107 0.000612456">
+        <!-- Joint from tt_motor to tire -->
+        <joint axis="0 0 1" name="left_axle" type="hinge"/>
+        <inertial pos="0 0 0" mass="1e-09" fullinertia="1e-09 1e-09 1e-09 0 0 0"/>
+        <!-- Part tire -->
+        <geom name="tire_visual" type="mesh" class="visual" pos="0 0 0.004" quat="0 0 -1 -0" mesh="tire" material="tire_material"/>
+        <geom name="tire_collision" type="cylinder" class="collision" size="0.0325 0.013" material="tire_material"/>
+        <!-- Part wheel -->
+        <geom name="wheel_visual" type="mesh" class="visual" pos="0 0 0.004" quat="0 0 -1 -0" mesh="wheel" material="wheel_material"/>
+        <!-- <geom type="mesh" class="collision" pos="0 0 0.004" quat="0 0 -1 -0" mesh="wheel" material="wheel_material"/> -->
       </body>
-      <!-- Driven right wheel: hinge joint actuated by the right_wheel_motor in rover_scene.xml -->
-      <body name="right_wheel" pos="-0.0827726 0.0611262 -0.0504087" quat="0.707105 0 0.707108 0">
-        <inertial pos="0 0 -0.01325" quat="0.5 0.5 -0.5 0.5" mass="0.034" diaginertia="2.00404e-05 1.20063e-05 1.20063e-05"/>
-        <joint name="right_axle"/>
-        <!-- Visual-only detailed mesh (collision handled by the cylinder primitive below) -->
-        <geom pos="0.464529 -0.0286537 -0.0265" quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" rgba="0.176471 0.654902 0.937255 1" mesh="right_wheel"/>
-        <!-- Cylinder collision primitive matching the wheel mesh's radius/width. Its quat is
-             derived from the MESH's *compiled* geom_quat (MuJoCo re-centers/re-orients mesh
-             assets at compile time, so this is not the identity-ish value in the mesh geom's
-             own XML `quat` above) composed with a -90 deg rotation about Y, which maps the
-             cylinder's default symmetry axis onto the mesh's measured thin axis (mesh-local X).
-             An earlier version of this file used the *uncompiled* mesh quat by mistake, which
-             put the cylinder's rolling axis 90 deg off the wheel's true axle direction — it
-             still produced roughly-correct net motion (tumbling nets forward progress) but
-             visibly rough/tilted motion, which is what this fixes. -->
-        <geom type="cylinder" size="0.03435 0.01325" quat="0 0.707107 -0.707107 0"/>
+      <!-- Link tire_2 -->
+      <body name="tire_2" pos="-0.208425 -0.00652673 0.061151" quat="0.707107 -0.000612456 0.707107 0.000612456">
+        <!-- Joint from tt_motor to tire_2 -->
+        <joint axis="0 0 1" name="right_axle" type="hinge"/>
+        <inertial pos="0 0 0" mass="1e-09" fullinertia="1e-09 1e-09 1e-09 0 0 0"/>
+        <!-- Part wheel_2 -->
+        <geom name="wheel_2_visual" type="mesh" class="visual" pos="0 0 0.004" quat="0 -0 1 0" mesh="wheel" material="wheel_material"/>
+        <!-- Part tire_2 -->
+        <geom name="tire_2_visual" type="mesh" class="visual" pos="0 0 0.004" quat="0 -0 1 0" mesh="tire" material="tire_material"/>
+        <geom name="tire_2_collision" type="cylinder" class="collision" size="0.0325 0.013" material="tire_material"/>
       </body>
-      <!-- Passive front caster swivel bracket (unactuated, free to rotate about the steering axis).
-           Mass/inertia below match the Webots diff_drive_rover.proto (the same rover, verified
-           driving correctly in Webots) instead of MuJoCo's mesh-volume auto-compute, which came
-           out 2.3x heavier for the wheel and was contributing to an unwanted pitch tilt. -->
-      <body name="front_wheel_lower_joint" pos="-0.00149314 -0.0978738 -0.0503587">
-        <inertial pos="0 0 0" mass="0.005" diaginertia="4.5e-07 4.5e-07 4.5e-07"/>
-        <joint name="front_swivel"/>
-        <geom pos="0.343294 -0.190212 0" quat="1.32679e-06 1 0 0" type="mesh" contype="0" conaffinity="0" rgba="0.647059 0.647059 0.647059 1" mesh="front_wheel_lower_joint"/>
-        <!-- Passive front caster wheel (unactuated, rolls freely to trail the rover).
-             z shifted down 5mm from the raw URDF value: with the chassis level, the caster's
-             collision cylinder fell ~7mm short of the floor (measured directly via forward
-             kinematics), forcing the whole rover to rest tilted so the caster could reach the
-             ground at all. Webots' own boundingObject for this wheel is actually two stacked
-             cylinders (a main one plus a slightly wider, near-flat "flange") — we'd only ported
-             the narrower one; using the flange's wider radius (0.0123) recovers part of the
-             clearance, and this position shift makes up the rest. -->
-        <body name="front_wheel" pos="0.00635 0.00965 -0.0221132" quat="9.38184e-07 -0.707105 -9.38187e-07 -0.707108">
-            <inertial pos="0 0 0" mass="0.005" diaginertia="2e-07 2e-07 2e-07"/>
-            <joint name="front_axle"/>
-          <!-- Visual-only detailed mesh (collision handled by the cylinder primitive below) -->
-          <geom pos="0.344734 -0.122278 0" quat="1.32679e-06 1 0 0" type="mesh" contype="0" conaffinity="0" rgba="0.247059 0.247059 0.247059 1" mesh="front_wheel"/>
-          <!-- Cylinder collision primitive: radius matches Webots' wider "flange" cylinder.
-               quat derived from the mesh's *compiled* geom_quat, same fix as the main wheels above. -->
-          <geom type="cylinder" size="0.0123 0.00611" quat="-0.707107 1.41421e-06 -1.41421e-06 -0.707107"/>
+      <!-- Link camera_holder -->
+      <body name="camera_holder" pos="-0.118021 -0.15199 0.097676" quat="0.500433 -0.500433 0.499567 -0.499567">
+        <!-- Joint from tt_motor to camera_holder -->
+        <joint axis="0 0 1" name="camera_hinge" type="hinge"/>
+        <inertial pos="0.000848356 -0.022896 -0.0031" mass="0.0109101" fullinertia="1.69216e-06 5.41218e-07 1.54812e-06 8.7232e-08 0 0"/>
+        <!-- Part camera_holder -->
+        <geom name="camera_holder_visual" type="mesh" class="visual" pos="0.0112623 -0.0510907 -0.0031" quat="0.707107 0.707107 -0 -0" mesh="camera_holder" material="camera_holder_material"/>
+        <!-- <geom type="mesh" class="collision" pos="0.0112623 -0.0510907 -0.0031" quat="0.707107 0.707107 -0 -0" mesh="camera_holder" material="camera_holder_material"/> -->
+      </body>
+      <!-- Link caster_wheel_holder -->
+      <body name="caster_wheel_holder" pos="-0.121041 -0.140495 0.057401" quat="0.999925 0 0 0.0122628">
+        <!-- Joint from tt_motor to caster_wheel_holder -->
+        <joint axis="0 0 1" name="front_wheel_holder"/>
+        <inertial pos="0 0 0" mass="1e-09" fullinertia="1e-09 1e-09 1e-09 0 0 0"/>
+        <!-- Part caster_wheel_holder -->
+        <geom name="caster_wheel_holder_visual" type="mesh" class="visual" pos="-0.107773 -0.0103881 -0.002" quat="0.707107 0.707107 -0 0" mesh="caster_wheel_holder" material="caster_wheel_holder_material"/>
+        <!-- <geom type="mesh" class="collision" pos="-0.107773 -0.0103881 -0.002" quat="0.707107 0.707107 -0 0" mesh="caster_wheel_holder" material="caster_wheel_holder_material"/> -->
+        <!-- Link caster_wheel -->
+        <body name="caster_wheel" pos="0.0062 0.0185328 -0.019" quat="0 0.707107 0 0.707107">
+          <!-- Joint from caster_wheel_holder to caster_wheel -->
+          <joint axis="0 0 1" name="front_wheel"/>
+          <inertial pos="0 0 0" mass="1e-09" fullinertia="1e-09 1e-09 1e-09 0 0 0"/>
+          <!-- Part caster_wheel -->
+          <geom name="caster_wheel_visual" type="mesh" class="visual" pos="-0.0850269 0.0450171 -0.0062" quat="0.707107 -0.707107 0 -0" mesh="caster_wheel" material="caster_wheel_material"/>
+          <geom name="caster_wheel_collision" type="sphere" class="collision" size="0.012" material="caster_wheel_material"/>
         </body>
       </body>
     </body>
   </worldbody>
+  <asset>
+    <mesh file="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_3_1_solid1.stl"/>
+    <mesh file="buttonflash_13_2.stl"/>
+    <mesh file="caster_wheel_holder.stl"/>
+    <mesh file="caster_wheel.stl"/>
+    <mesh file="buttonflash_14_2.stl"/>
+    <mesh file="battery_pack.stl"/>
+    <mesh file="caster_wheel_base.stl"/>
+    <mesh file="pcb_1__body1.stl"/>
+    <mesh file="usb_socket_2__2.stl"/>
+    <mesh file="gear_box_top_1__body1.stl"/>
+    <mesh file="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_2_2_solid1.stl"/>
+    <mesh file="gear_box_center_1__body1.stl"/>
+    <mesh file="motor_1__body1.stl"/>
+    <mesh file="magnet_1__body1.stl"/>
+    <mesh file="rectangularchip_2.stl"/>
+    <mesh file="camera_stand.stl"/>
+    <mesh file="usb_socket_2.stl"/>
+    <mesh file="resistor1_2.stl"/>
+    <mesh file="resistor2_32_2.stl"/>
+    <mesh file="gear_box_bottom_1__body1.stl"/>
+    <mesh file="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_2_1_solid1.stl"/>
+    <mesh file="bracket.stl"/>
+    <mesh file="220_35v_capacitor__lm2596_buck_converter_4_0_40_to_1_3_37v__chamfer1.stl"/>
+    <mesh file="3_digit_7_segment_display__lm2596_buck_converter_4_0_40_to_1_3_37v__lpattern3.stl"/>
+    <mesh file="tanchip_2.stl"/>
+    <mesh file="wheel.stl"/>
+    <mesh file="motor_driver.stl"/>
+    <mesh file="trimpot_3296w__lm2596_buck_converter_4_0_40_to_1_3_37v_valor_predeterminado__ressalto_extruso3.stl"/>
+    <mesh file="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_3_2_solid1.stl"/>
+    <mesh file="transistor_3_leg_2.stl"/>
+    <mesh file="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_4_2_solid1.stl"/>
+    <mesh file="acrylic_body.stl"/>
+    <mesh file="tire.stl"/>
+    <mesh file="microchip_2.stl"/>
+    <mesh file="camera_holder.stl"/>
+    <mesh file="rotor_holding_1__body1.stl"/>
+    <mesh file="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_4_1_solid1.stl"/>
+    <mesh file="battery_holder.stl"/>
+    <mesh file="shaft_1__body1.stl"/>
+    <mesh file="rotor_1__body1.stl"/>
+    <mesh file="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_1_solid1.stl"/>
+    <mesh file="220_35v_capacitor__lm2596_buck_converter_4_0_40_to_1_3_37v__fillet2.stl"/>
+    <mesh file="transistor_3_leg2_2.stl"/>
+    <mesh file="usb_socket_2__3.stl"/>
+    <mesh file="caster_block.stl"/>
+    <mesh file="pcb.stl"/>
+    <mesh file="wifi_card_2.stl"/>
+    <mesh file="92000a001_passivated_18_8_stainless_steel_pan_head_phillips_screws_1__body1.stl"/>
+    <mesh file="base___lm2596_buck_converter_4_0_40_to_1_3_37v__mirror2.stl"/>
+    
+    <material name="green_pcb" rgba="0.08 0.35 0.18 1" specular="0.4" shininess="0.3" reflectance="0.1"/>
+    <material name="bracket_material" rgba="0.196078 0.196078 0.196078 1"/>
+    <material name="battery_pack_material" rgba="0 0.313725 0.588235 1"/>
+    <material name="camera_stand_material" rgba="0.196078 0.196078 0.196078 1"/>
+    <material name="acrylic_body_material" rgba="1 1 1 0.15" shininess="0.9" specular="0.9" reflectance="0.3"/>
+    <material name="motor_driver_material" rgba="0.627451 0.627451 0.627451 1"/>
+    <material name="caster_block_material" rgba="0.196078 0.196078 0.196078 1"/>
+    <material name="caster_wheel_base_material" rgba="0.647059 0.647059 0.647059 1"/>
+    <material name="battery_holder_material" rgba="0.196078 0.196078 0.196078 1"/>
+    <material name="microchip_2_material" rgba="0.74902 0.74902 0.74902 1"/>
+    <material name="transistor_3_leg2_2_material" rgba="0.74902 0.74902 0.74902 1"/>
+    <material name="resistor1_2_material" rgba="0.74902 0.74902 0.74902 1"/>
+    <material name="resistor2_32_2_material" rgba="0.74902 0.74902 0.74902 1"/>
+    <material name="tanchip_2_material" rgba="0.74902 0.74902 0.74902 1"/>
+    <material name="pcb_material" rgba="0.196078 0.196078 0.196078 1"/>
+    <material name="transistor_3_leg_2_material" rgba="0.74902 0.74902 0.74902 1"/>
+    <material name="rectangularchip_2_material" rgba="0.74902 0.74902 0.74902 1"/>
+    <material name="wifi_card_2_material" rgba="0.74902 0.74902 0.74902 1"/>
+    <material name="3_digit_7_segment_display__lm2596_buck_converter_4_0_40_to_1_3_37v__lpattern3_material" rgba="0.752941 0.752941 0.752941 1"/>
+    <material name="trimpot_3296w__lm2596_buck_converter_4_0_40_to_1_3_37v_valor_predeterminado__ressalto_extruso3_material" rgba="0.00392157 0.235294 0.823529 1"/>        <!-- <geom type="cylinder" size="0.03435 0.01325" quat="0 0.707107 -0.707107 0"/>
+      </body> -->
+
+    <material name="base___lm2596_buck_converter_4_0_40_to_1_3_37v__mirror2_material" rgba="0 0.498039 0.752941 1"/>
+    <material name="gear_box_bottom_1__body1_material" rgba="0.74902 0.741176 0.733333 1"/>
+    <material name="pcb_1__body1_material" rgba="0.768627 0.207843 0.152941 1"/>
+    <material name="gear_box_top_1__body1_material" rgba="0.74902 0.741176 0.733333 1"/>
+    <material name="shaft_1__body1_material" rgba="0.74902 0.741176 0.733333 1"/>
+    <material name="magnet_1__body1_material" rgba="0.247059 0.247059 0.247059 1"/>
+    <material name="92000a001_passivated_18_8_stainless_steel_pan_head_phillips_screws_1__body1_material" rgba="0.627451 0.627451 0.627451 1"/>
+    <material name="rotor_holding_1__body1_material" rgba="0.607843 0.52549 0.364706 1"/>
+    <material name="motor_1__body1_material" rgba="0.74902 0.741176 0.733333 1"/>
+    <material name="gear_box_center_1__body1_material" rgba="0.74902 0.741176 0.733333 1"/>
+    <material name="rotor_1__body1_material" rgba="0.74902 0.741176 0.733333 1"/>
+    <material name="usb_socket_2_material" rgba="0.74902 0.74902 0.74902 1"/>
+    <material name="usb_socket_2__2_material" rgba="0.74902 0.74902 0.74902 1"/>
+    <material name="usb_socket_2__3_material" rgba="0.74902 0.74902 0.74902 1"/>
+    <material name="buttonflash_13_2_material" rgba="0.0196078 0.0196078 0.0196078 1"/>
+    <material name="buttonflash_14_2_material" rgba="0.960784 0.960784 0.964706 1"/>
+    <material name="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_3_2_solid1_material" rgba="0.792157 0.8 0.807843 1"/>
+    <material name="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_3_1_solid1_material" rgba="0.792157 0.8 0.807843 1"/>
+    <material name="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_4_2_solid1_material" rgba="0.792157 0.8 0.807843 1"/>
+    <material name="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_2_2_solid1_material" rgba="0.827451 0.831373 0.835294 1"/>
+    <material name="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_1_solid1_material" rgba="0 0.368627 0.721569 1"/>
+    <material name="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_2_1_solid1_material" rgba="0.827451 0.831373 0.835294 1"/>
+    <material name="dg301_5_0_02__lm2596_buck_converter_4_0_40_to_1_3_37v__imported_4_1_solid1_material" rgba="0.792157 0.8 0.807843 1"/>
+    <material name="220_35v_capacitor__lm2596_buck_converter_4_0_40_to_1_3_37v__chamfer1_material" rgba="0.501961 0.501961 0.501961 1"/>
+    <material name="220_35v_capacitor__lm2596_buck_converter_4_0_40_to_1_3_37v__fillet2_material" rgba="0.768627 0.768627 0.768627 1"/>
+    <material name="tire_material" rgba="0.647059 0.647059 0.647059 1"/>
+    <material name="wheel_material" rgba="0 0.670588 1 1"/>
+    <material name="camera_holder_material" rgba="0.196078 0.196078 0.196078 1"/>
+    <material name="caster_wheel_holder_material" rgba="0.647059 0.647059 0.647059 1"/>
+    <material name="caster_wheel_material" rgba="0.196078 0.196078 0.196078 1"/>
+  </asset>
+  <actuator>
+    <!-- <position class="C:\Users\rapan\OneDrive\Documents\mujoco\rover" name="left_axle" joint="left_axle"/>
+    <position class="C:\Users\rapan\OneDrive\Documents\mujoco\rover" name="right_axle" joint="right_axle"/>
+    <position class="C:\Users\rapan\OneDrive\Documents\mujoco\rover" name="camera_hinge" joint="camera_hinge"/>
+    <position class="C:\Users\rapan\OneDrive\Documents\mujoco\rover" name="front_wheel_holder" joint="front_wheel_holder"/>
+    <position class="C:\Users\rapan\OneDrive\Documents\mujoco\rover" name="front_wheel" joint="front_wheel"/> -->
+  </actuator>
+  <equality/>
 </mujoco>

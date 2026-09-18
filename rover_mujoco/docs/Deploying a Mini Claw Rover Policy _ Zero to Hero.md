@@ -52,8 +52,8 @@ Use an assembled Mini Claw Rover, its ESP32 camera, a USB data cable for flashin
 and a computer that can communicate with both devices.
 The workspace uses `uv` and requires **Python 3.12**, as declared in both
 `pyproject.toml` files.
-VSCode with PlatformIO is useful for firmware work; a GPU is not required for
-these small PPO policies.
+VSCode with PlatformIO is useful for rover firmware work, and the camera firmware
+needs the Arduino IDE; a GPU is not required for these small PPO policies.
 
 Examples use Bash on Linux.
 The desktop viewer needs a graphical session; `MUJOCO_GL=egl` enables headless
@@ -78,22 +78,68 @@ uv run rover_mujoco/scripts/teleop_rover.py
 Use a repository revision containing this line-follower implementation.
 The HF backup pins the weights and available training snapshots separately.
 
+### Or use VSCode instead of the terminal (optional)
+
+VSCode can run every simulation command in this guide without typing it.
+Open `matrix_lab_rover_above/mini_claw.code-workspace` with
+**File > Open Workspace from File**; it loads the application and both firmware
+repositories side by side.
+Accept the prompt to install the recommended extensions: Python, Python Debugger,
+Ruff, ty, Even Better TOML, and PlatformIO IDE.
+Opening only the `matrix_lab_rover_above` folder also works, without PlatformIO.
+
+Run **Terminal > Run Task...** and pick a task; each one wraps a command from this
+guide and runs it in the right directory.
+
+| Task | Terminal equivalent | Directory |
+| --- | --- | --- |
+| Setup: install workspace (CPU) | `uv sync --extra cpu` | repository root |
+| Setup: install workspace (NVIDIA GPU) | `uv sync --extra cu126` (or `cu128`, `cu130`) | repository root |
+| Sim: MuJoCo viewer sanity check | `uv run python -m mujoco.viewer --mjcf=assets/robots/rover/rover_scene.xml` | `rover_mujoco` |
+| Sim: teleop rover | `uv run rover_mujoco/scripts/teleop_rover.py` | repository root |
+| Sim: PID line follower | `uv run scripts/line_follower.py --track figure8 --camera` | `rover_mujoco` |
+| Train: PPO | `OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 uv run scripts/train_ppo.py` | `rover_mujoco` |
+| Evaluate: watch a PPO policy | `uv run scripts/evaluate_ppo.py <model> --tracks goomba --episodes 1 --viewer` | `rover_mujoco` |
+| Test: rover_mujoco | `uv run python -m pytest tests/ -q` | `rover_mujoco` |
+| Check: rover_mujoco (ruff and ty) | `uv run ruff format --check rover_mujoco`, then `uv run ruff check rover_mujoco` and `uv run ty check rover_mujoco` | repository root |
+
+Tasks that need a track or model ask for it in a picker.
+The **Run and Debug** panel has the same simulator entries with breakpoints, plus
+**Current file** for any open script.
+Tasks use the default training flags; pass options such as `--dynamics dr` from
+the terminal.
+Hardware deployment stays a terminal command because the rover and camera
+addresses depend on your network.
+
 ### Flash the rover and camera
 
 Skip flashing if both boards already run the intended firmware.
-Otherwise, open the workspace in VSCode, install PlatformIO IDE, and select the
-firmware project through its `platformio.ini` file.
-Set Wi-Fi credentials in the firmware's local configuration and use addresses
+The rover flashes through PlatformIO and the camera through the Arduino IDE.
+Set Wi-Fi credentials in each firmware's local configuration and use addresses
 appropriate for your network.
 The companion firmware repositories document their board and network settings.
+
+**Rover.** Open the workspace in VSCode, install PlatformIO IDE, and select the
+`rover-firmware` project through its `platformio.ini` file.
 
 ![Figure 1: Rover ESP32 connected over USB for flashing](images/Resources/plugged_in_esp32.jpg)
 
 Run **PlatformIO: Build**, then **PlatformIO: Upload** with the rover connected by
-USB; repeat for the camera firmware and camera board.
-Verify the rover address and camera capture endpoint after flashing.
+USB.
 
 ![Figure 2: PlatformIO build task in VSCode](images/Resources/platformio_run_task.png)
+
+**Camera.** Open
+`xiaoESP32/xiao_esp32s3_opencv_server/xiao_esp32s3_opencv_server.ino` in the
+[Arduino IDE](https://www.arduino.cc/en/software) and follow the
+[camera firmware README](https://github.com/wmala2/rover_camera_firmware).
+Install the **esp32 by Espressif Systems** board package, then select board
+`XIAO_ESP32S3` with **PSRAM: OPI PSRAM**; the camera fails to start without it.
+Set `WIFI_SSID` and `WIFI_PASSWORD` at the top of the sketch, upload over USB-C,
+and read the assigned IP from the Serial Monitor at 115200 baud.
+If the port does not appear, hold **BOOT** while plugging in the board.
+
+Verify the rover address and camera capture endpoint after flashing.
 
 ### Understand the simulation assets
 
