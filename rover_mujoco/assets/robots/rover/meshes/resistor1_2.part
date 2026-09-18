@@ -1,0 +1,13 @@
+{
+    "configuration": "default",
+    "documentId": "b96fba38d2ae45c4cf890061",
+    "documentMicroversion": "6a5788594e0776a5fb93e101",
+    "elementId": "f558c41572c99b86db31eaaa",
+    "fullConfiguration": "default",
+    "id": "MyRKeqC/ZGUc0NWP+",
+    "isStandardContent": false,
+    "name": "RESISTOR1_2 <5>",
+    "partId": "JFD",
+    "suppressed": false,
+    "type": "Part"
+}

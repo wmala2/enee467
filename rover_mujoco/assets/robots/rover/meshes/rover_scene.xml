@@ -1,0 +1,36 @@
+<mujoco model="rover_scene">
+  <asset>
+      <!-- 1. Define the checkerboard texture -->
+    <texture name="texplane" type="2d" builtin="checker" rgb1=".2 .3 .4" rgb2=".1 0.15 0.2" 
+                 width="512" height="512" mark="cross" markrgb=".8 .8 .8"/>  
+        
+    <!-- 2. Create a material using the texture and set it to repeat -->
+    <material name="matplane" texture="texplane" texrepeat="1 1" texuniform="true"/>
+
+  </asset>
+
+  <!-- Pulls in the rover body/mesh/joint tree compiled from rover.urdf -->
+  <include file="robot_v2.xml"/>
+
+  <!-- Implicit integrator: handles the stiff coupling between the velocity actuators and the
+       rover's very small wheel inertias far more robustly than the default explicit Euler -->
+  <option integrator="implicitfast"/>
+
+  <worldbody>
+    <!-- Overhead light so the rover and floor are visible in the viewer -->
+    <light diffuse=".8 .8 .8" pos="0 0 3" dir="0 0 -1"/>
+    <!-- Ground plane the rover drives on -->
+    <geom name="floor" type="plane" pos="0 0 0" size="0 0 .25" material="matplane" condim="3"/>
+        
+    <!-- Add a light source so you can actually see the pattern -->
+    <light directional="false" diffuse=".2 .2 .2" specular="0 0 0" pos="0 0 5" dir="0 0 -1"/>
+
+  </worldbody>
+
+  <actuator>
+    <!-- Velocity servo on left wheel: ctrl is a target angular speed (rad/s), self-damping and stable for teleop -->
+    <!-- <velocity name="left_wheel_motor" joint="left_axle" kv="0.2" ctrlrange="-10 10"/> -->
+    <!-- Velocity servo on right wheel: ctrl is a target angular speed (rad/s), self-damping and stable for teleop -->
+    <!-- <velocity name="right_wheel_motor" joint="right_axle" kv="0.2" ctrlrange="-10 10"/> --> -->
+  </actuator>
+</mujoco>

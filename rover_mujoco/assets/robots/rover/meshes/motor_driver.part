@@ -1,0 +1,13 @@
+{
+    "configuration": "default",
+    "documentId": "b96fba38d2ae45c4cf890061",
+    "documentMicroversion": "6a5788594e0776a5fb93e101",
+    "elementId": "c06dd6084e7b03a2b8e2c552",
+    "fullConfiguration": "default",
+    "id": "MXowqv123SjBppdof",
+    "isStandardContent": false,
+    "name": "Motor Driver <1>",
+    "partId": "JFD",
+    "suppressed": false,
+    "type": "Part"
+}

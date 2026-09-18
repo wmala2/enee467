@@ -1,0 +1,13 @@
+{
+    "configuration": "default",
+    "documentId": "b96fba38d2ae45c4cf890061",
+    "documentMicroversion": "6a5788594e0776a5fb93e101",
+    "elementId": "943f95f59f4c58fb4089456a",
+    "fullConfiguration": "default",
+    "id": "MS15VyYEGfomd27DY",
+    "isStandardContent": false,
+    "name": "Rotor_holding:1__Body1 <1>",
+    "partId": "JFP",
+    "suppressed": false,
+    "type": "Part"
+}

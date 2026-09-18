@@ -14,8 +14,9 @@ something breaks.
 
 ## 1. Install
 
-`onshape-to-robot` is already a project dependency (see `pyproject.toml`), so a plain
-`uv sync` (see [workspace-setup.md](workspace-setup.md)) is all you need. Nothing extra to install here.
+`onshape-to-robot` is included in the
+[shared workspace installation](../../README.md#installation). After setup,
+run the commands below from `rover_mujoco/` using that environment.
 
 The exporter needs to prove to OnShape's servers that it's allowed to read your CAD file, and it
 does that with an API key instead of your normal password. Sign in, open **My account** from the
@@ -241,8 +242,8 @@ enough.
 
 ### `No module named onshape_to_robot.__main__`
 
-`onshape-to-robot` ships as a console script, not a runnable module, so `python -m
-onshape_to_robot` cannot work. Call it by name, as in section 5.
+`onshape-to-robot` ships as a console script, not a runnable module. Use
+`uv run onshape-to-robot assets/robots/rover`, as in section 5.
 
 ### `Nan, Inf or huge value in QACC`, shortly after adding actuated joints
 
